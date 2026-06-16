@@ -28,7 +28,10 @@ export const useAuth = () => {
   });
 
   useEffect(() => {
+    console.log('[Nyra Auth] isFirebaseConfigured:', isFirebaseConfigured);
+
     if (!isFirebaseConfigured) {
+      console.log('[Nyra Auth] Running in SIMULATION mode (no Firebase keys detected)');
       // Mock local storage simulation
       const savedUser = localStorage.getItem(SIMULATED_USER_KEY);
       const user = savedUser ? JSON.parse(savedUser) : null;
@@ -36,18 +39,22 @@ export const useAuth = () => {
       return;
     }
 
+    console.log('[Nyra Auth] Firebase is configured. Setting up auth listener...');
+
     // Capture the redirect sign-in result when returning to the page
     getRedirectResult(auth)
       .then((result) => {
         if (result) {
-          console.log('Successfully authenticated via Google Redirect:', result.user);
+          console.log('[Nyra Auth] Successfully authenticated via Google Redirect:', result.user.email);
         }
       })
       .catch((error) => {
-        console.error('Google Redirect authentication error:', error);
+        console.error('[Nyra Auth] Google Redirect error:', error.code, error.message);
+        setAuthState(prev => ({ ...prev, error: getErrorMessage(error.code, error.message), loading: false }));
       });
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('[Nyra Auth] Auth state changed:', user ? user.email : 'signed out');
       setAuthState({ user, loading: false, error: null });
     });
     return () => unsubscribe();
@@ -73,8 +80,8 @@ export const useAuth = () => {
       await firebaseUpdateProfile(result.user, { displayName });
       return result.user;
     } catch (err: any) {
-      console.error('Sign up error details:', err);
-      const message = getErrorMessage(err.code);
+      console.error('[Nyra Auth] Sign up error:', err.code, err.message);
+      const message = getErrorMessage(err.code, err.message);
       setAuthState(prev => ({ ...prev, error: message, loading: false }));
       throw new Error(message);
     }
@@ -99,8 +106,8 @@ export const useAuth = () => {
       const result = await signInWithEmailAndPassword(auth, email, password);
       return result.user;
     } catch (err: any) {
-      console.error('Sign in error details:', err);
-      const message = getErrorMessage(err.code);
+      console.error('[Nyra Auth] Sign in error:', err.code, err.message);
+      const message = getErrorMessage(err.code, err.message);
       setAuthState(prev => ({ ...prev, error: message, loading: false }));
       throw new Error(message);
     }
@@ -127,22 +134,30 @@ export const useAuth = () => {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       
       if (isMobile) {
-        console.log('Mobile browser detected. Performing Google Redirect...');
+        console.log('[Nyra Auth] Mobile detected — using signInWithRedirect');
         await signInWithRedirect(auth, googleProvider);
         return new Promise<User>(() => {}); // Redirects page - resolve nothing
       }
 
+      // Desktop: try popup first
+      console.log('[Nyra Auth] Desktop detected — trying signInWithPopup');
       try {
         const result = await signInWithPopup(auth, googleProvider);
+        console.log('[Nyra Auth] Popup sign-in succeeded:', result.user.email);
         return result.user;
       } catch (popupErr: any) {
-        console.warn('Google Popup blocked or failed. Trying Redirect fallback...', popupErr);
-        await signInWithRedirect(auth, googleProvider);
-        return new Promise<User>(() => {}); // Redirects page - resolve nothing
+        // Only fallback to redirect for popup-blocked errors, not for config errors
+        if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/popup-closed-by-user') {
+          console.warn('[Nyra Auth] Popup blocked/closed. Falling back to redirect...', popupErr.code);
+          await signInWithRedirect(auth, googleProvider);
+          return new Promise<User>(() => {}); // Redirects page - resolve nothing
+        }
+        // For all other errors (unauthorized-domain, etc.), throw immediately
+        throw popupErr;
       }
     } catch (err: any) {
-      console.error('Google sign in error details:', err);
-      const message = getErrorMessage(err.code);
+      console.error('[Nyra Auth] Google sign-in error:', err.code, err.message);
+      const message = getErrorMessage(err.code, err.message);
       setAuthState(prev => ({ ...prev, error: message, loading: false }));
       throw new Error(message);
     }
@@ -178,14 +193,14 @@ export const useAuth = () => {
   };
 };
 
-function getErrorMessage(code: string): string {
+function getErrorMessage(code: string, rawMessage?: string): string {
   switch (code) {
     case 'auth/email-already-in-use':
       return 'An account with this email already exists';
     case 'auth/invalid-email':
       return 'Please enter a valid email address';
     case 'auth/operation-not-allowed':
-      return 'This sign-in method is not enabled';
+      return 'This sign-in method is not enabled. Please enable Email/Password and Google in your Firebase Console → Authentication → Sign-in method.';
     case 'auth/weak-password':
       return 'Password should be at least 6 characters';
     case 'auth/user-disabled':
@@ -200,12 +215,19 @@ function getErrorMessage(code: string): string {
       return 'Too many attempts. Please try again later';
     case 'auth/popup-closed-by-user':
       return 'Sign-in popup was closed';
+    case 'auth/popup-blocked':
+      return 'Sign-in popup was blocked by browser';
     case 'auth/network-request-failed':
       return 'Network error. Please check your connection';
     case 'auth/unauthorized-domain':
-      return 'Domain not authorized. Please add nyra-steel.vercel.app to Authorized Domains in your Firebase Console Settings.';
+      return 'This domain is not authorized for Firebase Auth. Go to Firebase Console → Authentication → Settings → Authorized domains and add: ' + window.location.hostname;
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in was cancelled. Please try again.';
+    case 'auth/invalid-api-key':
+      return 'Invalid Firebase API key. Check your environment variables.';
     default:
-      return 'Something went wrong. Please try again';
+      return `Auth error (${code || 'unknown'}): ${rawMessage || 'Please try again'}`;
   }
 }
+
 
