@@ -58,7 +58,7 @@ export interface NyraState {
 
   // Auth & Data Actions
   setUserId: (userId: string | null) => void;
-  loadUserData: (userId: string) => Promise<void>;
+  loadUserData: (userId: string) => Promise<boolean>;
   resetState: () => void;
 }
 
@@ -161,9 +161,11 @@ export const useNyraStore = create<NyraState>((set) => ({
         ...(chats.length > 0 && { chats, activeChatId: chats[chats.length - 1].id }),
         darkMode
       });
+      return !!profile;
     } catch (err) {
       console.warn('Failed to load user data from Firestore:', err);
       set({ userId, isLoading: false });
+      return false;
     }
   },
 

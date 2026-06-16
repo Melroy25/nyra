@@ -22,12 +22,16 @@ function App() {
     if (!authLoading) {
       if (user) {
         setUserId(user.uid);
-        // Load user data from Firestore, then navigate to dashboard
-        loadUserData(user.uid).then(() => {
+        // Load user data from Firestore, then navigate to dashboard or onboarding
+        loadUserData(user.uid).then((hasProfile) => {
           // Only navigate if currently on landing
           const currentView = useNyraStore.getState().view;
           if (currentView === 'landing') {
-            setView('dashboard');
+            if (hasProfile) {
+              setView('dashboard');
+            } else {
+              setView('onboarding');
+            }
           }
         });
       } else {
