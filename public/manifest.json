@@ -1,0 +1,56 @@
+{
+  "name": "Nyra - Women's Wellness & Cycle Companion",
+  "short_name": "Nyra",
+  "description": "Your AI-powered menstrual cycle, hormonal wellness, and hydration assistant.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#A78BFA",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "widgets": [
+    {
+      "name": "Nyra Cycle status",
+      "short_name": "Cycle",
+      "description": "Quick view of your current cycle day and phase.",
+      "icons": [
+        {
+          "src": "/logo.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ],
+      "ms_ac_template": "/widgets/cycle-widget-template.json",
+      "data": "/widgets/cycle-widget-data.json",
+      "type": "application/json"
+    },
+    {
+      "name": "Nyra Hydration log",
+      "short_name": "Hydrate",
+      "description": "Quick log and view of your daily water intake.",
+      "icons": [
+        {
+          "src": "/logo.png",
+          "sizes": "512x512",
+          "type": "image/png"
+        }
+      ],
+      "ms_ac_template": "/widgets/water-widget-template.json",
+      "data": "/widgets/water-widget-data.json",
+      "type": "application/json"
+    }
+  ]
+}
