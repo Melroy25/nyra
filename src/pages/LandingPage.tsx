@@ -286,13 +286,10 @@ export const LandingPage: React.FC = () => {
               </div>
 
               <button
-                onClick={() => {
-                  setShowLearnMore(false);
-                  setView('onboarding');
-                }}
-                className="mt-6 w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-accent text-white font-semibold text-center"
+                onClick={() => setShowLearnMore(false)}
+                className="mt-6 w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-accent text-white font-semibold text-center cursor-pointer"
               >
-                Start Onboarding
+                ← Back
               </button>
             </motion.div>
           </>
