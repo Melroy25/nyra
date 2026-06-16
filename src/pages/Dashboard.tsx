@@ -76,7 +76,7 @@ export const Dashboard: React.FC = () => {
   const strokeOffset = strokeDash - (progressPercent / 100) * strokeDash;
 
   return (
-    <div className="flex-1 p-5 pt-[68px] space-y-5 pb-10 overflow-y-auto">
+    <div className="flex-1 p-5 pt-[68px] space-y-5 pb-24">
       
       {/* Greeting Header */}
       <div className="flex justify-between items-start">

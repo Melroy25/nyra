@@ -219,7 +219,7 @@ export const ProfileScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 p-5 pt-[68px] space-y-5 pb-10 overflow-y-auto">
+    <div className="flex-1 p-5 pt-[68px] space-y-5 pb-24">
       
       {/* Profile Header card */}
       <div className="p-5 rounded-3xl bg-white border border-purple-100/50 shadow-sm flex items-center gap-4">

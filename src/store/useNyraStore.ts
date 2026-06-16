@@ -118,7 +118,7 @@ const saveToFirestore = (fn: () => Promise<void>) => {
 };
 
 export const useNyraStore = create<NyraState>((set) => ({
-  view: 'landing',
+  view: (localStorage.getItem('nyra_current_view') as any) || 'landing',
   onboardingStep: 0,
   profile: defaultProfile,
   notifications: defaultNotifications,
@@ -131,14 +131,48 @@ export const useNyraStore = create<NyraState>((set) => ({
   userId: null,
   isLoading: false,
   
-  setView: (view) => set({ view }),
+  setView: (view) => {
+    localStorage.setItem('nyra_current_view', view);
+    set({ view });
+  },
   
   setOnboardingStep: (onboardingStep) => set({ onboardingStep }),
   
   setUserId: (userId) => set({ userId }),
 
   loadUserData: async (userId: string) => {
-    set({ isLoading: true });
+    // 1. Try to load from localStorage first (optimistic cache)
+    try {
+      const cachedProfile = localStorage.getItem(`nyra_profile_cache_${userId}`);
+      const cachedNotifications = localStorage.getItem(`nyra_notifications_cache_${userId}`);
+      const cachedLogs = localStorage.getItem(`nyra_logs_cache_${userId}`);
+      const cachedCycles = localStorage.getItem(`nyra_cycles_cache_${userId}`);
+      const cachedMedications = localStorage.getItem(`nyra_medications_cache_${userId}`);
+      const cachedChats = localStorage.getItem(`nyra_chats_cache_${userId}`);
+      const cachedDarkMode = localStorage.getItem(`nyra_darkmode_cache_${userId}`);
+
+      if (cachedProfile) {
+        set({
+          userId,
+          profile: JSON.parse(cachedProfile),
+          ...(cachedNotifications && { notifications: JSON.parse(cachedNotifications) }),
+          ...(cachedLogs && { logs: JSON.parse(cachedLogs) }),
+          ...(cachedCycles && { cycles: JSON.parse(cachedCycles) }),
+          ...(cachedMedications && { medications: JSON.parse(cachedMedications) }),
+          ...(cachedChats && { chats: JSON.parse(cachedChats), activeChatId: JSON.parse(cachedChats)[JSON.parse(cachedChats).length - 1]?.id || 'chat-default' }),
+          darkMode: cachedDarkMode === 'true',
+          isLoading: false // Do not show spinner if cache exists
+        });
+      } else {
+        // Only show spinner if no cache exists
+        set({ isLoading: true });
+      }
+    } catch (cacheErr) {
+      console.warn('Failed to load from local cache:', cacheErr);
+      set({ isLoading: true });
+    }
+
+    // 2. Fetch from Firestore in the background
     try {
       const [profile, notifications, logs, cycles, medications, chats, darkMode] = await Promise.all([
         fs.loadProfile(userId),
@@ -149,6 +183,15 @@ export const useNyraStore = create<NyraState>((set) => ({
         fs.loadChats(userId),
         fs.loadDarkMode(userId)
       ]);
+
+      // Save to cache for next instant load
+      if (profile) localStorage.setItem(`nyra_profile_cache_${userId}`, JSON.stringify(profile));
+      if (notifications) localStorage.setItem(`nyra_notifications_cache_${userId}`, JSON.stringify(notifications));
+      if (logs && logs.length > 0) localStorage.setItem(`nyra_logs_cache_${userId}`, JSON.stringify(logs));
+      if (cycles && cycles.length > 0) localStorage.setItem(`nyra_cycles_cache_${userId}`, JSON.stringify(cycles));
+      if (medications && medications.length > 0) localStorage.setItem(`nyra_medications_cache_${userId}`, JSON.stringify(medications));
+      if (chats && chats.length > 0) localStorage.setItem(`nyra_chats_cache_${userId}`, JSON.stringify(chats));
+      localStorage.setItem(`nyra_darkmode_cache_${userId}`, String(darkMode));
 
       set({
         userId,
@@ -165,7 +208,9 @@ export const useNyraStore = create<NyraState>((set) => ({
     } catch (err) {
       console.warn('Failed to load user data from Firestore:', err);
       set({ userId, isLoading: false });
-      return false;
+      // Fallback to cache success check
+      const hasCachedProfile = !!localStorage.getItem(`nyra_profile_cache_${userId}`);
+      return hasCachedProfile;
     }
   },
 

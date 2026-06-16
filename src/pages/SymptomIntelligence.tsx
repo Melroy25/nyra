@@ -15,6 +15,23 @@ import {
 } from 'recharts';
 import { Calendar, Activity, TrendingUp, Brain } from 'lucide-react';
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 py-2 border border-purple-100/60 dark:border-white/10 rounded-2xl shadow-xl">
+        <p className="font-bold text-[10px] text-textpurple dark:text-purple-200 mb-1">{label}</p>
+        {payload.map((pld: any) => (
+          <p key={pld.name} className="text-[10px] font-semibold flex items-center gap-1.5" style={{ color: pld.stroke || pld.color || pld.fill }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+            {pld.name}: <span className="font-extrabold">{pld.value}</span>
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 export const SymptomIntelligence: React.FC = () => {
   const { logs, cycles, profile } = useNyraStore();
 
@@ -87,7 +104,7 @@ export const SymptomIntelligence: React.FC = () => {
   const phaseDetails = getPhaseDetails();
 
   return (
-    <div className="flex-1 p-5 pt-[68px] space-y-5 pb-10 overflow-y-auto">
+    <div className="flex-1 p-5 pt-[68px] space-y-5 pb-24">
       
       {/* Page Title */}
       <div>
@@ -200,7 +217,7 @@ export const SymptomIntelligence: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1E8FF" />
                 <XAxis dataKey="date" stroke="#94A3B8" />
                 <YAxis stroke="#94A3B8" domain={[0, 12]} />
-                <Tooltip />
+                <Tooltip content={<CustomTooltip />} />
                 <Line type="monotone" dataKey="Energy" stroke="#A78BFA" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                 <Line type="monotone" dataKey="Sleep" stroke="#F9A8D4" strokeWidth={3} dot={{ r: 4 }} />
               </LineChart>
@@ -227,7 +244,7 @@ export const SymptomIntelligence: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1E8FF" />
                 <XAxis dataKey="name" stroke="#94A3B8" />
                 <YAxis stroke="#94A3B8" />
-                <Tooltip />
+                <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="Occurrences" fill="#A78BFA" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

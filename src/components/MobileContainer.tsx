@@ -243,7 +243,7 @@ export const MobileContainer: React.FC<MobileContainerProps> = ({ children }) =>
         </AnimatePresence>
 
         {/* Content Area */}
-        <main className={`flex-1 overflow-y-auto relative flex flex-col bg-bgsoft`}>
+        <main className={`flex-1 relative flex flex-col bg-bgsoft ${view === 'chat' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           {children}
         </main>
 
