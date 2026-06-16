@@ -73,21 +73,21 @@ export const LandingPage: React.FC = () => {
 
   // Drifting emojis configuration positioned safely outside the central cycle card
   const floatingEmojis = [
-    { emoji: '✨', bg: 'bg-purple-100/80', delay: 0, x: -105, y: -85, duration: 16 },
-    { emoji: '🌸', bg: 'bg-pink-100/80', delay: 0, x: 125, y: 0, duration: 24 },
-    { emoji: '🧘‍♀️', bg: 'bg-teal-100/80', delay: 0.1, x: -125, y: 0, duration: 26 },
-    { emoji: '🥗', bg: 'bg-emerald-100/80', delay: 0.2, x: 105, y: -80, duration: 20 },
-    { emoji: '⚡', bg: 'bg-amber-100/80', delay: 0.3, x: 105, y: 80, duration: 22 },
-    { emoji: '😴', bg: 'bg-indigo-100/80', delay: 0.4, x: -105, y: 85, duration: 18 },
-    { emoji: '💧', bg: 'bg-blue-100/80', delay: 0.5, x: 0, y: -120, duration: 14 },
-    { emoji: '🩸', bg: 'bg-rose-100/80', delay: 0.6, x: 0, y: 120, duration: 18 },
+    { emoji: '✨', bg: 'bg-purple-100/80', delay: 0, x: -90, y: -70, duration: 16 },
+    { emoji: '🌸', bg: 'bg-pink-100/80', delay: 0, x: 105, y: 0, duration: 24 },
+    { emoji: '🧘‍♀️', bg: 'bg-teal-100/80', delay: 0.1, x: -105, y: 0, duration: 26 },
+    { emoji: '🥗', bg: 'bg-emerald-100/80', delay: 0.2, x: 90, y: -65, duration: 20 },
+    { emoji: '⚡', bg: 'bg-amber-100/80', delay: 0.3, x: 90, y: 65, duration: 22 },
+    { emoji: '😴', bg: 'bg-indigo-100/80', delay: 0.4, x: -90, y: 70, duration: 18 },
+    { emoji: '💧', bg: 'bg-blue-100/80', delay: 0.5, x: 0, y: -100, duration: 14 },
+    { emoji: '🩸', bg: 'bg-rose-100/80', delay: 0.6, x: 0, y: 100, duration: 18 },
   ];
 
   return (
-    <div className="flex-1 flex flex-col justify-around p-5 bg-gradient-to-b from-white via-bgsoft to-purple-50/50 dark:from-slate-950 dark:via-slate-900 dark:to-purple-950/25 h-[100dvh] overflow-hidden pb-8">
+    <div className="flex-1 flex flex-col justify-between p-4 bg-gradient-to-b from-white via-bgsoft to-purple-50/50 dark:from-slate-950 dark:via-slate-900 dark:to-purple-950/25 h-full overflow-hidden">
       
       {/* Brand Header */}
-      <div className="flex justify-between items-center py-2">
+      <div className="flex justify-between items-center py-1">
         <div className="flex items-center">
           <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md bg-white flex items-center justify-center border border-purple-100/30">
             <img src={logoImg} alt="Nyra Logo" className="w-full h-full object-cover" />
@@ -105,12 +105,12 @@ export const LandingPage: React.FC = () => {
       </div>
 
       {/* Hero Visual Area */}
-      <div className="my-auto py-4 flex flex-col items-center justify-center relative">
+      <div className="flex-1 flex flex-col items-center justify-center relative min-h-0">
         {/* Animated Gradient Background Glow */}
-        <div className="absolute w-64 h-64 bg-primary/20 rounded-full blur-3xl -z-10 animate-pulse-ring"></div>
+        <div className="absolute w-52 h-52 bg-primary/20 rounded-full blur-3xl -z-10 animate-pulse-ring"></div>
         
         {/* Central Glowing Cycle Ring */}
-        <div className="relative w-48 h-48 flex items-center justify-center">
+        <div className="relative w-40 h-40 flex items-center justify-center">
           {/* Main outer rotating ring */}
           <motion.div
             animate={{ rotate: 360 }}
@@ -126,7 +126,7 @@ export const LandingPage: React.FC = () => {
           />
 
           {/* Central Core Display */}
-          <div className="w-32 h-32 rounded-full bg-white/85 backdrop-blur-md flex flex-col items-center justify-center shadow-lg border border-purple-100/70 z-10 text-center px-2">
+          <div className="w-28 h-28 rounded-full bg-white/85 backdrop-blur-md flex flex-col items-center justify-center shadow-lg border border-purple-100/70 z-10 text-center px-2">
             <Heart className="w-8 h-8 text-accent fill-accent animate-pulse" />
             <span className="text-xs font-bold tracking-widest text-textpurple uppercase mt-2">Nyra</span>
             <span className="text-[10px] text-slate-400 italic font-medium mt-0.5">the one you need</span>
@@ -164,7 +164,7 @@ export const LandingPage: React.FC = () => {
                     ease: 'easeInOut',
                     delay: item.delay
                   }}
-                  className={`w-10 h-10 rounded-full ${item.bg} flex items-center justify-center shadow-md border border-white/90 text-lg select-none`}
+                  className={`w-9 h-9 rounded-full ${item.bg} flex items-center justify-center shadow-md border border-white/90 text-base select-none`}
                 >
                   {item.emoji}
                 </motion.div>
@@ -175,7 +175,7 @@ export const LandingPage: React.FC = () => {
       </div>
 
       {/* Copywriting & Action Area */}
-      <div className="flex flex-col gap-3 text-center pb-2">
+      <div className="flex flex-col gap-2 text-center pb-2">
         <div>
           <h1 className="font-serif text-2xl font-extrabold tracking-tight text-textpurple leading-tight">
             Understand Your Cycle.
@@ -190,7 +190,7 @@ export const LandingPage: React.FC = () => {
         </div>
 
         {/* Buttons */}
-        <div className="flex flex-col gap-2 px-2">
+        <div className="flex flex-col gap-1.5 px-2">
           <button
             onClick={() => { setAuthMode('signup'); setShowAuthModal(true); }}
             className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-primary to-accent text-white font-semibold flex items-center justify-center gap-2 hover:opacity-95 transition-opacity shadow-lg shadow-primary/20 cursor-pointer text-sm"
