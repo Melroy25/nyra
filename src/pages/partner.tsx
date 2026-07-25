@@ -3,15 +3,18 @@ import { useRouter } from 'next/router';
 import { useStore } from '../store/useStore';
 import { 
   Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, PlusCircle, Check, HelpCircle, Bot,
-  Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X
+  Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiConnectPartner, apiGetMessages, apiSendMessage, apiAddReaction } from '../lib/api';
+import { useRealtimeChat } from '../hooks/useRealtimeChat';
 
 export default function PartnerPage() {
   const router = useRouter();
   const { 
     user, 
+    setUser,
     chatThreads, 
     activeThreadId, 
     addMessage, 
@@ -26,13 +29,19 @@ export default function PartnerPage() {
   } = useStore();
 
   const activeThread = chatThreads.find((t) => t.id === activeThreadId) || chatThreads[0];
-  const messages = activeThread?.messages || [];
+  const [messages, setMessages] = useState<any[]>(activeThread?.messages || []);
 
   // Active Partner AI Thread
   const activePartnerAiThread = partnerAiThreads.find((t) => t.id === activePartnerAiThreadId) || partnerAiThreads[0];
   const partnerAiMessages = activePartnerAiThread?.messages || [];
   
   const activeTab = (router.query.tab as string) || 'dashboard';
+
+  // Connection input state for partner
+  const [inputCode, setInputCode] = useState('');
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [connectError, setConnectError] = useState('');
+  const [connectSuccess, setConnectSuccess] = useState('');
 
   // Private Chat state
   const [chatInput, setChatInput] = useState('');
@@ -51,6 +60,22 @@ export default function PartnerPage() {
   const aiChatEndRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // Dynamic user & partner details
+  const isPartner = user?.role === 'partner';
+  const myName = user?.name || (isPartner ? 'Royal' : 'Melroy');
+  const connectedPartnerName = user?.connectedPartner?.name || (isPartner ? 'Melroy' : 'Royal');
+  const trackedUserName = isPartner ? connectedPartnerName : myName;
+  const displayPairingCode = user?.partnerCode || 'NYRA-82941';
+  const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
+
+  // Subscribe to Realtime Chat Messages
+  useRealtimeChat(activeThreadId, (newMsg) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === newMsg.id)) return prev;
+      return [...prev, newMsg];
+    });
+  });
+
   // Auto-scroll chat to bottom
   useEffect(() => {
     if (activeTab === 'chat') {
@@ -60,10 +85,56 @@ export default function PartnerPage() {
     }
   }, [messages, partnerAiMessages, activeTab]);
 
-  const handleSendMessage = () => {
+  // Handle Connecting to Partner via Code
+  const handleConnectPartner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputCode.trim()) {
+      setConnectError('Please enter a valid connection code.');
+      return;
+    }
+    setConnectError('');
+    setConnectSuccess('');
+    setConnectLoading(true);
+
+    try {
+      const res = await apiConnectPartner(inputCode.trim());
+      setConnectSuccess(`Successfully connected to ${res.connectedPartner.name}! ❤️`);
+      if (user) {
+        setUser({
+          ...user,
+          connectedPartnerId: res.connectedPartner.id,
+          connectedPartner: res.connectedPartner,
+        });
+      }
+      setInputCode('');
+    } catch (err: any) {
+      setConnectError(err.message || 'Invalid or unknown partner code.');
+    } finally {
+      setConnectLoading(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
-    addMessage(chatInput.trim());
+    const textToSend = chatInput.trim();
     setChatInput('');
+
+    // Optimistic local add
+    const tempMsg = {
+      id: `msg-${Date.now()}`,
+      senderId: user?.id || 'partner-john',
+      text: textToSend,
+      timestamp: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+    addMessage(textToSend);
+
+    // Call backend API if authenticated
+    try {
+      await apiSendMessage(activeThreadId, textToSend);
+    } catch (err) {
+      console.log('Local fallback used for chat');
+    }
   };
 
   const handleSendSticker = (stickerLabel: string) => {
@@ -137,17 +208,6 @@ export default function PartnerPage() {
   // Filter user prompts for Outline index
   const userPrompts = partnerAiMessages.filter((m) => m.senderId === user?.id || m.senderId === 'user' || m.senderId === 'partner-john');
 
-  // Dynamic user and partner details
-  const isPartner = user?.role === 'partner';
-  const myName = user?.name || (isPartner ? 'Partner' : 'User');
-  const connectedPartnerName = user?.connectedPartner?.name || (isPartner ? 'User' : 'Partner');
-  
-  // Target person being tracked (main user)
-  const trackedUserName = isPartner ? connectedPartnerName : myName;
-
-  // Pairing code to display
-  const displayPairingCode = user?.partnerCode || 'NYRA-82941';
-
   return (
     <div className="max-w-[1000px] mx-auto px-container-padding-mobile pt-stack-md pb-12 transition-colors duration-300">
       
@@ -188,6 +248,41 @@ export default function PartnerPage() {
                 </button>
               </div>
             </section>
+
+            {/* PARTNER CONNECTION CODE CARD (If not connected yet or partner mode) */}
+            {isPartner && !isConnected && (
+              <div className="glass-card bg-gradient-to-br from-tertiary/10 via-primary/5 to-secondary/10 dark:bg-[#16102a]/90 rounded-2xl p-6 border border-tertiary/30 shadow-md">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-2xl bg-tertiary/20 flex items-center justify-center text-tertiary shrink-0">
+                    <KeyRound className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-serif font-bold text-lg text-[#18003d] dark:text-[#eee6ff]">Connect with {connectedPartnerName}</h3>
+                    <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium">Enter your partner's connection code to link your accounts.</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleConnectPartner} className="flex flex-col sm:flex-row gap-3 mt-4">
+                  <input
+                    type="text"
+                    placeholder="e.g. NYRA-82941"
+                    value={inputCode}
+                    onChange={(e) => setInputCode(e.target.value)}
+                    className="flex-1 px-4 py-3 rounded-2xl border border-tertiary/40 bg-white/90 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-bold uppercase tracking-wider outline-none focus:border-tertiary"
+                  />
+                  <button
+                    type="submit"
+                    disabled={connectLoading}
+                    className="px-6 py-3 rounded-2xl bg-gradient-to-r from-tertiary to-primary text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
+                  >
+                    {connectLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Heart className="w-4 h-4" /> Link Partner</>}
+                  </button>
+                </form>
+
+                {connectError && <p className="text-xs font-bold text-red-500 mt-2">{connectError}</p>}
+                {connectSuccess && <p className="text-xs font-bold text-primary dark:text-[#d4b8ff] mt-2">{connectSuccess}</p>}
+              </div>
+            )}
 
             {!isPartner ? (
               // MAIN USER'S VIEW — Shows Connection Code & Share Options
@@ -475,7 +570,7 @@ export default function PartnerPage() {
               </button>
               <input 
                 type="text" 
-                placeholder="Type a secure note..." 
+                placeholder={`Message ${connectedPartnerName}...`} 
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
