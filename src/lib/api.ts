@@ -65,6 +65,12 @@ export const apiConnectPartner = (partnerCode: string) =>
     body: JSON.stringify({ partnerCode }),
   });
 
+export const apiRegenerateCode = () =>
+  request<{ success: boolean; user: any }>('/api/users/regenerate-code', {
+    method: 'POST',
+  });
+
+
 export const apiGetPartnerDashboard = () =>
   request<{
     isConnected: boolean;

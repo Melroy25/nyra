@@ -92,11 +92,13 @@ export default function ProfilePage() {
             <div className="space-y-3">
               <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
                 <span className={labelCls}>Link Status</span>
-                <span className="font-bold text-tertiary">Connected</span>
+                <span className={`font-bold ${user?.connectedPartnerId || user?.connectedPartner ? 'text-tertiary' : 'text-slate-400'}`}>
+                  {user?.connectedPartnerId || user?.connectedPartner ? 'Connected' : 'Not Connected'}
+                </span>
               </div>
               <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
                 <span className={labelCls}>Partner Connection Code</span>
-                <span className={`font-bold ${headingCls}`}>NYRA-82941</span>
+                <span className={`font-bold ${headingCls}`}>{user?.partnerCode || 'Not Generated'}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-semibold">
                 <span className={labelCls}>Partner View Permissions</span>

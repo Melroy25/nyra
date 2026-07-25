@@ -3,11 +3,12 @@ import { useRouter } from 'next/router';
 import { useStore } from '../store/useStore';
 import { 
   Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, PlusCircle, Check, HelpCircle, Bot,
-  Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2
+  Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2,
+  Eye, EyeOff, RefreshCw, UserCheck, Unlink
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiConnectPartner, apiGetMessages, apiSendMessage, apiAddReaction, apiGetPartnerDashboard } from '../lib/api';
+import { apiConnectPartner, apiRegenerateCode, apiGetMessages, apiSendMessage, apiAddReaction, apiGetPartnerDashboard } from '../lib/api';
 import { useRealtimeChat } from '../hooks/useRealtimeChat';
 
 export default function PartnerPage() {
@@ -42,6 +43,38 @@ export default function PartnerPage() {
   const [connectLoading, setConnectLoading] = useState(false);
   const [connectError, setConnectError] = useState('');
   const [connectSuccess, setConnectSuccess] = useState('');
+
+  // Code Hide / Reveal toggle & Regeneration state
+  const [showCode, setShowCode] = useState(false);
+  const [regenLoading, setRegenLoading] = useState(false);
+  const [regenMsg, setRegenMsg] = useState('');
+
+  const handleRegenerateCode = async () => {
+    if (isConnected) {
+      const confirmAction = window.confirm(
+        'Regenerating your connection code will instantly unlink your current partner. Are you sure you want to continue?'
+      );
+      if (!confirmAction) return;
+    }
+    setRegenLoading(true);
+    setRegenMsg('');
+    try {
+      const res = await apiRegenerateCode();
+      if (res.user && user) {
+        setUser({
+          ...user,
+          partnerCode: res.user.partnerCode,
+          connectedPartnerId: undefined,
+          connectedPartner: undefined,
+        });
+      }
+      setRegenMsg(`New code generated: ${res.user.partnerCode}. Partner unlinked.`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to regenerate partner code');
+    } finally {
+      setRegenLoading(false);
+    }
+  };
 
   // Private Chat state
   const [chatInput, setChatInput] = useState('');
@@ -311,14 +344,32 @@ export default function PartnerPage() {
                 {/* Pairing Code Card */}
                 <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-6 border border-white/50 dark:border-[#3a2d58]/60 shadow-sm flex flex-col justify-between min-h-[220px]">
                   <div>
-                    <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff] uppercase tracking-wider block mb-1">Your Connection Code</span>
-                    <h3 className="font-serif font-bold text-3xl text-[#18003d] dark:text-[#eee6ff] mb-2">{displayPairingCode}</h3>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff] uppercase tracking-wider block">
+                        Your Connection Code
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowCode(!showCode)}
+                        className="px-2.5 py-1 rounded-xl bg-primary/10 dark:bg-primary/20 text-primary dark:text-[#d4b8ff] hover:bg-primary/20 transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+                        title={showCode ? "Hide connection code" : "Show connection code"}
+                      >
+                        {showCode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        <span>{showCode ? "Hide" : "Show"}</span>
+                      </button>
+                    </div>
+
+                    <h3 className="font-serif font-bold text-3xl text-[#18003d] dark:text-[#eee6ff] mb-2 tracking-wider">
+                      {showCode ? displayPairingCode : '••••••••'}
+                    </h3>
+
                     <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium">
                       Share this code with your partner. When they log in with this code, they can view your expected cycle periods, energy, and cravings.
                     </p>
                   </div>
-                  <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 dark:border-primary/30 rounded-xl p-3 text-xs italic text-primary dark:text-[#d4b8ff] mt-4 font-medium">
-                    Strict privacy: You choose what gets shared inside settings.
+
+                  <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 dark:border-primary/30 rounded-xl p-3 text-xs italic text-primary dark:text-[#d4b8ff] mt-4 font-medium flex items-center justify-between">
+                    <span>Strict privacy: You choose what gets shared inside settings.</span>
                   </div>
                 </div>
 
@@ -326,25 +377,64 @@ export default function PartnerPage() {
                 <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-6 border border-white/50 dark:border-[#3a2d58]/60 shadow-sm flex flex-col justify-between min-h-[220px] relative overflow-hidden">
                   <div className="absolute -right-12 -top-12 w-32 h-32 bg-primary/20 rounded-full blur-3xl"></div>
                   <div>
-                    <span className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">Connection Status</span>
-                    <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff] mb-4">Partner Linked ❤️</h3>
-                    <div className="space-y-2.5">
-                      <div className="flex justify-between items-center text-xs font-semibold">
-                        <span className="text-[#3d3050] dark:text-[#c8bedd]">Connected Partner</span>
-                        <span className="font-bold text-[#18003d] dark:text-[#eee6ff]">{connectedPartnerName}</span>
+                    <span className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">
+                      Connection Status
+                    </span>
+                    <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff] mb-3 flex items-center gap-2">
+                      {isConnected ? (
+                        <>Partner Linked <Heart className="w-5 h-5 text-red-500 fill-current inline" /></>
+                      ) : (
+                        'No Partner Linked'
+                      )}
+                    </h3>
+
+                    {isConnected ? (
+                      <div className="space-y-2.5">
+                        <div className="flex justify-between items-center text-xs font-semibold">
+                          <span className="text-[#3d3050] dark:text-[#c8bedd] flex items-center gap-1.5">
+                            <UserCheck className="w-3.5 h-3.5 text-primary" /> Connected Partner
+                          </span>
+                          <span className="font-bold text-[#18003d] dark:text-[#eee6ff] bg-primary/10 px-2.5 py-0.5 rounded-full">
+                            {connectedPartnerName} {user?.connectedPartner?.email ? `(${user.connectedPartner.email})` : ''}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs font-semibold">
+                          <span className="text-[#3d3050] dark:text-[#c8bedd]">Last Update Sync</span>
+                          <span className="font-bold text-primary dark:text-[#d4b8ff]">Just now</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center text-xs font-semibold">
-                        <span className="text-[#3d3050] dark:text-[#c8bedd]">Last Update Sync</span>
-                        <span className="font-bold text-primary dark:text-[#d4b8ff]">Just now</span>
-                      </div>
-                    </div>
+                    ) : (
+                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium leading-relaxed">
+                        No active partner linked to your account yet. Share your connection code with your partner so they can log in.
+                      </p>
+                    )}
+
+                    {regenMsg && (
+                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-3 p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-800/40">
+                        {regenMsg}
+                      </p>
+                    )}
                   </div>
-                  <button 
-                    onClick={() => router.push('/partner?tab=chat')}
-                    className="w-full mt-6 py-2.5 rounded-2xl border border-primary/30 dark:border-primary/40 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
-                  >
-                    Send Love Note
-                  </button>
+
+                  <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                    {isConnected && (
+                      <button 
+                        onClick={() => router.push('/partner?tab=chat')}
+                        className="flex-1 py-2.5 rounded-xl border border-primary/30 dark:border-primary/40 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all cursor-pointer"
+                      >
+                        Send Love Note
+                      </button>
+                    )}
+
+                    <button 
+                      onClick={handleRegenerateCode}
+                      disabled={regenLoading}
+                      className="flex-1 py-2.5 rounded-xl border border-rose-300 dark:border-rose-500/40 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {regenLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      Regenerate Code
+                    </button>
+                  </div>
                 </div>
 
               </div>
