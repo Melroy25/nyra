@@ -12,6 +12,7 @@ export interface User {
   partnerCode: string;
   connectedPartnerCode?: string | null;
   connectedPartnerId?: string | null;
+  connectedPartner?: User | null;
   role: 'user' | 'partner';
   avatarUrl?: string;
   onboardingCompleted?: boolean;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Mail, ArrowRight, ShieldCheck, Heart, User, Sun, Moon, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
@@ -8,6 +8,10 @@ import { apiLogin, apiRegister } from '../lib/api';
 export default function LoginPage() {
   const router = useRouter();
   const { setUser, darkMode, toggleDarkMode } = useStore();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => { setIsMounted(true); }, []);
+
 
   // Mode: 'choose' | 'login' | 'register' | 'partner'
   const [mode, setMode] = useState<'choose' | 'login' | 'register' | 'partner'>('choose');
@@ -137,13 +141,15 @@ export default function LoginPage() {
     <div className="bg-nebula min-h-screen relative overflow-hidden flex items-center justify-center p-container-padding-mobile md:p-container-padding-desktop transition-colors duration-300">
 
       {/* Dark Mode Toggle */}
-      <button
-        onClick={toggleDarkMode}
-        title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-        className="absolute top-6 right-6 p-2.5 rounded-2xl glass-card border border-white/40 dark:border-[#3a2d58]/60 text-[#3d3050] dark:text-[#c8bedd] hover:text-primary dark:hover:text-[#d4b8ff] transition-all z-20 shadow-sm"
-      >
-        {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
-      </button>
+      {isMounted && (
+        <button
+          onClick={toggleDarkMode}
+          title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          className="absolute top-6 right-6 p-2.5 rounded-2xl glass-card border border-white/40 dark:border-[#3a2d58]/60 text-[#3d3050] dark:text-[#c8bedd] hover:text-primary dark:hover:text-[#d4b8ff] transition-all z-20 shadow-sm"
+        >
+          {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
+        </button>
+      )}
 
       {/* Background Blobs */}
       <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">

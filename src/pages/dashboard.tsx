@@ -13,10 +13,11 @@ export default function DashboardPage() {
     currentCycleDay, 
     currentCyclePhase, 
     nextPeriodDaysLeft,
-    cycleLogs
+    cycleLogs,
+    user
   } = useStore();
 
-  const name = onboardingData.name || 'Sarah';
+  const name = user?.name || onboardingData.name || 'User';
 
   // Quick actions layout
   const quickActions = [

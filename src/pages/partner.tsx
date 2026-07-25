@@ -135,11 +135,18 @@ export default function PartnerPage() {
   };
 
   // Filter user prompts for Outline index
-  const userPrompts = partnerAiMessages.filter((m) => m.senderId === 'partner-john' || m.senderId === 'user-sarah');
+  const userPrompts = partnerAiMessages.filter((m) => m.senderId === user?.id || m.senderId === 'user' || m.senderId === 'partner-john');
 
-  // Strictly check role: default/unspecified or 'user' is Sarah, 'partner' is John
+  // Dynamic user and partner details
   const isPartner = user?.role === 'partner';
-  const isUserSarah = !isPartner;
+  const myName = user?.name || (isPartner ? 'Partner' : 'User');
+  const connectedPartnerName = user?.connectedPartner?.name || (isPartner ? 'User' : 'Partner');
+  
+  // Target person being tracked (main user)
+  const trackedUserName = isPartner ? connectedPartnerName : myName;
+
+  // Pairing code to display
+  const displayPairingCode = user?.partnerCode || 'NYRA-82941';
 
   return (
     <div className="max-w-[1000px] mx-auto px-container-padding-mobile pt-stack-md pb-12 transition-colors duration-300">
@@ -160,9 +167,9 @@ export default function PartnerPage() {
               <div>
                 <h1 className="font-serif font-bold text-3xl md:text-5xl text-[#18003d] dark:text-[#eee6ff]">Partner Mode</h1>
                 <p className="text-sm text-[#3d3050] dark:text-[#c8bedd] font-medium mt-1">
-                  {isUserSarah 
+                  {!isPartner 
                     ? 'Share specific cycle insights securely with your partner.' 
-                    : 'Sarah\'s cycle phase updates & wellness tracker.'}
+                    : `${trackedUserName}'s cycle phase updates & wellness tracker.`}
                 </p>
               </div>
 
@@ -182,15 +189,15 @@ export default function PartnerPage() {
               </div>
             </section>
 
-            {isUserSarah ? (
-              // SARAH'S (USER) VIEW — Shows Connection Code & Share Options
+            {!isPartner ? (
+              // MAIN USER'S VIEW — Shows Connection Code & Share Options
               <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
                 
                 {/* Pairing Code Card */}
                 <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-6 border border-white/50 dark:border-[#3a2d58]/60 shadow-sm flex flex-col justify-between min-h-[220px]">
                   <div>
                     <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff] uppercase tracking-wider block mb-1">Your Connection Code</span>
-                    <h3 className="font-serif font-bold text-3xl text-[#18003d] dark:text-[#eee6ff] mb-2">NYRA-82941</h3>
+                    <h3 className="font-serif font-bold text-3xl text-[#18003d] dark:text-[#eee6ff] mb-2">{displayPairingCode}</h3>
                     <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium">
                       Share this code with your partner. When they log in with this code, they can view your expected cycle periods, energy, and cravings.
                     </p>
@@ -209,7 +216,7 @@ export default function PartnerPage() {
                     <div className="space-y-2.5">
                       <div className="flex justify-between items-center text-xs font-semibold">
                         <span className="text-[#3d3050] dark:text-[#c8bedd]">Connected Partner</span>
-                        <span className="font-bold text-[#18003d] dark:text-[#eee6ff]">John Doe</span>
+                        <span className="font-bold text-[#18003d] dark:text-[#eee6ff]">{connectedPartnerName}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs font-semibold">
                         <span className="text-[#3d3050] dark:text-[#c8bedd]">Last Update Sync</span>
@@ -227,13 +234,13 @@ export default function PartnerPage() {
 
               </div>
             ) : (
-              // JOHN'S (PARTNER) DASHBOARD VIEW
+              // PARTNER'S DASHBOARD VIEW
               <div className="flex flex-col gap-6">
                 
                 {/* Status cards */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
                   
-                  {/* Sarah's Cycle Stage */}
+                  {/* Tracked User's Cycle Stage */}
                   <div className="md:col-span-8 glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between min-h-[200px] border border-white/50 dark:border-[#3a2d58]/60 shadow-sm">
                     <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none text-primary">
                       <Heart className="w-32 h-32 fill-current" />
@@ -288,7 +295,7 @@ export default function PartnerPage() {
                     </div>
                     <div className="z-10">
                       <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Nyra AI Suggests</h3>
-                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-semibold">How you can support Sarah today</p>
+                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-semibold">How you can support {trackedUserName} today</p>
                     </div>
                   </div>
                   
@@ -334,7 +341,7 @@ export default function PartnerPage() {
                 </button>
                 <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0">
                   <img 
-                    src={isUserSarah 
+                    src={isPartner 
                       ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
                       : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
                     alt="Chat Avatar" 
@@ -342,7 +349,7 @@ export default function PartnerPage() {
                   />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{isUserSarah ? 'John Doe ❤️' : 'Sarah 🌸'}</h3>
+                  <h3 className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{connectedPartnerName} ❤️</h3>
                   <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff] block mt-0.5">Active Sync • Encrypted Chat</span>
                 </div>
               </div>
@@ -351,7 +358,7 @@ export default function PartnerPage() {
             {/* Chat Body Logs */}
             <div className="flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-4 bg-white/30 dark:bg-[#0d0818]/60">
               {messages.map((msg) => {
-                const isSentByMe = (isUserSarah && msg.senderId === 'user-sarah') || (!isUserSarah && msg.senderId === 'partner-john');
+                const isSentByMe = msg.senderId === user?.id || (isPartner && msg.senderId === 'partner-john') || (!isPartner && msg.senderId === 'user-sarah');
                 const isReactionsActive = activeMessageIdForReactions === msg.id;
 
                 return (
@@ -539,7 +546,7 @@ export default function PartnerPage() {
             {/* Quick Prompt Suggestions Bar */}
             <div className="px-4 py-2 bg-white/40 dark:bg-[#100c20]/60 border-b border-black/8 dark:border-[#3a2d58]/40 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
               <button 
-                onClick={() => handleSendPartnerAi("How can I support Sarah during her Luteal Phase?")}
+                onClick={() => handleSendPartnerAi(`How can I support ${trackedUserName} during her Luteal Phase?`)}
                 className="px-3 py-1 rounded-xl border border-tertiary/30 bg-tertiary/5 dark:bg-tertiary/10 hover:bg-tertiary/20 text-tertiary text-[11px] font-semibold shrink-0 transition-colors"
               >
                 🌸 Support Luteal phase?
@@ -561,7 +568,7 @@ export default function PartnerPage() {
             {/* AI Chat Messages Body */}
             <div className="flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-4 bg-white/30 dark:bg-[#0d0818]/60 relative">
               {partnerAiMessages.map((msg) => {
-                const isUser = msg.senderId === 'partner-john' || msg.senderId === 'user';
+                const isUser = msg.senderId === user?.id || msg.senderId === 'partner-john' || msg.senderId === 'user';
                 const isSpeaking = speakingMessageId === msg.id;
 
                 return (
@@ -615,7 +622,7 @@ export default function PartnerPage() {
             <div className="bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex items-center gap-2">
               <input 
                 type="text" 
-                placeholder="Ask Nyra AI how to support Sarah..." 
+                placeholder={`Ask Nyra AI how to support ${trackedUserName}...`}
                 value={partnerAiInput}
                 onChange={(e) => setPartnerAiInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendPartnerAi()}

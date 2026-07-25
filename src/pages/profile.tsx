@@ -8,7 +8,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { onboardingData, user } = useStore();
 
-  const name = onboardingData.name || 'Sarah';
+  const name = user?.name || onboardingData.name || 'User';
   const age = onboardingData.age || 28;
   const dob = onboardingData.dob || '1998-04-12';
   const cycleLength = onboardingData.averageCycleLength || 28;

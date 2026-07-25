@@ -161,10 +161,10 @@ export default function Layout({ children }: LayoutProps) {
             </button>
 
             {/* Avatar */}
-            <div className="w-8 h-8 rounded-xl overflow-hidden border-2 border-primary/25 shadow-sm shrink-0 ml-1" title={isPartnerMode ? 'John (Partner)' : 'Sarah'}>
+            <div className="w-8 h-8 rounded-xl overflow-hidden border-2 border-primary/25 shadow-sm shrink-0 ml-1" title={user?.name || (isPartnerMode ? 'Partner' : 'User')}>
               <img
                 src={avatarSrc}
-                alt={isPartnerMode ? 'John Avatar' : 'Sarah Avatar'}
+                alt={user?.name ? `${user.name} Avatar` : 'User Avatar'}
                 className="w-full h-full object-cover"
               />
             </div>
