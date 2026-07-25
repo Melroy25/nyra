@@ -36,11 +36,12 @@ export const apiRegister = (email: string, password: string, name: string, role:
     body: JSON.stringify({ email, password, name, role }),
   });
 
-export const apiPartnerCodeLogin = (partnerCode: string, name?: string) =>
+export const apiPartnerCodeLogin = (partnerCode: string, email: string, password: string) =>
   request<{ token: string; user: any }>('/api/auth/partner-code-login', {
     method: 'POST',
-    body: JSON.stringify({ partnerCode, name }),
+    body: JSON.stringify({ partnerCode, email, password }),
   });
+
 
 // ── USER ──────────────────────────────────────
 
@@ -98,6 +99,19 @@ export const apiSaveCycleLog = (log: Record<string, any>) =>
     method: 'POST',
     body: JSON.stringify(log),
   });
+
+export const apiGetCycleMetrics = () =>
+  request<{
+    currentDay: number;
+    currentPhase: string;
+    nextPeriodDaysLeft: number;
+    cycleLength: number;
+    periodDuration: number;
+    lastPeriodDate: string | null;
+    todayMood: string | null;
+    todaySymptoms: string[];
+    todayNotes: string | null;
+  }>('/api/cycle/metrics');
 
 // ── CHAT ─────────────────────────────────────
 

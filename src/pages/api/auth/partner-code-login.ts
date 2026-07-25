@@ -3,132 +3,110 @@ import { supabaseAdmin } from '../../../lib/supabase';
 import jwt from 'jsonwebtoken';
 
 // POST /api/auth/partner-code-login
-// Body: { partnerCode: string, name?: string }
-// Instant 1-click login for partners using just their partner's connection code!
+// NEW FLOW: Partner must have their own registered account (role='partner')
+// Body: { partnerCode, email, password }
+// 1. Validate their email+password credentials
+// 2. Find the main user by partnerCode
+// 3. Bidirectionally link both accounts
+// 4. Return JWT for the partner
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { partnerCode, name = 'Partner' } = req.body;
-  if (!partnerCode) {
-    return res.status(400).json({ error: 'Please enter a valid connection code.' });
+  const { partnerCode, email, password } = req.body;
+
+  if (!partnerCode || !email || !password) {
+    return res.status(400).json({ error: 'Partner code, email, and password are all required.' });
   }
 
   const supabase = supabaseAdmin();
   const cleanCode = partnerCode.trim().toUpperCase();
 
   try {
-    // 1. Find main user by partner_code OR fallback to 'NYRA-82941' default match
-    let { data: targetUser } = await supabase
+    // 1. Authenticate the partner using Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+
+    if (authError || !authData.user) {
+      return res.status(401).json({ error: 'Invalid email or password. Please check your credentials.' });
+    }
+
+    // 2. Lookup partner's user profile from our public.users table
+    const { data: partnerUser, error: partnerLookupError } = await supabase
       .from('users')
       .select('*')
+      .eq('auth_id', authData.user.id)
+      .maybeSingle();
+
+    if (partnerLookupError || !partnerUser) {
+      return res.status(404).json({ error: 'Partner account profile not found. Please create an account first.' });
+    }
+
+    if (partnerUser.role !== 'partner') {
+      return res.status(403).json({ error: 'This account is not a partner account. Use regular Sign In instead.' });
+    }
+
+    // 3. Find the main user by their partner_code
+    const { data: targetUser, error: targetError } = await supabase
+      .from('users')
+      .select('id, name, email, role, partner_code, cycle_length, period_duration, connected_partner_id')
       .eq('partner_code', cleanCode)
       .maybeSingle();
 
-    // Fallback: if searching for NYRA-82941 or similar, match the first 'user' role account (Melroy)
-    if (!targetUser) {
-      const { data: firstUser } = await supabase
-        .from('users')
-        .select('*')
-        .eq('role', 'user')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (firstUser) {
-        targetUser = firstUser;
-        // Update main user's partner code to match cleanCode so future lookups match
-        await supabase
-          .from('users')
-          .update({ partner_code: cleanCode })
-          .eq('id', firstUser.id);
-      }
+    if (targetError || !targetUser) {
+      return res.status(404).json({ error: 'No user found with that partner code. Please double-check the code.' });
     }
 
-    if (!targetUser) {
-      return res.status(404).json({ error: 'Invalid connection code. No user account found for that code.' });
+    // 4. Don't allow connecting to your own account
+    if (targetUser.id === partnerUser.id) {
+      return res.status(400).json({ error: "You can't connect to your own account." });
     }
 
-    // 2. Check if partner user already exists for this target user
-    let partnerUser = null;
-
-    if (targetUser.connected_partner_id) {
-      const { data: existingPartner } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', targetUser.connected_partner_id)
-        .maybeSingle();
-      partnerUser = existingPartner;
+    // 5. Check if target user is already linked to a DIFFERENT partner
+    if (
+      targetUser.connected_partner_id &&
+      targetUser.connected_partner_id !== partnerUser.id
+    ) {
+      return res.status(409).json({ error: 'This user is already linked to another partner.' });
     }
 
-    // 3. If no partner account exists yet, create one automatically
-    if (!partnerUser) {
-      const partnerEmail = `partner-${cleanCode.toLowerCase()}-${Date.now()}@nyra.app`;
-      const partnerPassword = `nyra-partner-pass-${Date.now()}`;
+    // 6. Bidirectional link: partner → user AND user → partner
+    await supabase
+      .from('users')
+      .update({ connected_partner_id: targetUser.id })
+      .eq('id', partnerUser.id);
 
-      // Create Supabase Auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: partnerEmail,
-        password: partnerPassword,
-        email_confirm: true,
-      });
+    await supabase
+      .from('users')
+      .update({ connected_partner_id: partnerUser.id })
+      .eq('id', targetUser.id);
 
-      if (authError) {
-        return res.status(500).json({ error: 'Failed to create partner session' });
-      }
+    // 7. Ensure shared chat thread exists
+    const { data: existingThread } = await supabase
+      .from('chat_threads')
+      .select('id')
+      .or(
+        `and(user_id.eq.${targetUser.id},partner_id.eq.${partnerUser.id}),and(user_id.eq.${partnerUser.id},partner_id.eq.${targetUser.id})`
+      )
+      .maybeSingle();
 
-      // Create user profile in public.users
-      const { data: newPartnerProfile, error: profileError } = await supabase
-        .from('users')
-        .insert({
-          auth_id: authData.user.id,
-          email: partnerEmail,
-          name: name.trim() || 'Partner',
-          role: 'partner',
-          partner_code: `NYRA-P-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-          connected_partner_id: targetUser.id,
-        })
-        .select()
-        .single();
-
-      if (profileError || !newPartnerProfile) {
-        return res.status(500).json({ error: 'Failed to save partner profile' });
-      }
-
-      partnerUser = newPartnerProfile;
-
-      // Link main user back to partner bidirectionally
-      await supabase
-        .from('users')
-        .update({ connected_partner_id: partnerUser.id })
-        .eq('id', targetUser.id);
-
-      // Create shared chat thread
+    if (!existingThread) {
       await supabase.from('chat_threads').insert({
         user_id: targetUser.id,
         partner_id: partnerUser.id,
         title: 'Partner Chat',
       });
-    } else {
-      // If partner exists, update name if provided
-      if (name && name !== 'Partner') {
-        const { data: updated } = await supabase
-          .from('users')
-          .update({ name: name.trim() })
-          .eq('id', partnerUser.id)
-          .select()
-          .single();
-        if (updated) partnerUser = updated;
-      }
     }
 
-    // 4. Generate session JWT
+    // 8. Sign JWT for partner session
     const token = jwt.sign(
       {
         userId: partnerUser.id,
         email: partnerUser.email,
         role: 'partner',
-        authId: partnerUser.auth_id,
+        authId: authData.user.id,
       },
       process.env.JWT_SECRET!,
       { expiresIn: '30d' }

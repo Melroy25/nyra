@@ -1,23 +1,62 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Sparkles, Calendar, Heart, PlusCircle, Smile, Activity, MessageCircle, Leaf, Zap, Moon, HeartPulse, ArrowRight } from 'lucide-react';
+import { Sparkles, Calendar, Heart, PlusCircle, Smile, Activity, MessageCircle, Leaf, Zap, Moon, HeartPulse, ArrowRight, Loader2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion } from 'framer-motion';
+import { apiGetCycleMetrics } from '../lib/api';
 
 export default function DashboardPage() {
   const router = useRouter();
   
   // Fetch values from Zustand store
-  const { 
-    onboardingData, 
-    currentCycleDay, 
-    currentCyclePhase, 
-    nextPeriodDaysLeft,
-    cycleLogs,
-    user
-  } = useStore();
+  const { user } = useStore();
 
-  const name = user?.name || onboardingData.name || 'User';
+  const name = user?.name || 'User';
+
+  // Live backend cycle metrics
+  const [cycleMetrics, setCycleMetrics] = useState<{
+    currentDay: number;
+    currentPhase: string;
+    nextPeriodDaysLeft: number;
+    cycleLength: number;
+    todayMood: string | null;
+    todaySymptoms: string[];
+  } | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(true);
+
+  useEffect(() => {
+    if (user?.id) {
+      setMetricsLoading(true);
+      apiGetCycleMetrics()
+        .then((data) => {
+          setCycleMetrics(data);
+        })
+        .catch((err) => {
+          console.log('Cycle metrics fetch failed (using defaults):', err);
+          // Fallback defaults for new users who haven't done onboarding
+          setCycleMetrics({
+            currentDay: 1,
+            currentPhase: 'Follicular',
+            nextPeriodDaysLeft: 28,
+            cycleLength: 28,
+            todayMood: null,
+            todaySymptoms: [],
+          });
+        })
+        .finally(() => setMetricsLoading(false));
+    } else {
+      setMetricsLoading(false);
+    }
+  }, [user?.id]);
+
+  const currentCycleDay = cycleMetrics?.currentDay ?? 1;
+  const currentCyclePhase = cycleMetrics?.currentPhase ?? 'Follicular';
+  const nextPeriodDaysLeft = cycleMetrics?.nextPeriodDaysLeft ?? 28;
+  const todayMood = cycleMetrics?.todayMood;
+  const todaySymptoms = cycleMetrics?.todaySymptoms ?? [];
+
+  // Progress fraction for the ring
+  const progressFraction = Math.max(0.02, currentCycleDay / (cycleMetrics?.cycleLength ?? 28));
 
   // Quick actions layout
   const quickActions = [
@@ -28,16 +67,22 @@ export default function DashboardPage() {
     { label: 'Self Care',    icon: Leaf,       path: '/selfcare', color: 'text-[#a0517a]', iconBg: 'bg-[#a0517a]/10 dark:bg-[#a0517a]/20' },
   ];
 
-  // Helper to retrieve today's log entries for energy/sleep
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayLog = cycleLogs.find((l) => l.date === todayStr);
-
   const stats = [
-    { label: 'Mood',     value: todayLog?.mood || 'Balanced', icon: Smile,       bg: 'bg-tertiary/12 dark:bg-[#a0517a]/25',  color: 'text-tertiary dark:text-[#ffaeda]' },
-    { label: 'Energy',   value: 'High',                        icon: Zap,         bg: 'bg-primary/12 dark:bg-[#7c5cbf]/25',   color: 'text-primary dark:text-[#d4b8ff]' },
-    { label: 'Sleep',    value: '7h 30m',                      icon: Moon,        bg: 'bg-secondary/12 dark:bg-[#7b5ea7]/25', color: 'text-secondary dark:text-[#ccbeff]' },
-    { label: 'Symptoms', value: todayLog?.symptoms?.length ? todayLog.symptoms.join(', ') : 'Mild Cramps', icon: HeartPulse, bg: 'bg-on-surface/8 dark:bg-white/8', color: 'text-on-surface dark:text-[#eee6ff]' },
+    { label: 'Mood',     value: todayMood || 'Not logged',          icon: Smile,       bg: 'bg-tertiary/12 dark:bg-[#a0517a]/25',  color: 'text-tertiary dark:text-[#ffaeda]' },
+    { label: 'Energy',   value: currentCyclePhase === 'Ovulation' ? 'High Energy' : currentCyclePhase === 'Menstrual' || currentCyclePhase === 'Luteal' ? 'Low Energy' : 'Normal',
+                          icon: Zap,         bg: 'bg-primary/12 dark:bg-[#7c5cbf]/25',   color: 'text-primary dark:text-[#d4b8ff]' },
+    { label: 'Phase',    value: currentCyclePhase,                   icon: Moon,        bg: 'bg-secondary/12 dark:bg-[#7b5ea7]/25', color: 'text-secondary dark:text-[#ccbeff]' },
+    { label: 'Symptoms', value: todaySymptoms.length ? todaySymptoms.slice(0, 2).join(', ') : 'None logged', icon: HeartPulse, bg: 'bg-on-surface/8 dark:bg-white/8', color: 'text-on-surface dark:text-[#eee6ff]' },
   ];
+
+  // Insight message based on real phase
+  const phaseInsight: Record<string, string> = {
+    Menstrual: 'Your body is in renewal mode. Rest well, stay hydrated, and be gentle with yourself today.',
+    Follicular: 'Energy is building! Great time to tackle goals, try new things, and socialise.',
+    Ovulation: 'Peak energy and confidence! You may feel your best today — perfect for big plans.',
+    Luteal: 'Your energy may dip slightly. Nourish yourself with warm foods and light movement.',
+  };
+  const insight = phaseInsight[currentCyclePhase] || 'Track your cycle daily to receive personalised insights.';
 
   return (
     <div className="max-w-[1200px] mx-auto px-container-padding-mobile md:px-container-padding-desktop pt-stack-md pb-12">
@@ -58,49 +103,57 @@ export default function DashboardPage() {
           {/* Nebula decorative glow */}
           <div className="absolute -right-12 -top-12 w-64 h-64 bg-primary-fixed/30 rounded-full blur-3xl"></div>
           
-          <div className="z-10 flex justify-between items-start mb-6">
-            <div>
-              <span className="font-bold text-xs text-primary uppercase tracking-wider block mb-1">Current Phase</span>
-              <h2 className="font-serif font-bold text-3xl md:text-5xl text-[#18003d] dark:text-[#eee6ff]">{currentCyclePhase}</h2>
+          {metricsLoading ? (
+            <div className="flex items-center justify-center flex-1 z-10">
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
             </div>
-            <div className="bg-white/60 dark:bg-white/10 text-[#18003d] dark:text-[#eee6ff] px-4 py-2 rounded-xl font-bold text-xs border border-white/50 dark:border-white/15 shadow-sm">
-              Cycle Day {currentCycleDay}
-            </div>
-          </div>
+          ) : (
+            <>
+              <div className="z-10 flex justify-between items-start mb-6">
+                <div>
+                  <span className="font-bold text-xs text-primary uppercase tracking-wider block mb-1">Current Phase</span>
+                  <h2 className="font-serif font-bold text-3xl md:text-5xl text-[#18003d] dark:text-[#eee6ff]">{currentCyclePhase}</h2>
+                </div>
+                <div className="bg-white/60 dark:bg-white/10 text-[#18003d] dark:text-[#eee6ff] px-4 py-2 rounded-xl font-bold text-xs border border-white/50 dark:border-white/15 shadow-sm">
+                  Cycle Day {currentCycleDay}
+                </div>
+              </div>
 
-          <div className="z-10 mt-auto">
-            <div className="flex items-center gap-4">
-              {/* Progress Ring Widget */}
-              <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                  <path 
-                    className="text-surface-dim" 
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="3.5"
-                  ></path>
-                  <motion.path 
-                    initial={{ pathLength: 0 }}
-                    animate={{ pathLength: Math.max(0.01, (cycleLogs.length / 30) || 0.6) }}
-                    transition={{ duration: 1 }}
-                    className="text-primary" 
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeDasharray="100, 100" 
-                    strokeLinecap="round" 
-                    strokeWidth="3.5"
-                  ></motion.path>
-                </svg>
-                <Calendar className="absolute text-primary w-5 h-5" />
+              <div className="z-10 mt-auto">
+                <div className="flex items-center gap-4">
+                  {/* Progress Ring Widget */}
+                  <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                      <path 
+                        className="text-surface-dim" 
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="3.5"
+                      ></path>
+                      <motion.path 
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: progressFraction }}
+                        transition={{ duration: 1 }}
+                        className="text-primary" 
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeDasharray="100, 100" 
+                        strokeLinecap="round" 
+                        strokeWidth="3.5"
+                      ></motion.path>
+                    </svg>
+                    <Calendar className="absolute text-primary w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block">Next Period In</span>
+                    <span className="font-serif font-bold text-2xl text-[#18003d] dark:text-[#eee6ff]">{nextPeriodDaysLeft} Days</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block">Next Period In</span>
-                <span className="font-serif font-bold text-2xl text-[#18003d] dark:text-[#eee6ff]">{nextPeriodDaysLeft} Days</span>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
 
         {/* AI Insight Card Widget */}
@@ -111,7 +164,7 @@ export default function DashboardPage() {
               <span className="font-bold text-sm text-tertiary">Nyra Insight</span>
             </div>
             <p className="text-base text-[#18003d] dark:text-[#eee6ff] italic leading-relaxed">
-              &quot;Based on your previous cycles, you may experience lower energy tomorrow. Sync in with a light routine today.&quot;
+              &quot;{insight}&quot;
             </p>
           </div>
           <div className="mt-6">

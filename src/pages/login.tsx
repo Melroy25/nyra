@@ -292,23 +292,26 @@ export default function LoginPage() {
             </div>
 
             {partnerTab === 'code' ? (
-              /* CODE LOGIN FORM */
+              /* PARTNER CODE + CREDENTIALS LOGIN */
               <form onSubmit={async (e) => {
                 e.preventDefault();
-                if (!partnerCode.trim()) { setErrorMsg('Please enter a partner connection code.'); return; }
+                if (!partnerCode.trim()) { setErrorMsg('Please enter your partner connection code.'); return; }
+                if (!partnerEmail) { setErrorMsg('Please enter your email address.'); return; }
+                if (!partnerPassword) { setErrorMsg('Please enter your password.'); return; }
                 setErrorMsg('');
                 setLoading(true);
                 try {
-                  const { token, user } = await apiPartnerCodeLogin(partnerCode.trim(), name.trim() || 'Royal');
+                  const { token, user } = await apiPartnerCodeLogin(partnerCode.trim(), partnerEmail.trim(), partnerPassword);
                   localStorage.setItem('nyra_token', token);
                   setUser(user);
                   router.push('/partner');
                 } catch (err: any) {
-                  setErrorMsg(err.message || 'Could not log in with that partner code.');
+                  setErrorMsg(err.message || 'Could not log in. Check your code, email, and password.');
                 } finally {
                   setLoading(false);
                 }
               }} className="w-full flex flex-col gap-3">
+
                 <div>
                   <label className="text-[10px] font-bold text-tertiary uppercase tracking-wider block mb-1">Partner Connection Code</label>
                   <input 
@@ -322,15 +325,37 @@ export default function LoginPage() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">Your Name</label>
+                  <label className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">Your Email</label>
                   <input 
-                    type="text" 
-                    value={name} 
-                    onChange={e => setName(e.target.value)} 
-                    placeholder="e.g. Royal" 
+                    type="email" 
+                    value={partnerEmail} 
+                    onChange={e => setPartnerEmail(e.target.value)} 
+                    placeholder="your@email.com" 
+                    required
                     className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 dark:placeholder-[#8a7fa0]"
                   />
                 </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">Your Password</label>
+                  <div className="relative">
+                    <input 
+                      type={showPartnerPassword ? 'text' : 'password'} 
+                      value={partnerPassword} 
+                      onChange={e => setPartnerPassword(e.target.value)} 
+                      placeholder="Your account password"
+                      required
+                      className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 dark:placeholder-[#8a7fa0]"
+                    />
+                    <button type="button" onClick={() => setShowPartnerPassword(!showPartnerPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3d3050] dark:text-[#c8bedd] hover:text-tertiary">
+                      {showPartnerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-[#3d3050] dark:text-[#c8bedd] font-medium leading-relaxed px-1">
+                  💡 You need a Partner account. <span className="font-bold text-tertiary cursor-pointer" onClick={() => setPartnerTab('email')}>Register one here →</span>
+                </p>
 
                 {errorMsg && <p className="text-xs font-bold text-red-500 dark:text-red-400 text-center mt-1">{errorMsg}</p>}
                 
@@ -339,7 +364,7 @@ export default function LoginPage() {
                   disabled={loading} 
                   className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-tertiary to-primary text-white font-bold text-sm shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Heart className="w-4 h-4" /> Connect & Log In as Partner</>}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Heart className="w-4 h-4" /> Connect & Sign In</>}
                 </button>
               </form>
             ) : (
