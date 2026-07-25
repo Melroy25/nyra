@@ -65,6 +65,23 @@ export const apiConnectPartner = (partnerCode: string) =>
     body: JSON.stringify({ partnerCode }),
   });
 
+export const apiGetPartnerDashboard = () =>
+  request<{
+    isConnected: boolean;
+    partner?: any;
+    cycleMetrics?: {
+      currentDay: number;
+      currentPhase: string;
+      daysLeft: number;
+      updatedText: string;
+      energyLevel: string;
+      cravings: string;
+      latestMood: string;
+      latestSymptoms: string[];
+    };
+    suggestions?: { title: string; desc: string }[];
+  }>('/api/partner/dashboard');
+
 // ── CYCLE LOGS ────────────────────────────────
 
 export const apiGetCycleLogs = (month?: string) =>

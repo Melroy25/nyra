@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiConnectPartner, apiGetMessages, apiSendMessage, apiAddReaction } from '../lib/api';
+import { apiConnectPartner, apiGetMessages, apiSendMessage, apiAddReaction, apiGetPartnerDashboard } from '../lib/api';
 import { useRealtimeChat } from '../hooks/useRealtimeChat';
 
 export default function PartnerPage() {
@@ -68,6 +68,8 @@ export default function PartnerPage() {
   const displayPairingCode = user?.partnerCode || 'NYRA-82941';
   const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
 
+  const [dashboardData, setDashboardData] = useState<any>(null);
+
   // Subscribe to Realtime Chat Messages
   useRealtimeChat(activeThreadId, (newMsg) => {
     setMessages((prev) => {
@@ -75,6 +77,24 @@ export default function PartnerPage() {
       return [...prev, newMsg];
     });
   });
+
+  // Fetch Live Partner Dashboard Data
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      apiGetPartnerDashboard()
+        .then((data: any) => {
+          setDashboardData(data);
+          if (data.partner && user && !user.connectedPartner) {
+            setUser({
+              ...user,
+              connectedPartner: data.partner,
+              connectedPartnerId: data.partner.id,
+            });
+          }
+        })
+        .catch((err: any) => console.log('Partner dashboard load:', err));
+    }
+  }, [activeTab]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -343,13 +363,19 @@ export default function PartnerPage() {
                     <div>
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-2xl bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 mb-4">
                         <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-                        <span className="font-bold text-[10px] text-primary dark:text-[#d4b8ff] uppercase tracking-wider">Luteal Phase</span>
+                        <span className="font-bold text-[10px] text-primary dark:text-[#d4b8ff] uppercase tracking-wider">
+                          {dashboardData?.cycleMetrics?.currentPhase || 'Luteal Phase'}
+                        </span>
                       </div>
-                      <h2 className="font-serif font-bold text-4xl text-primary dark:text-[#d4b8ff] mb-1">Day 24</h2>
-                      <p className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Period Expected in 4 days</p>
+                      <h2 className="font-serif font-bold text-4xl text-primary dark:text-[#d4b8ff] mb-1">
+                        Day {dashboardData?.cycleMetrics?.currentDay || 24}
+                      </h2>
+                      <p className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">
+                        Period Expected in {dashboardData?.cycleMetrics?.daysLeft || 4} days
+                      </p>
                     </div>
                     <div className="mt-6 text-xs text-[#3d3050] dark:text-[#c8bedd] font-semibold">
-                      Updated 2 hours ago
+                      {dashboardData?.cycleMetrics?.updatedText || 'Updated just now'}
                     </div>
                   </div>
 
@@ -362,7 +388,9 @@ export default function PartnerPage() {
                       </div>
                       <div>
                         <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-0.5">Energy Level</span>
-                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">Low Energy</span>
+                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">
+                          {dashboardData?.cycleMetrics?.energyLevel || 'Low Energy'}
+                        </span>
                       </div>
                     </div>
                     
@@ -373,7 +401,9 @@ export default function PartnerPage() {
                       </div>
                       <div>
                         <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-0.5">Cravings</span>
-                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">Chocolate</span>
+                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">
+                          {dashboardData?.cycleMetrics?.cravings || 'Chocolate'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -395,18 +425,17 @@ export default function PartnerPage() {
                   </div>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 z-10 relative">
-                    <div className="bg-white/60 dark:bg-[#1c1230]/70 border border-white/50 dark:border-[#3a2d58]/60 p-4 rounded-2xl space-y-1">
-                      <h4 className="font-bold text-xs text-[#18003d] dark:text-[#eee6ff]">Offer a quiet evening</h4>
-                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium">
-                        Her low energy suggests she might appreciate resting instead of going out. Keep it cozy.
-                      </p>
-                    </div>
-                    <div className="bg-white/60 dark:bg-[#1c1230]/70 border border-white/50 dark:border-[#3a2d58]/60 p-4 rounded-2xl space-y-1">
-                      <h4 className="font-bold text-xs text-[#18003d] dark:text-[#eee6ff]">Bring a small treat</h4>
-                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium">
-                        She logged cravings for chocolate. A small chocolate surprise on your way home could boost her spirits.
-                      </p>
-                    </div>
+                    {(dashboardData?.suggestions || [
+                      { title: 'Offer a quiet evening', desc: 'Her low energy suggests she might appreciate resting instead of going out.' },
+                      { title: 'Bring a small treat', desc: 'She logged cravings for chocolate. A small surprise will mean a lot!' },
+                    ]).map((s: any, idx: number) => (
+                      <div key={idx} className="bg-white/60 dark:bg-[#1c1230]/70 border border-white/50 dark:border-[#3a2d58]/60 p-4 rounded-2xl space-y-1">
+                        <h4 className="font-bold text-xs text-[#18003d] dark:text-[#eee6ff]">{s.title}</h4>
+                        <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium">
+                          {s.desc}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
