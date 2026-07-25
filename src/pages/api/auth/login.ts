@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 
 // POST /api/auth/login
@@ -12,28 +13,73 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
-  const supabase = supabaseAdmin();
+  // Use ANON key client for signInWithPassword (this is what Supabase auth requires)
+  const supabaseAnon = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
 
   try {
-    // 1. Sign in via Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
+    // 1. Sign in via Supabase Auth using anon client
+    const { data: authData, error: authError } = await supabaseAnon.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
       password,
     });
 
-    if (authError) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+    if (authError || !authData?.user) {
+      console.error('Supabase auth error:', authError?.message);
+      return res.status(401).json({ error: authError?.message || 'Invalid email or password' });
     }
 
-    // 2. Fetch user profile
+    const supabase = supabaseAdmin();
+
+    // 2. Fetch user profile using admin client
     const { data: userProfile, error: profileError } = await supabase
       .from('users')
-      .select('*, notification_settings(*)')
+      .select('*')
       .eq('auth_id', authData.user.id)
-      .single();
+      .maybeSingle();
 
     if (profileError || !userProfile) {
-      return res.status(404).json({ error: 'User profile not found' });
+      console.error('Profile fetch error:', profileError?.message, 'auth_id:', authData.user.id);
+      // Profile missing but auth exists — create basic profile
+      const partnerCode = `NYRA-${Math.floor(10000 + Math.random() * 90000)}`;
+      const { data: newProfile } = await supabase
+        .from('users')
+        .insert({
+          auth_id: authData.user.id,
+          email: email.trim().toLowerCase(),
+          name: authData.user.user_metadata?.name || email.split('@')[0],
+          role: 'user',
+          partner_code: partnerCode,
+        })
+        .select()
+        .single();
+
+      if (!newProfile) {
+        return res.status(404).json({ error: 'User profile not found. Please create an account.' });
+      }
+
+      const token = jwt.sign(
+        { userId: newProfile.id, email: newProfile.email, role: newProfile.role, authId: authData.user.id },
+        process.env.JWT_SECRET!,
+        { expiresIn: '30d' }
+      );
+
+      return res.status(200).json({
+        token,
+        user: {
+          id: newProfile.id,
+          email: newProfile.email,
+          name: newProfile.name,
+          role: newProfile.role,
+          partnerCode: newProfile.partner_code,
+          connectedPartnerId: null,
+          connectedPartner: null,
+          onboardingCompleted: false,
+        },
+      });
     }
 
     // 3. Fetch connected partner info if any
@@ -43,7 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .from('users')
         .select('id, name, email, role, partner_code')
         .eq('id', userProfile.connected_partner_id)
-        .single();
+        .maybeSingle();
       connectedPartner = partner;
     }
 
@@ -51,7 +97,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const token = jwt.sign(
       {
         userId: userProfile.id,
-        email,
+        email: userProfile.email,
         role: userProfile.role,
         authId: authData.user.id,
       },
@@ -79,7 +125,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
   } catch (err: any) {
-    console.error('Login error:', err);
+    console.error('Login API error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

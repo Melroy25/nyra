@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
 
 // POST /api/auth/partner-code-login
@@ -22,9 +23,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const supabase = supabaseAdmin();
   const cleanCode = partnerCode.trim().toUpperCase();
 
+  // Use anon client for auth signIn (admin client doesn't support password auth the same way)
+  const supabaseAnon = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  );
+
   try {
-    // 1. Authenticate the partner using Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    // 1. Authenticate the partner using Supabase Auth (anon client)
+    const { data: authData, error: authError } = await supabaseAnon.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
