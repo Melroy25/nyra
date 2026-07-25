@@ -1,14 +1,20 @@
 export interface User {
   id: string;
   name: string;
-  age: number;
-  dob: string;
-  averageCycleLength: number;
+  email?: string;
+  age?: number;
+  dob?: string;
+  dateOfBirth?: string;
+  averageCycleLength?: number;
+  cycleLength: number;
   periodDuration: number;
   goals: string[];
   partnerCode: string;
-  connectedPartnerCode: string | null;
+  connectedPartnerCode?: string | null;
+  connectedPartnerId?: string | null;
   role: 'user' | 'partner';
+  avatarUrl?: string;
+  onboardingCompleted?: boolean;
 }
 
 export type FlowLevel = 'light' | 'medium' | 'heavy';

@@ -201,6 +201,7 @@ export const useStore = create<AppState>((set, get) => ({
       age: data.age,
       dob: data.dob,
       averageCycleLength: data.averageCycleLength,
+      cycleLength: data.averageCycleLength || 28,
       periodDuration: data.periodDuration,
       goals: data.goals,
       partnerCode: 'NYRA-82941',
