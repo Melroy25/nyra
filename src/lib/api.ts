@@ -36,6 +36,12 @@ export const apiRegister = (email: string, password: string, name: string, role:
     body: JSON.stringify({ email, password, name, role }),
   });
 
+export const apiPartnerCodeLogin = (partnerCode: string, name?: string) =>
+  request<{ token: string; user: any }>('/api/auth/partner-code-login', {
+    method: 'POST',
+    body: JSON.stringify({ partnerCode, name }),
+  });
+
 // ── USER ──────────────────────────────────────
 
 export const apiGetProfile = () =>
