@@ -10,14 +10,42 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
   const supabase = supabaseAdmin();
 
   if (req.method === 'GET') {
-    const { data, error } = await supabase
+    const { data: rawUser, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', authUser.userId)
       .single();
 
-    if (error) return res.status(404).json({ error: 'Profile not found' });
-    return res.status(200).json({ user: data });
+    if (error || !rawUser) return res.status(404).json({ error: 'Profile not found' });
+
+    let connectedPartner = null;
+    if (rawUser.connected_partner_id) {
+      const { data: partner } = await supabase
+        .from('users')
+        .select('id, name, email, role, partner_code')
+        .eq('id', rawUser.connected_partner_id)
+        .maybeSingle();
+      connectedPartner = partner;
+    }
+
+    const formattedUser = {
+      id: rawUser.id,
+      email: rawUser.email,
+      name: rawUser.name,
+      role: rawUser.role,
+      age: rawUser.age,
+      dateOfBirth: rawUser.date_of_birth,
+      cycleLength: rawUser.cycle_length || 28,
+      periodDuration: rawUser.period_duration || 5,
+      goals: rawUser.goals || [],
+      partnerCode: rawUser.partner_code,
+      connectedPartnerId: rawUser.connected_partner_id,
+      connectedPartner,
+      onboardingCompleted: rawUser.onboarding_completed || false,
+      avatarUrl: rawUser.avatar_url,
+    };
+
+    return res.status(200).json({ user: formattedUser });
   }
 
   if (req.method === 'PATCH') {

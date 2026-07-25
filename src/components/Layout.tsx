@@ -57,8 +57,11 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   const handleLogout = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('nyra_token');
+    }
     setUser(null);
-    router.push('/');
+    router.push('/login');
   };
 
   const avatarSrc = isPartnerMode
