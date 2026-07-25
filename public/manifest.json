@@ -1,0 +1,25 @@
+{
+  "name": "Nyra - AI Women's Health & Wellness",
+  "short_name": "Nyra",
+  "description": "AI-powered companion for cycle tracking, wellness, nutrition, and private partner support.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d0818",
+  "theme_color": "#7c5cbf",
+  "categories": ["lifestyle", "health", "medical"],
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

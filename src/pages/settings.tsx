@@ -1,11 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Bell, Shield, Download, Trash2, Check, Sparkles, ToggleLeft, ToggleRight } from 'lucide-react';
+import { ArrowLeft, Bell, Shield, Download, Trash2, Check, Sparkles, ToggleLeft, ToggleRight, Smartphone, MonitorSmartphone } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function SettingsPage() {
   const router = useRouter();
   const [isSaved, setIsSaved] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [isIos, setIsIos] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
+      setIsInstalled(true);
+      return;
+    }
+    const ua = window.navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(ua)) setIsIos(true);
+
+    const handler = (e: Event) => { e.preventDefault(); setDeferredPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') setIsInstalled(true);
+      setDeferredPrompt(null);
+    }
+  };
 
   // Notification toggles
   const [reminders, setReminders] = useState({
@@ -126,6 +152,43 @@ export default function SettingsPage() {
             );
           })}
         </div>
+      </section>
+
+      {/* Install App as PWA */}
+      <section className="glass-card rounded-xl p-5 border border-primary/20 dark:border-[#3a2d58]/60 shadow-sm bg-gradient-to-br from-primary/5 to-tertiary/5 dark:from-primary/10 dark:to-tertiary/10 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+            <MonitorSmartphone className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-serif font-bold text-base text-on-background dark:text-[#eee6ff]">Install Nyra App</h3>
+            <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] font-semibold">Add Nyra to your home screen for instant 1-tap access.</p>
+          </div>
+        </div>
+
+        {isInstalled ? (
+          <div className="flex items-center gap-2 text-xs font-bold text-primary dark:text-[#d4b8ff]">
+            <Check className="w-4 h-4" /> Nyra is already installed on this device!
+          </div>
+        ) : isIos ? (
+          <div className="bg-white/60 dark:bg-[#1c1230]/60 rounded-xl p-4 border border-black/8 dark:border-[#3a2d58]/40 text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium space-y-1.5">
+            <p className="font-bold text-[#18003d] dark:text-[#eee6ff] mb-2">iPhone / iPad Instructions:</p>
+            <p>1. Tap the <strong>Share ⎋</strong> button in your Safari browser.</p>
+            <p>2. Scroll and tap <strong>"Add to Home Screen"</strong>.</p>
+            <p>3. Tap <strong>"Add"</strong> — Nyra will appear on your home screen!</p>
+          </div>
+        ) : deferredPrompt ? (
+          <button
+            onClick={handleInstall}
+            className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-sm shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            <Download className="w-4 h-4" /> Install App Now
+          </button>
+        ) : (
+          <div className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium bg-white/50 dark:bg-[#1c1230]/50 rounded-xl p-3 border border-black/8 dark:border-[#3a2d58]/40">
+            Open Nyra in <strong>Chrome</strong> (Android/Desktop) to get the install prompt, or use <strong>Safari</strong> on iPhone and tap "Add to Home Screen".
+          </div>
+        )}
       </section>
 
       {/* Local data controls */}
