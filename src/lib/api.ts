@@ -36,10 +36,10 @@ export const apiRegister = (email: string, password: string, name: string, role:
     body: JSON.stringify({ email, password, name, role }),
   });
 
-export const apiPartnerCodeLogin = (partnerCode: string, email: string, password: string) =>
+export const apiPartnerCodeLogin = (partnerCode: string, email: string, password: string, name?: string) =>
   request<{ token: string; user: any }>('/api/auth/partner-code-login', {
     method: 'POST',
-    body: JSON.stringify({ partnerCode, email, password }),
+    body: JSON.stringify({ partnerCode, email, password, name }),
   });
 
 
@@ -115,13 +115,13 @@ export const apiGetCycleMetrics = () =>
 
 // ── CHAT ─────────────────────────────────────
 
-export const apiGetMessages = (threadId: string) =>
-  request<{ messages: any[] }>(`/api/chat/messages?threadId=${threadId}`);
+export const apiGetMessages = (threadId: string = 'auto') =>
+  request<{ messages: any[]; threadId: string }>(`/api/chat/messages?threadId=${threadId}`);
 
-export const apiSendMessage = (threadId: string, text?: string, sticker?: string) =>
-  request<{ message: any }>('/api/chat/messages', {
+export const apiSendMessage = (threadId: string = 'auto', text?: string, sticker?: string, mediaUrl?: string, mediaType?: string) =>
+  request<{ message: any; threadId: string }>('/api/chat/messages', {
     method: 'POST',
-    body: JSON.stringify({ threadId, text, sticker }),
+    body: JSON.stringify({ threadId, text, sticker, mediaUrl, mediaType }),
   });
 
 export const apiAddReaction = (messageId: string, reaction: string) =>
@@ -206,4 +206,25 @@ export const apiUpdateNotificationSettings = (updates: Record<string, any>) =>
     method: 'PATCH',
     body: JSON.stringify(updates),
   });
+
+// ── ACCOUNT MANAGEMENT & AUTH HELPERS ─────────
+
+export const apiDeleteAccount = (password: string) =>
+  request<{ success: boolean; message?: string }>('/api/users/delete-account', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+
+export const apiRequestPasswordReset = (email: string) =>
+  request<{ success: boolean; message: string }>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ step: 'request', email }),
+  });
+
+export const apiResetPassword = (email: string, otp: string, newPassword: string) =>
+  request<{ success: boolean; message: string }>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ step: 'reset', email, otp, newPassword }),
+  });
+
 

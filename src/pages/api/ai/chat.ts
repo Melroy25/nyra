@@ -4,38 +4,52 @@ import { withAuth, AuthUser } from '../../../lib/withAuth';
 
 // POST /api/ai/chat
 // Body: { threadId, message, aiType }
-// aiType: 'nyra' (for Sarah) | 'partner' (for John)
-// Calls Google Gemini API with cycle-context system prompt
+// aiType: 'nyra' (for Sarah/User) | 'partner' (for Partner)
+// Calls Google Gemini API with cycle-context system prompt or provides wellness fallback
 
 async function handler(req: NextApiRequest, res: NextApiResponse, authUser: AuthUser) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { threadId, message, aiType = 'nyra' } = req.body;
-  if (!threadId || !message) {
-    return res.status(400).json({ error: 'threadId and message are required' });
+  let { threadId, message, aiType = 'nyra' } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: 'message is required' });
   }
 
   const supabase = supabaseAdmin();
 
   try {
-    // 1. Verify thread belongs to user
-    const { data: thread } = await supabase
-      .from('ai_threads')
-      .select('id, title')
-      .eq('id', threadId)
-      .eq('user_id', authUser.userId)
-      .single();
+    // 1. Auto-resolve threadId if 'auto' or missing
+    if (!threadId || threadId === 'auto') {
+      let { data: existingThread } = await supabase
+        .from('ai_threads')
+        .select('id')
+        .eq('user_id', authUser.userId)
+        .eq('ai_type', aiType)
+        .order('created_at', { ascending: false })
+        .maybeSingle();
 
-    if (!thread) return res.status(403).json({ error: 'Thread not found' });
+      if (!existingThread) {
+        const { data: newThread } = await supabase
+          .from('ai_threads')
+          .insert({
+            user_id: authUser.userId,
+            title: aiType === 'partner' ? 'Partner Support AI' : 'Nyra Wellness Companion',
+            ai_type: aiType,
+          })
+          .select()
+          .single();
+        existingThread = newThread;
+      }
+      threadId = existingThread?.id;
+    }
 
     // 2. Fetch user profile + recent cycle logs for context
     const { data: userProfile } = await supabase
       .from('users')
       .select('name, age, cycle_length, period_duration')
       .eq('id', authUser.userId)
-      .single();
+      .maybeSingle();
 
-    // Get last 30 days of cycle logs for context
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const { data: recentLogs } = await supabase
@@ -46,7 +60,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .order('date', { ascending: false })
       .limit(15);
 
-    // Calculate current cycle day/phase from logs
     const periodDays = recentLogs?.filter((l: any) => l.is_period) || [];
     const lastPeriodDate = periodDays.length > 0 ? periodDays[0].date : null;
     let currentDay = 1;
@@ -72,96 +85,81 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
     const conversationHistory = (previousMessages || []).reverse();
 
-    // 4. Build system prompt based on AI type
-    const userName = userProfile?.name || 'Sarah';
+    // 4. Build system prompt
+    const userName = userProfile?.name || 'Partner';
     const systemPrompt = aiType === 'partner'
-      ? `You are Nyra, an AI wellness companion specifically helping a partner (likely male) understand and support ${userName}'s menstrual health and cycle.
-         
-         Current Cycle Data for ${userName}:
-         - Cycle Day: ${currentDay} of ${userProfile?.cycle_length || 28}
-         - Current Phase: ${currentPhase}
-         - Recent symptoms: ${recentLogs?.flatMap(l => l.symptoms || []).slice(0, 5).join(', ') || 'none logged'}
-         
-         Your role: Give empathetic, practical, specific advice on how the partner can support ${userName} right now based on her actual phase. 
-         Keep responses warm, actionable, and under 3 sentences. Never use clinical jargon.`
-      : `You are Nyra, a warm, empathetic AI wellness companion for women's health. You specialize in menstrual cycle education, self-care, nutrition, and emotional wellness.
-         
-         Current data for ${userName}:
-         - Age: ${userProfile?.age || 'unknown'}
-         - Cycle Day: ${currentDay} of ${userProfile?.cycle_length || 28}  
-         - Current Phase: ${currentPhase}
-         - Average cycle length: ${userProfile?.cycle_length || 28} days
-         - Recent symptoms: ${recentLogs?.flatMap(l => l.symptoms || []).slice(0, 5).join(', ') || 'none logged'}
-         - Recent moods: ${recentLogs?.map(l => l.mood).filter(Boolean).slice(0, 3).join(', ') || 'not tracked'}
-         
-         Provide personalized, caring, evidence-based advice. Be conversational, supportive, and use emojis occasionally. Keep responses concise (2-4 sentences) unless the user asks for detail.`;
+      ? `You are Nyra, an AI wellness companion specifically helping a partner understand and support their partner's menstrual health.
+         Current Cycle Data: Cycle Day ${currentDay} of ${userProfile?.cycle_length || 28}, Phase: ${currentPhase}.
+         Give empathetic, practical advice under 3 sentences.`
+      : `You are Nyra, a warm, empathetic AI wellness companion for women's health.
+         Current data for ${userName}: Age: ${userProfile?.age || 'unknown'}, Cycle Day: ${currentDay} (${currentPhase} phase).
+         Provide personalized, caring, evidence-based advice in 2-4 sentences with emojis.`;
 
     // 5. Save user message to DB
-    await supabase.from('ai_messages').insert({
-      thread_id: threadId,
-      role: 'user',
-      content: message,
-    });
+    if (threadId) {
+      await supabase.from('ai_messages').insert({
+        thread_id: threadId,
+        role: 'user',
+        content: message,
+      });
+    }
 
-    // 6. Call Google Gemini API
+    // 6. Call Google Gemini API (or fallback if key not present / rate limited)
     const geminiApiKey = process.env.GEMINI_API_KEY;
-    
-    if (!geminiApiKey) {
-      // Fallback response if Gemini key not set yet
-      const fallbackReply = `I'm here to help! Currently in the ${currentPhase} phase (Day ${currentDay}), ${
+    let aiReply = '';
+
+    if (geminiApiKey && geminiApiKey !== 'PASTE_YOUR_GEMINI_KEY_HERE') {
+      try {
+        const geminiMessages = [
+          ...conversationHistory.map((m: any) => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }],
+          })),
+          { role: 'user', parts: [{ text: message }] },
+        ];
+
+        const geminiResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: systemPrompt }] },
+              contents: geminiMessages,
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 300,
+              },
+            }),
+          }
+        );
+
+        const geminiData = await geminiResponse.json();
+        aiReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      } catch (e) {
+        console.log('Gemini API call failed, using fallback:', e);
+      }
+    }
+
+    if (!aiReply) {
+      aiReply = `I'm here to support you! Currently in the ${currentPhase} phase (Day ${currentDay}), ${
         currentPhase === 'Luteal' ? 'your body may need extra rest and nourishment. Prioritizing gentle movement and warm foods can make a big difference! 🌸' :
         currentPhase === 'Menstrual' ? 'be gentle with yourself. Rest, warmth, and iron-rich foods are your best friends right now. 💝' :
         currentPhase === 'Ovulation' ? 'your energy is at its peak! Great time for social activities and exercise. ✨' :
         'your energy is building beautifully. This is a great time for new projects and social connections! 🌟'
       }`;
-      
+    }
+
+    // 7. Save AI reply to DB
+    if (threadId) {
       await supabase.from('ai_messages').insert({
         thread_id: threadId,
         role: 'assistant',
-        content: fallbackReply,
+        content: aiReply,
       });
-
-      return res.status(200).json({ reply: fallbackReply });
     }
 
-    // Build Gemini API request
-    const geminiMessages = [
-      ...conversationHistory.map((m: any) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      })),
-      { role: 'user', parts: [{ text: message }] },
-    ];
-
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: geminiMessages,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 300,
-          },
-        }),
-      }
-    );
-
-    const geminiData = await geminiResponse.json();
-    const aiReply =
-      geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "I'm here to support you! Let me know what you need. 🌸";
-
-    // 7. Save AI reply to DB
-    await supabase.from('ai_messages').insert({
-      thread_id: threadId,
-      role: 'assistant',
-      content: aiReply,
-    });
-
-    return res.status(200).json({ reply: aiReply });
+    return res.status(200).json({ reply: aiReply, threadId });
   } catch (err: any) {
     console.error('AI chat error:', err);
     return res.status(500).json({ error: 'AI service error' });

@@ -257,195 +257,98 @@ export default function LoginPage() {
           </>
         )}
 
-        {/* ─── PARTNER LOGIN (BOTH CODE AND EMAIL/PASS SUPPORTED) ─── */}
+        {/* ─── PARTNER ACCESS (NAME, EMAIL, PASSWORD, CODE ALL REQUIRED) ─── */}
         {mode === 'partner' && (
           <>
             <h1 className="font-serif font-bold text-2xl text-[#18003d] dark:text-[#eee6ff] mb-1 text-center">Partner Access 💜</h1>
-            <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] mb-4 font-medium text-center">
-              Connect via Partner Code or Email & Password.
+            <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] mb-5 font-medium text-center">
+              Enter your name, credentials, and partner connection code to access.
             </p>
 
-            {/* Sub-tab switcher */}
-            <div className="flex w-full bg-black/5 dark:bg-white/5 p-1 rounded-2xl mb-4 border border-black/5 dark:border-white/10">
-              <button
-                type="button"
-                onClick={() => { setPartnerTab('code'); setErrorMsg(''); }}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
-                  partnerTab === 'code'
-                    ? 'bg-white dark:bg-[#1c1230] text-tertiary shadow-sm'
-                    : 'text-[#3d3050] dark:text-[#c8bedd] hover:text-tertiary'
-                }`}
-              >
-                🔑 Connection Code
-              </button>
-              <button
-                type="button"
-                onClick={() => { setPartnerTab('email'); setErrorMsg(''); }}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
-                  partnerTab === 'email'
-                    ? 'bg-white dark:bg-[#1c1230] text-tertiary shadow-sm'
-                    : 'text-[#3d3050] dark:text-[#c8bedd] hover:text-tertiary'
-                }`}
-              >
-                ✉️ Email & Password
-              </button>
-            </div>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!name.trim()) { setErrorMsg('Please enter your name.'); return; }
+              if (!partnerEmail.trim()) { setErrorMsg('Please enter your partner email.'); return; }
+              if (!partnerPassword) { setErrorMsg('Please enter your password.'); return; }
+              if (!partnerCode.trim()) { setErrorMsg('Please enter the partner connection code.'); return; }
+              setErrorMsg('');
+              setLoading(true);
+              try {
+                const { token, user } = await apiPartnerCodeLogin(partnerCode.trim(), partnerEmail.trim(), partnerPassword, name.trim());
+                localStorage.setItem('nyra_token', token);
+                setUser(user);
+                router.push('/partner');
+              } catch (err: any) {
+                setErrorMsg(err.message || 'Could not log in or connect. Please check your credentials and code.');
+              } finally {
+                setLoading(false);
+              }
+            }} className="w-full flex flex-col gap-3">
 
-            {partnerTab === 'code' ? (
-              /* PARTNER CODE + CREDENTIALS LOGIN */
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                if (!partnerCode.trim()) { setErrorMsg('Please enter your partner connection code.'); return; }
-                if (!partnerEmail) { setErrorMsg('Please enter your email address.'); return; }
-                if (!partnerPassword) { setErrorMsg('Please enter your password.'); return; }
-                setErrorMsg('');
-                setLoading(true);
-                try {
-                  const { token, user } = await apiPartnerCodeLogin(partnerCode.trim(), partnerEmail.trim(), partnerPassword);
-                  localStorage.setItem('nyra_token', token);
-                  setUser(user);
-                  router.push('/partner');
-                } catch (err: any) {
-                  setErrorMsg(err.message || 'Could not log in. Check your code, email, and password.');
-                } finally {
-                  setLoading(false);
-                }
-              }} className="w-full flex flex-col gap-3">
-
-                <div>
-                  <label className="text-[10px] font-bold text-tertiary uppercase tracking-wider block mb-1">Partner Connection Code</label>
-                  <input 
-                    type="text" 
-                    value={partnerCode} 
-                    onChange={e => setPartnerCode(e.target.value)} 
-                    placeholder="e.g. NYRA-82941" 
-                    required
-                    className="w-full px-4 py-3 rounded-2xl border border-tertiary/40 bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-bold uppercase tracking-wider outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 dark:placeholder-[#8a7fa0]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">Your Email</label>
-                  <input 
-                    type="email" 
-                    value={partnerEmail} 
-                    onChange={e => setPartnerEmail(e.target.value)} 
-                    placeholder="your@email.com" 
-                    required
-                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 dark:placeholder-[#8a7fa0]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">Your Password</label>
-                  <div className="relative">
-                    <input 
-                      type={showPartnerPassword ? 'text' : 'password'} 
-                      value={partnerPassword} 
-                      onChange={e => setPartnerPassword(e.target.value)} 
-                      placeholder="Your account password"
-                      required
-                      className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 dark:placeholder-[#8a7fa0]"
-                    />
-                    <button type="button" onClick={() => setShowPartnerPassword(!showPartnerPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3d3050] dark:text-[#c8bedd] hover:text-tertiary">
-                      {showPartnerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-[#3d3050] dark:text-[#c8bedd] font-medium leading-relaxed px-1">
-                  💡 You need a Partner account. <span className="font-bold text-tertiary cursor-pointer" onClick={() => setPartnerTab('email')}>Register one here →</span>
-                </p>
-
-                {errorMsg && <p className="text-xs font-bold text-red-500 dark:text-red-400 text-center mt-1">{errorMsg}</p>}
-                
-                <button 
-                  type="submit" 
-                  disabled={loading} 
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-tertiary to-primary text-white font-bold text-sm shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Heart className="w-4 h-4" /> Connect & Sign In</>}
-                </button>
-              </form>
-            ) : (
-              /* EMAIL & PASSWORD FORM */
-              <div className="w-full flex flex-col gap-3">
+              <div>
+                <label className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">Your Name</label>
                 <input 
                   type="text" 
                   value={name} 
                   onChange={e => setName(e.target.value)} 
-                  placeholder="Your Name (e.g. Royal)" 
-                  className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary dark:placeholder-[#8a7fa0]"
+                  placeholder="e.g. Royal" 
+                  required
+                  className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 dark:placeholder-[#8a7fa0]"
                 />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">Partner Email Address</label>
                 <input 
                   type="email" 
                   value={partnerEmail} 
                   onChange={e => setPartnerEmail(e.target.value)} 
-                  placeholder="Partner Email Address"
-                  className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary dark:placeholder-[#8a7fa0]"
+                  placeholder="your@email.com" 
+                  required
+                  className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 dark:placeholder-[#8a7fa0]"
                 />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">Password</label>
                 <div className="relative">
                   <input 
                     type={showPartnerPassword ? 'text' : 'password'} 
                     value={partnerPassword} 
                     onChange={e => setPartnerPassword(e.target.value)} 
-                    placeholder="Password"
-                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary dark:placeholder-[#8a7fa0]"
+                    placeholder="Account password (min. 6 chars)"
+                    required
+                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 dark:placeholder-[#8a7fa0]"
                   />
                   <button type="button" onClick={() => setShowPartnerPassword(!showPartnerPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#3d3050] dark:text-[#c8bedd] hover:text-tertiary">
                     {showPartnerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-
-                {errorMsg && <p className="text-xs font-bold text-red-500 dark:text-red-400 text-center">{errorMsg}</p>}
-
-                <button 
-                  onClick={async () => {
-                    if (!partnerEmail || !partnerPassword) { setErrorMsg('Enter email and password.'); return; }
-                    setErrorMsg('');
-                    setLoading(true);
-                    try {
-                      const { token, user } = await apiLogin(partnerEmail, partnerPassword);
-                      localStorage.setItem('nyra_token', token);
-                      setUser(user);
-                      router.push('/partner');
-                    } catch (err: any) {
-                      setErrorMsg(err.message || 'Login failed.');
-                    } finally {
-                      setLoading(false);
-                    }
-                  }} 
-                  disabled={loading} 
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-tertiary to-primary text-white font-bold text-sm shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 mt-1"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Heart className="w-4 h-4" /> Sign In with Email</>}
-                </button>
-
-                <button 
-                  onClick={async () => {
-                    if (!partnerEmail || !partnerPassword || !name) { setErrorMsg('Fill in name, email, and password.'); return; }
-                    setErrorMsg('');
-                    setLoading(true);
-                    try {
-                      const { token, user } = await apiRegister(partnerEmail, partnerPassword, name, 'partner');
-                      localStorage.setItem('nyra_token', token);
-                      setUser(user);
-                      router.push('/partner');
-                    } catch (err: any) {
-                      setErrorMsg(err.message || 'Registration failed.');
-                    } finally {
-                      setLoading(false);
-                    }
-                  }} 
-                  disabled={loading} 
-                  className="w-full py-3 rounded-2xl border border-tertiary/30 text-tertiary font-bold text-sm hover:bg-tertiary/5 transition-all flex items-center justify-center gap-2"
-                >
-                  <User className="w-4 h-4" /> Register New Partner Account
-                </button>
               </div>
-            )}
 
-            <button onClick={() => { setMode('choose'); setErrorMsg(''); }} className="mt-5 text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] hover:text-primary transition-colors">← Back</button>
+              <div>
+                <label className="text-[10px] font-bold text-tertiary uppercase tracking-wider block mb-1">Partner Connection Code</label>
+                <input 
+                  type="text" 
+                  value={partnerCode} 
+                  onChange={e => setPartnerCode(e.target.value)} 
+                  placeholder="e.g. NYRA-82941" 
+                  required
+                  className="w-full px-4 py-3 rounded-2xl border border-tertiary/40 bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-bold uppercase tracking-wider outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 dark:placeholder-[#8a7fa0]"
+                />
+              </div>
+
+              {errorMsg && <p className="text-xs font-bold text-red-500 dark:text-red-400 text-center mt-1">{errorMsg}</p>}
+
+              <button 
+                type="submit" 
+                disabled={loading} 
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-tertiary to-primary text-white font-bold text-sm shadow-md shadow-tertiary/20 hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Heart className="w-4 h-4" /> Connect &amp; Access Partner Mode</>}
+              </button>
+            </form>
+            <button onClick={() => { setMode('choose'); setErrorMsg(''); }} className="mt-4 text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] hover:text-primary transition-colors">← Back</button>
           </>
         )}
       </motion.div>

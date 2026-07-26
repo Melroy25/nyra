@@ -90,7 +90,7 @@ export default function DashboardPage() {
       {/* Welcome Greeting */}
       <section className="mb-stack-lg animate-entrance">
         <h1 className="font-serif font-bold text-3xl md:text-5xl text-[#18003d] dark:text-[#eee6ff] mb-unit">
-          Good Morning {name} 🌸
+          Good Morning {name}
         </h1>
         <p className="text-sm text-[#3d3050] dark:text-[#c8bedd]">Here is your wellness overview for today.</p>
       </section>

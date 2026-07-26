@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { 
   Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, PlusCircle, Check, HelpCircle, Bot,
   Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2,
-  Eye, EyeOff, RefreshCw, UserCheck, Unlink
+  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -102,14 +102,7 @@ export default function PartnerPage() {
   const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
 
   const [dashboardData, setDashboardData] = useState<any>(null);
-
-  // Subscribe to Realtime Chat Messages
-  useRealtimeChat(activeThreadId, (newMsg) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === newMsg.id)) return prev;
-      return [...prev, newMsg];
-    });
-  });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch Live Partner Dashboard Data
   useEffect(() => {
@@ -127,6 +120,34 @@ export default function PartnerPage() {
         })
         .catch((err: any) => console.log('Partner dashboard load:', err));
     }
+  }, [activeTab]);
+
+  // Polling for live chat messages when on 'chat' tab
+  useEffect(() => {
+    if (activeTab !== 'chat') return;
+
+    const fetchLiveMessages = () => {
+      apiGetMessages('auto')
+        .then(({ messages: liveMsgs }) => {
+          if (liveMsgs && liveMsgs.length > 0) {
+            setMessages(liveMsgs.map(m => ({
+              id: m.id,
+              senderId: m.sender_id,
+              text: m.text,
+              sticker: m.sticker,
+              reaction: m.reaction,
+              mediaUrl: m.media_url,
+              mediaType: m.media_type,
+              timestamp: m.created_at,
+            })));
+          }
+        })
+        .catch(() => {/* fallback */});
+    };
+
+    fetchLiveMessages();
+    const interval = setInterval(fetchLiveMessages, 3000);
+    return () => clearInterval(interval);
   }, [activeTab]);
 
   // Auto-scroll chat to bottom
@@ -172,22 +193,55 @@ export default function PartnerPage() {
     const textToSend = chatInput.trim();
     setChatInput('');
 
-    // Optimistic local add
-    const tempMsg = {
-      id: `msg-${Date.now()}`,
-      senderId: user?.id || 'partner-john',
-      text: textToSend,
-      timestamp: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, tempMsg]);
-    addMessage(textToSend);
-
-    // Call backend API if authenticated
+    // Call backend API
     try {
-      await apiSendMessage(activeThreadId, textToSend);
+      const { message: sentMsg } = await apiSendMessage('auto', textToSend);
+      if (sentMsg) {
+        setMessages((prev) => [...prev, {
+          id: sentMsg.id,
+          senderId: sentMsg.sender_id,
+          text: sentMsg.text,
+          sticker: sentMsg.sticker,
+          mediaUrl: sentMsg.media_url,
+          mediaType: sentMsg.media_type,
+          timestamp: sentMsg.created_at,
+        }]);
+      }
     } catch (err) {
-      console.log('Local fallback used for chat');
+      console.log('Chat send error:', err);
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      let mediaType = 'document';
+      if (file.type.startsWith('image/')) mediaType = 'image';
+      else if (file.type.startsWith('video/')) mediaType = 'video';
+
+      try {
+        const { message: sentMsg } = await apiSendMessage('auto', chatInput.trim() || undefined, undefined, dataUrl, mediaType);
+        if (sentMsg) {
+          setMessages((prev) => [...prev, {
+            id: sentMsg.id,
+            senderId: sentMsg.sender_id,
+            text: sentMsg.text,
+            sticker: sentMsg.sticker,
+            mediaUrl: sentMsg.media_url,
+            mediaType: sentMsg.media_type,
+            timestamp: sentMsg.created_at,
+          }]);
+        }
+        setChatInput('');
+      } catch (err) {
+        alert('Failed to send attachment.');
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSendSticker = (stickerLabel: string) => {
@@ -591,6 +645,37 @@ export default function PartnerPage() {
                             : 'glass-card bg-white/80 dark:bg-[#1c1230]/90 text-[#18003d] dark:text-[#eee6ff] border-white/60 dark:border-[#3a2d58]/60 rounded-tl-sm shadow-sm'
                         }`}
                       >
+                        {/* Media Attachment Render */}
+                        {(msg.mediaUrl || msg.media_url) && (
+                          <div className="mb-2">
+                            {(msg.mediaType === 'image' || msg.media_type === 'image') ? (
+                              <img
+                                src={msg.mediaUrl || msg.media_url}
+                                alt="Attachment"
+                                className="rounded-xl max-h-56 max-w-full object-cover shadow-sm border border-black/10"
+                              />
+                            ) : (msg.mediaType === 'video' || msg.media_type === 'video') ? (
+                              <video
+                                src={msg.mediaUrl || msg.media_url}
+                                controls
+                                className="rounded-xl max-h-56 max-w-full shadow-sm border border-black/10"
+                              />
+                            ) : (
+                              <a
+                                href={msg.mediaUrl || msg.media_url}
+                                download="attachment"
+                                target="_blank"
+                                rel="noreferrer"
+                                className={`flex items-center gap-2 p-2.5 rounded-xl font-bold text-xs underline ${
+                                  isSentByMe ? 'bg-white/20 text-white' : 'bg-black/10 text-primary'
+                                }`}
+                              >
+                                <FileText className="w-4 h-4" /> Download Attachment
+                              </a>
+                            )}
+                          </div>
+                        )}
+
                         {/* Sticker Render */}
                         {msg.sticker ? (
                           <div className="text-center py-1">
@@ -678,6 +763,20 @@ export default function PartnerPage() {
 
             {/* Chat Footer Input Box */}
             <div className="bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex items-center gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                className="hidden"
+                accept="image/*,video/*,application/pdf,application/msword,.doc,.docx,.txt"
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 rounded-2xl text-[#3d3050] dark:text-[#c8bedd] hover:bg-primary/10 transition-colors"
+                title="Attach Image, Video, or Document"
+              >
+                <Paperclip className="w-5 h-5" />
+              </button>
               <button 
                 onClick={() => setShowStickerDrawer(!showStickerDrawer)}
                 className={`p-2 rounded-2xl transition-colors ${

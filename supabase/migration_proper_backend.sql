@@ -1,5 +1,5 @@
 -- ============================================================
--- NYRA 2.0 — Migration: Proper Backend Tables
+-- NYRA 2.0 — Migration: Proper Backend Tables & Media Chat
 -- Run this in: Supabase Dashboard → SQL Editor → New Query
 -- ============================================================
 
@@ -35,7 +35,12 @@ ALTER TABLE public.daily_logs
 ALTER TABLE public.routines
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
--- 4. Insert default notification_settings for existing users who don't have one
+-- 4. Add media_url and media_type to chat_messages for WhatsApp style attachments
+ALTER TABLE public.chat_messages
+  ADD COLUMN IF NOT EXISTS media_url TEXT,
+  ADD COLUMN IF NOT EXISTS media_type TEXT;
+
+-- 5. Insert default notification_settings for existing users who don't have one
 INSERT INTO public.notification_settings (user_id)
 SELECT id FROM public.users
 WHERE id NOT IN (SELECT user_id FROM public.notification_settings)

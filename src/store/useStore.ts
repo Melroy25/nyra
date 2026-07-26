@@ -113,10 +113,10 @@ export const useStore = create<AppState>((set, get) => ({
   user: null,
   onboardingStep: 1,
   onboardingData: {
-    name: 'Sarah',
-    age: 28,
-    dob: '1998-04-12',
-    lastPeriodDate: new Date(Date.now() - 18 * 24 * 3600000).toISOString().split('T')[0], // 18 days ago
+    name: '',
+    age: 0,
+    dob: '',
+    lastPeriodDate: '',
     averageCycleLength: 28,
     periodDuration: 5,
     goals: ['Track cycle'],

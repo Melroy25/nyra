@@ -2,25 +2,52 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { withAuth, AuthUser } from '../../../lib/withAuth';
 
-// GET  /api/chat/messages?threadId=xxx → fetch messages for a thread
-// POST /api/chat/messages               → send a new message
+// GET  /api/chat/messages?threadId=xxx → fetch messages for a thread (or auto-find/create thread for connected partner)
+// POST /api/chat/messages               → send a new message with text, sticker, or mediaUrl/mediaType
 
 async function handler(req: NextApiRequest, res: NextApiResponse, authUser: AuthUser) {
   const supabase = supabaseAdmin();
 
   if (req.method === 'GET') {
-    const { threadId } = req.query;
-    if (!threadId) return res.status(400).json({ error: 'threadId is required' });
+    let { threadId } = req.query;
 
-    // Verify user has access to this thread
-    const { data: thread } = await supabase
-      .from('chat_threads')
-      .select('id, user_id, partner_id')
-      .eq('id', threadId)
-      .or(`user_id.eq.${authUser.userId},partner_id.eq.${authUser.userId}`)
-      .single();
+    if (!threadId || threadId === 'auto') {
+      // 1. Fetch user profile to get connected partner
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('id, connected_partner_id')
+        .eq('id', authUser.userId)
+        .single();
 
-    if (!thread) return res.status(403).json({ error: 'Access denied to this thread' });
+      if (!userProfile?.connected_partner_id) {
+        return res.status(200).json({ messages: [], threadId: null });
+      }
+
+      // 2. Find existing shared thread between user & connected partner
+      let { data: existingThread } = await supabase
+        .from('chat_threads')
+        .select('id')
+        .or(`and(user_id.eq.${authUser.userId},partner_id.eq.${userProfile.connected_partner_id}),and(user_id.eq.${userProfile.connected_partner_id},partner_id.eq.${authUser.userId})`)
+        .maybeSingle();
+
+      if (!existingThread) {
+        // Create shared thread
+        const { data: newThread } = await supabase
+          .from('chat_threads')
+          .insert({
+            user_id: authUser.userId,
+            partner_id: userProfile.connected_partner_id,
+            title: 'Private Partner Chat',
+          })
+          .select()
+          .single();
+        existingThread = newThread;
+      }
+
+      threadId = existingThread?.id;
+    }
+
+    if (!threadId) return res.status(200).json({ messages: [], threadId: null });
 
     const { data: messages, error } = await supabase
       .from('chat_messages')
@@ -29,23 +56,49 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .order('created_at', { ascending: true });
 
     if (error) return res.status(500).json({ error: 'Failed to fetch messages' });
-    return res.status(200).json({ messages });
+    return res.status(200).json({ messages: messages || [], threadId });
   }
 
   if (req.method === 'POST') {
-    const { threadId, text, sticker } = req.body;
-    if (!threadId) return res.status(400).json({ error: 'threadId is required' });
-    if (!text && !sticker) return res.status(400).json({ error: 'text or sticker is required' });
+    let { threadId, text, sticker, mediaUrl, mediaType } = req.body;
 
-    // Verify access
-    const { data: thread } = await supabase
-      .from('chat_threads')
-      .select('id')
-      .eq('id', threadId)
-      .or(`user_id.eq.${authUser.userId},partner_id.eq.${authUser.userId}`)
-      .single();
+    if (!threadId || threadId === 'auto') {
+      // Auto-resolve thread ID
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('id, connected_partner_id')
+        .eq('id', authUser.userId)
+        .single();
 
-    if (!thread) return res.status(403).json({ error: 'Access denied to this thread' });
+      if (!userProfile?.connected_partner_id) {
+        return res.status(400).json({ error: 'You are not connected to a partner yet.' });
+      }
+
+      let { data: existingThread } = await supabase
+        .from('chat_threads')
+        .select('id')
+        .or(`and(user_id.eq.${authUser.userId},partner_id.eq.${userProfile.connected_partner_id}),and(user_id.eq.${userProfile.connected_partner_id},partner_id.eq.${authUser.userId})`)
+        .maybeSingle();
+
+      if (!existingThread) {
+        const { data: newThread } = await supabase
+          .from('chat_threads')
+          .insert({
+            user_id: authUser.userId,
+            partner_id: userProfile.connected_partner_id,
+            title: 'Private Partner Chat',
+          })
+          .select()
+          .single();
+        existingThread = newThread;
+      }
+
+      threadId = existingThread?.id;
+    }
+
+    if (!text && !sticker && !mediaUrl) {
+      return res.status(400).json({ error: 'Message content, sticker, or media attachment is required.' });
+    }
 
     const { data: message, error } = await supabase
       .from('chat_messages')
@@ -54,15 +107,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
         sender_id: authUser.userId,
         text: text || null,
         sticker: sticker || null,
+        media_url: mediaUrl || null,
+        media_type: mediaType || null,
       })
       .select('*, sender:sender_id(id, name, avatar_url)')
       .single();
 
     if (error) return res.status(500).json({ error: 'Failed to send message' });
-    return res.status(201).json({ message });
+    return res.status(201).json({ message, threadId });
   }
 
-  // PATCH: add reaction to message
+  // PATCH: add reaction
   if (req.method === 'PATCH') {
     const { messageId, reaction } = req.body;
     if (!messageId) return res.status(400).json({ error: 'messageId is required' });

@@ -1,39 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Bell, Shield, Download, Trash2, Check, Sparkles, ToggleLeft, ToggleRight, Smartphone, MonitorSmartphone, Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { apiGetNotificationSettings, apiUpdateNotificationSettings } from '../lib/api';
+import { ArrowLeft, Bell, Shield, Trash2, Check, ToggleLeft, ToggleRight, Smartphone, Loader2, AlertTriangle, Key, X, Lock } from 'lucide-react';
+import { useStore } from '../store/useStore';
+import { apiGetNotificationSettings, apiUpdateNotificationSettings, apiDeleteAccount, apiRequestPasswordReset, apiResetPassword } from '../lib/api';
 import { requestNativeNotificationPermission, sendNativeNotification } from '../lib/pushNotifications';
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { user, setUser } = useStore();
   const [isSaved, setIsSaved] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
-  const [isIos, setIsIos] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
-      setIsInstalled(true);
-      return;
-    }
-    const ua = window.navigator.userAgent.toLowerCase();
-    if (/iphone|ipad|ipod/.test(ua)) setIsIos(true);
-
-    const handler = (e: Event) => { e.preventDefault(); setDeferredPrompt(e); };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  const handleInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') setIsInstalled(true);
-      setDeferredPrompt(null);
-    }
-  };
 
   // Notification toggles — loaded from Supabase
   const [settingsLoading, setSettingsLoading] = useState(true);
@@ -46,13 +21,29 @@ export default function SettingsPage() {
     dailyCheckins: false,
   });
 
-  // Privacy toggles (local only, no schema change needed)
+  // Privacy toggles
   const [privacy, setPrivacy] = useState({
     sharePeriod: true,
     shareEnergy: true,
     shareCravings: true,
     shareMood: false,
   });
+
+  // Delete Account Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Forgot Password / OTP Modal State
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetStep, setResetStep] = useState<'request' | 'verify'>('request');
+  const [resetOtp, setResetOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resetMsg, setResetMsg] = useState('');
+  const [resetErr, setResetErr] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
 
   // Load notification settings from DB on mount
   useEffect(() => {
@@ -77,7 +68,6 @@ export default function SettingsPage() {
     const newVal = !reminders[key];
     setReminders((prev) => ({ ...prev, [key]: newVal }));
 
-    // Request native notification permission when any toggle is turned ON
     if (newVal) {
       const granted = await requestNativeNotificationPermission();
       if (granted) {
@@ -88,7 +78,6 @@ export default function SettingsPage() {
       }
     }
 
-    // Map local keys to DB column names
     const dbKeyMap: Record<string, string> = {
       period: 'period_reminders',
       ovulation: 'fertile_window_alerts',
@@ -116,6 +105,73 @@ export default function SettingsPage() {
     }, 1200);
   };
 
+  // Delete Account Handler
+  const handleDeleteAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteError('');
+    setIsDeleting(true);
+
+    try {
+      const res = await apiDeleteAccount(deletePassword);
+      if (res?.success) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('nyra_token');
+        }
+        setUser(null);
+        router.push('/login');
+      } else {
+        setDeleteError('Failed to delete account.');
+      }
+    } catch (err: any) {
+      setDeleteError(err.message || 'Incorrect password. Account deletion canceled.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Forgot Password Step 1: Request OTP Email
+  const handleRequestResetOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetErr('');
+    setResetMsg('');
+    setIsResetting(true);
+
+    try {
+      const res = await apiRequestPasswordReset(resetEmail || user?.email || '');
+      if (res?.success) {
+        setResetMsg('OTP reset code sent to your email. Check your inbox!');
+        setResetStep('verify');
+      }
+    } catch (err: any) {
+      setResetErr(err.message || 'Failed to send reset email.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  // Forgot Password Step 2: Verify OTP & Change Password
+  const handleVerifyOtpAndReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetErr('');
+    setResetMsg('');
+    setIsResetting(true);
+
+    try {
+      const res = await apiResetPassword(resetEmail || user?.email || '', resetOtp, newPassword);
+      if (res?.success) {
+        setResetMsg('Password updated successfully!');
+        setTimeout(() => {
+          setIsForgotModalOpen(false);
+          setResetStep('request');
+        }, 1500);
+      }
+    } catch (err: any) {
+      setResetErr(err.message || 'Invalid or expired OTP code.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <div className="max-w-[700px] mx-auto px-container-padding-mobile pt-stack-md pb-12 flex flex-col gap-stack-lg">
       
@@ -123,13 +179,13 @@ export default function SettingsPage() {
       <section className="flex items-center gap-4 animate-entrance">
         <button 
           onClick={() => router.push('/profile')}
-          className="p-2 bg-white/60 border border-white/50 rounded-full hover:bg-white text-on-surface-variant transition-colors"
+          className="p-2 bg-white/60 dark:bg-white/10 border border-white/50 dark:border-[#3a2d58] rounded-full hover:bg-white text-on-surface-variant transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
           <h1 className="font-serif font-bold text-2xl md:text-3xl text-on-surface">Settings</h1>
-          <p className="text-xs text-on-surface-variant">Manage your notifications, data privacy, and sharing controls.</p>
+          <p className="text-xs text-on-surface-variant">Manage your notifications, privacy, and security controls.</p>
         </div>
       </section>
 
@@ -137,14 +193,13 @@ export default function SettingsPage() {
       <section className="glass-card rounded-xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm space-y-4">
         <h3 className="font-serif font-bold text-lg text-on-background dark:text-[#eee6ff] flex items-center gap-2 mb-2">
           <Bell className="w-4 h-4 text-primary" />
-          <span>Notifications & Reminders</span>
+          <span>Notifications &amp; Reminders</span>
         </h3>
 
-        {/* Native push notification note */}
         <div className="flex items-start gap-3 bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-xl p-3">
           <Smartphone className="w-4 h-4 text-primary mt-0.5 shrink-0" />
           <p className="text-xs text-primary dark:text-[#d4b8ff] font-semibold leading-relaxed">
-            Nyra uses your device's native notification system. Enable any toggle below to allow real push alerts — just like any other app.
+            Nyra uses your device&apos;s native notification system. Enable any toggle below to allow real push alerts.
           </p>
         </div>
         
@@ -185,7 +240,7 @@ export default function SettingsPage() {
       <section className="glass-card rounded-xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm space-y-4">
         <h3 className="font-serif font-bold text-lg text-on-background dark:text-[#eee6ff] flex items-center gap-2 mb-2">
           <Shield className="w-4 h-4 text-tertiary" />
-          <span>Partner Privacy controls</span>
+          <span>Partner Privacy Controls</span>
         </h3>
         
         <div className="flex flex-col gap-3">
@@ -214,61 +269,28 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Install App as PWA */}
-      <section className="glass-card rounded-xl p-5 border border-primary/20 dark:border-[#3a2d58]/60 shadow-sm bg-gradient-to-br from-primary/5 to-tertiary/5 dark:from-primary/10 dark:to-tertiary/10 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-            <MonitorSmartphone className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-serif font-bold text-base text-on-background dark:text-[#eee6ff]">Install Nyra App</h3>
-            <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] font-semibold">Add Nyra to your home screen for instant 1-tap access.</p>
-          </div>
-        </div>
-
-        {isInstalled ? (
-          <div className="flex items-center gap-2 text-xs font-bold text-primary dark:text-[#d4b8ff]">
-            <Check className="w-4 h-4" /> Nyra is already installed on this device!
-          </div>
-        ) : isIos ? (
-          <div className="bg-white/60 dark:bg-[#1c1230]/60 rounded-xl p-4 border border-black/8 dark:border-[#3a2d58]/40 text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium space-y-1.5">
-            <p className="font-bold text-[#18003d] dark:text-[#eee6ff] mb-2">iPhone / iPad Instructions:</p>
-            <p>1. Tap the <strong>Share ⎋</strong> button in your Safari browser.</p>
-            <p>2. Scroll and tap <strong>"Add to Home Screen"</strong>.</p>
-            <p>3. Tap <strong>"Add"</strong> — Nyra will appear on your home screen!</p>
-          </div>
-        ) : deferredPrompt ? (
-          <button
-            onClick={handleInstall}
-            className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-sm shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2"
-          >
-            <Download className="w-4 h-4" /> Install App Now
-          </button>
-        ) : (
-          <div className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium bg-white/50 dark:bg-[#1c1230]/50 rounded-xl p-3 border border-black/8 dark:border-[#3a2d58]/40">
-            Open Nyra in <strong>Chrome</strong> (Android/Desktop) to get the install prompt, or use <strong>Safari</strong> on iPhone and tap "Add to Home Screen".
-          </div>
-        )}
-      </section>
-
-      {/* Local data controls */}
-      <section className="glass-card rounded-xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+      {/* Account Deletion Section */}
+      <section className="glass-card rounded-xl p-5 border border-red-200/50 dark:border-red-900/40 bg-red-500/5 dark:bg-red-950/20 shadow-sm flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <div>
-          <h3 className="font-serif font-bold text-base text-on-background dark:text-[#eee6ff] mb-1">Your Account Data</h3>
-          <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] font-semibold">Download or completely wipe your data records.</p>
+          <h3 className="font-serif font-bold text-base text-red-600 dark:text-red-400 mb-1 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" /> Delete Account
+          </h3>
+          <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] font-semibold">Permanently wipe your account, logs, and partner links.</p>
         </div>
-        <div className="flex gap-3">
-          <button className="px-4 py-2 border border-outline-variant/60 dark:border-[#3a2d58]/60 rounded-full text-xs font-bold bg-white/40 dark:bg-[#1c1230]/60 dark:text-[#eee6ff] hover:bg-white dark:hover:bg-[#1c1230] flex items-center gap-1.5 transition-colors">
-            <Download className="w-3.5 h-3.5" /> Download Data
-          </button>
-          <button className="px-4 py-2 border border-error/20 rounded-full text-xs font-bold bg-error-container/20 text-error hover:bg-error-container/40 flex items-center gap-1.5 transition-colors">
-            <Trash2 className="w-3.5 h-3.5" /> Clear All
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            setDeletePassword('');
+            setDeleteError('');
+            setIsDeleteModalOpen(true);
+          }}
+          className="px-4 py-2 border border-red-500/30 rounded-xl text-xs font-bold bg-red-500 text-white hover:bg-red-600 flex items-center gap-1.5 transition-all shadow-sm shrink-0"
+        >
+          <Trash2 className="w-3.5 h-3.5" /> Delete Account
+        </button>
       </section>
 
       {/* Save control */}
-      <div className="mt-4 pb-6">
+      <div className="mt-2 pb-6">
         <button
           onClick={handleSave}
           disabled={isSaved}
@@ -283,6 +305,165 @@ export default function SettingsPage() {
           )}
         </button>
       </div>
+
+      {/* ── DELETE ACCOUNT CONFIRMATION MODAL ── */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#16102a] border border-red-500/30 rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-4">
+            <div className="flex justify-between items-center border-b border-outline-variant/20 dark:border-[#3a2d58] pb-3">
+              <h3 className="font-serif font-bold text-lg text-red-600 dark:text-red-400 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" /> Delete Account Confirmation
+              </h3>
+              <button onClick={() => setIsDeleteModalOpen(false)} className="p-1 rounded-full text-on-surface-variant hover:bg-black/5 dark:hover:bg-white/10">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-on-surface dark:text-[#c8bedd] font-semibold leading-relaxed">
+              This action is permanent and cannot be undone. Enter your password to verify ownership and confirm account deletion.
+            </p>
+
+            {deleteError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs font-bold text-red-600 dark:text-red-400">
+                {deleteError}
+              </div>
+            )}
+
+            <form onSubmit={handleDeleteAccountSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-on-surface dark:text-[#c8bedd] uppercase tracking-wider mb-1">Your Password</label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter your current password"
+                  required
+                  className="w-full px-4 py-2.5 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-sm font-semibold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-red-500/30"
+                />
+              </div>
+
+              <div className="flex justify-between items-center text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeleteModalOpen(false);
+                    setResetEmail(user?.email || '');
+                    setResetStep('request');
+                    setResetMsg('');
+                    setResetErr('');
+                    setIsForgotModalOpen(true);
+                  }}
+                  className="text-primary dark:text-[#d4b8ff] hover:underline font-bold"
+                >
+                  Forgot password? Reset via OTP
+                </button>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-outline-variant dark:border-[#3a2d58] text-xs font-bold text-on-surface dark:text-[#c8bedd]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isDeleting || !deletePassword}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-xs font-bold shadow-md hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Deletion'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── FORGOT PASSWORD / OTP MODAL ── */}
+      {isForgotModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#16102a] border border-primary/30 rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-4">
+            <div className="flex justify-between items-center border-b border-outline-variant/20 dark:border-[#3a2d58] pb-3">
+              <h3 className="font-serif font-bold text-lg text-primary dark:text-[#d4b8ff] flex items-center gap-2">
+                <Key className="w-5 h-5" /> Forgot Password / OTP Reset
+              </h3>
+              <button onClick={() => setIsForgotModalOpen(false)} className="p-1 rounded-full text-on-surface-variant hover:bg-black/5 dark:hover:bg-white/10">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {resetMsg && (
+              <div className="p-3 bg-primary/10 border border-primary/30 rounded-xl text-xs font-bold text-primary dark:text-[#d4b8ff]">
+                {resetMsg}
+              </div>
+            )}
+            {resetErr && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs font-bold text-red-600 dark:text-red-400">
+                {resetErr}
+              </div>
+            )}
+
+            {resetStep === 'request' ? (
+              <form onSubmit={handleRequestResetOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-on-surface dark:text-[#c8bedd] uppercase tracking-wider mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="Enter your registered email"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-sm font-semibold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isResetting || !resetEmail}
+                  className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-md hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isResetting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Reset Code (OTP)'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyOtpAndReset} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-on-surface dark:text-[#c8bedd] uppercase tracking-wider mb-1">Enter OTP Code</label>
+                  <input
+                    type="text"
+                    value={resetOtp}
+                    onChange={(e) => setResetOtp(e.target.value)}
+                    placeholder="Enter OTP from your email"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-sm font-semibold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-on-surface dark:text-[#c8bedd] uppercase tracking-wider mb-1">New Password</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter at least 6 characters"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-sm font-semibold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isResetting || !resetOtp || !newPassword}
+                  className="w-full py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-md hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isResetting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Set New Password'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

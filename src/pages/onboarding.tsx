@@ -100,8 +100,8 @@ export default function OnboardingPage() {
                       type="text" 
                       value={onboardingData.name}
                       onChange={(e) => updateOnboardingData({ name: e.target.value })}
-                      placeholder="e.g. Sarah"
-                      className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-base font-semibold bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0]"
+                      placeholder="Enter your name"
+                      className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-base font-semibold bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] placeholder-outline-variant/70 dark:placeholder-[#8a7fa0]"
                     />
                   </div>
 
@@ -112,8 +112,8 @@ export default function OnboardingPage() {
                         type="number" 
                         value={onboardingData.age || ''}
                         onChange={(e) => updateOnboardingData({ age: parseInt(e.target.value) || 0 })}
-                        placeholder="e.g. 28"
-                        className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-base font-semibold bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0]"
+                        placeholder="Enter your age"
+                        className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-base font-semibold bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] placeholder-outline-variant/70 dark:placeholder-[#8a7fa0]"
                       />
                     </div>
                     <div>
@@ -144,7 +144,7 @@ export default function OnboardingPage() {
                   <p className="text-sm text-[#3d3050] dark:text-[#c8bedd] font-medium">Used to map your phases (Menstrual, Follicular, Ovulation, Luteal).</p>
                 </div>
 
-                <div className="space-y-5">
+                <div className="space-y-6">
                   <div>
                     <label className="block text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider mb-2">Last period start date</label>
                     <input 
@@ -155,10 +155,11 @@ export default function OnboardingPage() {
                     />
                   </div>
 
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
+                  {/* Clean styled slider 1 */}
+                  <div className="bg-white/40 dark:bg-[#1c1230]/60 p-4 rounded-2xl border border-outline-variant/30 dark:border-[#3a2d58]/60 space-y-3">
+                    <div className="flex justify-between items-center">
                       <label className="text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider">Average cycle length</label>
-                      <span className="text-sm font-bold text-primary dark:text-[#d4b8ff]">{onboardingData.averageCycleLength} Days</span>
+                      <span className="text-sm font-bold text-primary dark:text-[#d4b8ff] bg-primary/10 dark:bg-primary/20 px-3 py-1 rounded-xl">{onboardingData.averageCycleLength} Days</span>
                     </div>
                     <input 
                       type="range" 
@@ -166,19 +167,20 @@ export default function OnboardingPage() {
                       max="40" 
                       value={onboardingData.averageCycleLength}
                       onChange={(e) => updateOnboardingData({ averageCycleLength: parseInt(e.target.value) })}
-                      className="w-full h-1 bg-outline-variant/60 dark:bg-[#3a2d58] rounded-full appearance-none outline-none focus:ring-0"
+                      className="w-full h-2 bg-purple-200 dark:bg-[#3a2d58] rounded-lg appearance-none cursor-pointer accent-purple-600 dark:accent-purple-400 outline-none"
                     />
-                    <div className="flex justify-between text-[10px] text-[#3d3050] dark:text-[#c8bedd] mt-1.5 font-bold">
+                    <div className="flex justify-between text-[11px] text-[#3d3050] dark:text-[#c8bedd] font-bold px-1">
                       <span>21 Days</span>
-                      <span>28 Days (Avg)</span>
+                      <span className="text-primary dark:text-[#d4b8ff]">28 Days (Avg)</span>
                       <span>40 Days</span>
                     </div>
                   </div>
 
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
+                  {/* Clean styled slider 2 */}
+                  <div className="bg-white/40 dark:bg-[#1c1230]/60 p-4 rounded-2xl border border-outline-variant/30 dark:border-[#3a2d58]/60 space-y-3">
+                    <div className="flex justify-between items-center">
                       <label className="text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider">Average period duration</label>
-                      <span className="text-sm font-bold text-primary dark:text-[#d4b8ff]">{onboardingData.periodDuration} Days</span>
+                      <span className="text-sm font-bold text-primary dark:text-[#d4b8ff] bg-primary/10 dark:bg-primary/20 px-3 py-1 rounded-xl">{onboardingData.periodDuration} Days</span>
                     </div>
                     <input 
                       type="range" 
@@ -186,11 +188,11 @@ export default function OnboardingPage() {
                       max="10" 
                       value={onboardingData.periodDuration}
                       onChange={(e) => updateOnboardingData({ periodDuration: parseInt(e.target.value) })}
-                      className="w-full h-1 bg-outline-variant/60 dark:bg-[#3a2d58] rounded-full appearance-none outline-none focus:ring-0"
+                      className="w-full h-2 bg-purple-200 dark:bg-[#3a2d58] rounded-lg appearance-none cursor-pointer accent-purple-600 dark:accent-purple-400 outline-none"
                     />
-                    <div className="flex justify-between text-[10px] text-[#3d3050] dark:text-[#c8bedd] mt-1.5 font-bold">
+                    <div className="flex justify-between text-[11px] text-[#3d3050] dark:text-[#c8bedd] font-bold px-1">
                       <span>3 Days</span>
-                      <span>5 Days (Avg)</span>
+                      <span className="text-primary dark:text-[#d4b8ff]">5 Days (Avg)</span>
                       <span>10 Days</span>
                     </div>
                   </div>
