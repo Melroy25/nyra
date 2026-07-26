@@ -1,23 +1,74 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { Sparkles, Calendar, Heart, Shield, Check, Sun, Moon } from 'lucide-react';
+import { Sparkles, Calendar, Heart, Shield, Check, Sun, Moon, Loader2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiCompleteOnboarding } from '../lib/api';
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { onboardingStep, setOnboardingStep, onboardingData, updateOnboardingData, completeOnboarding, darkMode, toggleDarkMode } = useStore();
+  const { onboardingStep, setOnboardingStep, onboardingData, updateOnboardingData, setUser, user, darkMode, toggleDarkMode } = useStore();
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleNext = () => {
+  const handleNext = async () => {
+    setErrorMsg('');
+
+    // Validate Step 1
+    if (onboardingStep === 1) {
+      if (!onboardingData.name.trim()) {
+        setErrorMsg('Please enter your name to continue.');
+        return;
+      }
+      if (!onboardingData.age || onboardingData.age < 10 || onboardingData.age > 60) {
+        setErrorMsg('Please enter a valid age (10-60).');
+        return;
+      }
+    }
+
+    // Validate Step 2 — last period date is mandatory
+    if (onboardingStep === 2) {
+      if (!onboardingData.lastPeriodDate) {
+        setErrorMsg('Please enter your last period start date. This is required for accurate predictions.');
+        return;
+      }
+    }
+
     if (onboardingStep < 3) {
       setOnboardingStep(onboardingStep + 1);
     } else {
-      completeOnboarding();
-      router.push('/dashboard');
+      // Step 3 complete — save to backend
+      setIsSaving(true);
+      try {
+        const res = await apiCompleteOnboarding({
+          name: onboardingData.name,
+          age: onboardingData.age,
+          dateOfBirth: onboardingData.dob,
+          lastPeriodDate: onboardingData.lastPeriodDate,
+          cycleLength: onboardingData.averageCycleLength,
+          periodDuration: onboardingData.periodDuration,
+          goals: onboardingData.goals,
+        });
+
+        if (res.user) {
+          setUser({
+            ...user,
+            ...res.user,
+            onboardingCompleted: true,
+          });
+        }
+
+        router.push('/dashboard');
+      } catch (err: any) {
+        setErrorMsg(err.message || 'Failed to save your profile. Please try again.');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
   const handleBack = () => {
+    setErrorMsg('');
     if (onboardingStep > 1) {
       setOnboardingStep(onboardingStep - 1);
     }
@@ -112,7 +163,9 @@ export default function OnboardingPage() {
                         type="number" 
                         value={onboardingData.age || ''}
                         onChange={(e) => updateOnboardingData({ age: parseInt(e.target.value) || 0 })}
-                        placeholder="Enter your age"
+                        placeholder="Your age"
+                        min="10"
+                        max="60"
                         className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-base font-semibold bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] placeholder-outline-variant/70 dark:placeholder-[#8a7fa0]"
                       />
                     </div>
@@ -146,13 +199,24 @@ export default function OnboardingPage() {
 
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider mb-2">Last period start date</label>
+                    <label className="block text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider mb-2">
+                      Last Period Start Date <span className="text-red-500 ml-0.5">*</span>
+                    </label>
                     <input 
                       type="date" 
                       value={onboardingData.lastPeriodDate}
                       onChange={(e) => updateOnboardingData({ lastPeriodDate: e.target.value })}
-                      className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-base font-semibold bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff]"
+                      max={new Date().toISOString().split('T')[0]}
+                      required
+                      className={`w-full px-4 py-3 rounded-2xl border focus:ring-2 focus:ring-primary/20 outline-none text-base font-semibold bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] transition-colors ${
+                        !onboardingData.lastPeriodDate 
+                          ? 'border-red-300 dark:border-red-500/50' 
+                          : 'border-outline-variant dark:border-[#3a2d58] focus:border-primary'
+                      }`}
                     />
+                    {!onboardingData.lastPeriodDate && (
+                      <p className="text-xs text-red-500 font-semibold mt-1">Required for cycle predictions</p>
+                    )}
                   </div>
 
                   {/* Clean styled slider 1 */}
@@ -244,11 +308,19 @@ export default function OnboardingPage() {
             )}
           </AnimatePresence>
 
+          {/* Error message */}
+          {errorMsg && (
+            <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-500/30">
+              <p className="text-xs font-bold text-red-600 dark:text-red-400">{errorMsg}</p>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex gap-4 mt-8">
             {onboardingStep > 1 && (
               <button
                 onClick={handleBack}
+                disabled={isSaving}
                 className="flex-1 py-3.5 rounded-2xl border border-outline-variant dark:border-[#3a2d58] hover:bg-white/30 dark:hover:bg-white/10 text-[#3d3050] dark:text-[#c8bedd] font-bold text-sm transition-colors"
               >
                 Back
@@ -256,9 +328,12 @@ export default function OnboardingPage() {
             )}
             <button
               onClick={handleNext}
-              className="flex-[2] py-3.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white hover:opacity-95 shadow-md shadow-primary/20 transition-opacity font-bold text-sm"
+              disabled={isSaving}
+              className="flex-[2] py-3.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white hover:opacity-95 shadow-md shadow-primary/20 transition-opacity font-bold text-sm flex items-center justify-center gap-2"
             >
-              {onboardingStep === 3 ? 'Complete Setup 🌸' : 'Continue'}
+              {isSaving ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+              ) : onboardingStep === 3 ? 'Complete Setup 🌸' : 'Continue'}
             </button>
           </div>
         </motion.div>

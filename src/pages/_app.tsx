@@ -34,9 +34,9 @@ export default function App({ Component, pageProps }: AppProps) {
           if (user) {
             setUser(user);
             updateOnboardingData({
-              name: user.name,
-              age: user.age || 28,
-              dob: user.dateOfBirth || '1998-04-12',
+              name: user.name || '',
+              age: user.age || 0,
+              dob: user.dateOfBirth || '',
               averageCycleLength: user.cycleLength || 28,
               periodDuration: user.periodDuration || 5,
               goals: user.goals || [],

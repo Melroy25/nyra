@@ -2,23 +2,32 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { 
   Sparkles, Send, Mic, ArrowUp, Menu, X, Edit3, Trash2, ListFilter, 
-  Volume2, Copy, Smile, Image, Moon, Sun, Bell, Check, ChevronRight, Plus 
+  Volume2, Copy, Smile, Image, Moon, Sun, Bell, Check, ChevronRight, Plus, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiAiChat, apiGetAiThreads, apiCreateAiThread, apiRenameAiThread, apiDeleteAiThread, apiGetAiMessages } from '../lib/api';
+
+interface AiMessage {
+  id: string;
+  senderId: 'user' | 'nyra-ai';
+  text: string;
+  timestamp: string;
+  reaction?: string;
+}
+
+interface AiThread {
+  id: string;
+  title: string;
+  messages: AiMessage[];
+}
 
 export default function AIPage() {
-  const { 
-    chatThreads, 
-    activeThreadId, 
-    createChatThread, 
-    renameChatThread, 
-    deleteChatThread, 
-    addMessage, 
-    addReaction,
-    darkMode,
-    toggleDarkMode
-  } = useStore();
+  const { user, darkMode, toggleDarkMode } = useStore();
 
+  const [threads, setThreads] = useState<AiThread[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string>('');
+  const [isLoadingThreads, setIsLoadingThreads] = useState(true);
+  
   const [inputVal, setInputVal] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showThreadsDrawer, setShowThreadsDrawer] = useState(false);
@@ -35,28 +44,121 @@ export default function AIPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const activeThread = chatThreads.find((t) => t.id === activeThreadId) || chatThreads[0];
+  const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0];
   const messages = activeThread?.messages || [];
+
+  // Load threads from backend on mount
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('nyra_token') : null;
+    if (!token) { setIsLoadingThreads(false); return; }
+    
+    apiGetAiThreads()
+      .then(({ threads: backendThreads }) => {
+        if (backendThreads && backendThreads.length > 0) {
+          const mapped: AiThread[] = backendThreads.map((t: any) => ({
+            id: t.id,
+            title: t.title || 'Nyra Chat',
+            messages: [],
+          }));
+          setThreads(mapped);
+          setActiveThreadId(mapped[0].id);
+          // Load messages for first thread
+          loadMessages(mapped[0].id, mapped);
+        } else {
+          // Create first thread
+          apiCreateAiThread('Nyra Wellness Companion')
+            .then(({ thread }) => {
+              const newThread: AiThread = { id: thread.id, title: thread.title, messages: [] };
+              setThreads([newThread]);
+              setActiveThreadId(thread.id);
+            })
+            .catch(() => {})
+            .finally(() => setIsLoadingThreads(false));
+        }
+      })
+      .catch(() => setIsLoadingThreads(false));
+  }, []);
+
+  const loadMessages = async (threadId: string, currentThreads?: AiThread[]) => {
+    try {
+      const { messages: msgs } = await apiGetAiMessages(threadId);
+      const formatted: AiMessage[] = (msgs || []).map((m: any) => ({
+        id: m.id,
+        senderId: m.role === 'user' ? 'user' : 'nyra-ai',
+        text: m.content,
+        timestamp: m.created_at || new Date().toISOString(),
+      }));
+      const targetThreads = currentThreads || threads;
+      setThreads(prev => prev.map(t => t.id === threadId ? { ...t, messages: formatted } : t));
+    } catch {}
+    setIsLoadingThreads(false);
+  };
+
+  // Switch thread and load messages
+  const handleSelectThread = async (id: string) => {
+    setActiveThreadId(id);
+    setShowThreadsDrawer(false);
+    const thread = threads.find(t => t.id === id);
+    if (thread && thread.messages.length === 0) {
+      await loadMessages(id);
+    }
+  };
 
   // Scroll to bottom when messages update
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSend = () => {
-    if (!inputVal.trim()) return;
-    setIsTyping(true);
-    addMessage(inputVal.trim());
+  const handleSend = async () => {
+    if (!inputVal.trim() || isTyping) return;
+    const text = inputVal.trim();
     setInputVal('');
+    
+    const token = typeof window !== 'undefined' ? localStorage.getItem('nyra_token') : null;
+    if (!token) {
+      alert('Please log in to use Nyra AI.');
+      return;
+    }
 
-    // Simulate AI response delay
-    setTimeout(() => {
+    // Optimistically add user message
+    const userMsg: AiMessage = {
+      id: `u-${Date.now()}`,
+      senderId: 'user',
+      text,
+      timestamp: new Date().toISOString(),
+    };
+    setThreads(prev => prev.map(t => t.id === activeThread?.id ? { ...t, messages: [...t.messages, userMsg] } : t));
+    setIsTyping(true);
+
+    try {
+      const { reply } = await apiAiChat(activeThread?.id || 'auto', text, 'nyra');
+      const aiMsg: AiMessage = {
+        id: `ai-${Date.now()}`,
+        senderId: 'nyra-ai',
+        text: reply,
+        timestamp: new Date().toISOString(),
+      };
+      setThreads(prev => prev.map(t => t.id === activeThread?.id ? { ...t, messages: [...t.messages, aiMsg] } : t));
+    } catch (err: any) {
+      const errMsg: AiMessage = {
+        id: `err-${Date.now()}`,
+        senderId: 'nyra-ai',
+        text: 'I had trouble connecting right now. Please check your internet connection and try again.',
+        timestamp: new Date().toISOString(),
+      };
+      setThreads(prev => prev.map(t => t.id === activeThread?.id ? { ...t, messages: [...t.messages, errMsg] } : t));
+    } finally {
       setIsTyping(false);
-    }, 1600);
+    }
   };
 
-  const handleCreateNewChat = () => {
-    createChatThread();
+  const handleCreateNewChat = async () => {
+    try {
+      const { thread } = await apiCreateAiThread();
+      const newThread: AiThread = { id: thread.id, title: thread.title || 'New Chat', messages: [] };
+      setThreads(prev => [...prev, newThread]);
+      setActiveThreadId(thread.id);
+    } catch {}
     setShowThreadsDrawer(false);
   };
 
@@ -66,21 +168,30 @@ export default function AIPage() {
     setEditingTitle(currentTitle);
   };
 
-  const handleSaveRename = (id: string) => {
+  const handleSaveRename = async (id: string) => {
     if (editingTitle.trim()) {
-      renameChatThread(id, editingTitle.trim());
+      try {
+        await apiRenameAiThread(id, editingTitle.trim());
+        setThreads(prev => prev.map(t => t.id === id ? { ...t, title: editingTitle.trim() } : t));
+      } catch {}
     }
     setEditingThreadId(null);
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteChatThread(id);
+    try {
+      await apiDeleteAiThread(id);
+      const remaining = threads.filter(t => t.id !== id);
+      setThreads(remaining);
+      if (activeThreadId === id && remaining.length > 0) {
+        setActiveThreadId(remaining[0].id);
+      }
+    } catch {}
   };
 
   const handleCopyText = (text: string, msgId: string) => {
     navigator.clipboard.writeText(text);
-    // Simple alert or temp visual change can indicate copy success
     setSpeakingMessageId(msgId);
     setTimeout(() => setSpeakingMessageId(null), 1000);
   };
@@ -98,7 +209,6 @@ export default function AIPage() {
         setSpeakingMessageId(msgId);
       }
     } else {
-      // Simulate
       setSpeakingMessageId(speakingMessageId === msgId ? null : msgId);
     }
   };
@@ -108,9 +218,9 @@ export default function AIPage() {
     setShowOutline(false);
   };
 
-  // Compile outline of prompts (User queries)
+  // Compile outline of user prompts
   const promptsOutline = messages
-    .filter((m) => m.senderId === 'user-sarah')
+    .filter((m) => m.senderId === 'user')
     .map((m, idx) => ({
       id: m.id,
       index: idx + 1,
@@ -122,14 +232,23 @@ export default function AIPage() {
       const date = new Date(isoString);
       return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
     } catch {
-      return '20:20';
+      return '';
     }
   };
+
+  if (isLoadingThreads) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-sm font-semibold text-on-surface-variant">Loading Nyra AI...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-[760px] mx-auto px-container-padding-mobile pt-4 pb-[130px] flex flex-col min-h-[85vh] relative overflow-hidden">
       
-      {/* Top chat bar matching screenshots */}
+      {/* Top chat bar */}
       <section className="flex justify-between items-center bg-white/40 dark:bg-surface-container/45 backdrop-blur-xl border border-white/40 dark:border-white/10 rounded-2xl px-4 py-3.5 mb-4 shadow-sm">
         <div className="flex items-center gap-3">
           <button 
@@ -141,13 +260,12 @@ export default function AIPage() {
           </button>
           <img src="/logo.png" alt="Nyra Logo" className="w-8 h-8 rounded-full object-cover border border-white" />
           <div>
-            <h2 className="font-serif font-bold text-sm text-on-surface">{activeThread?.title}</h2>
+            <h2 className="font-serif font-bold text-sm text-on-surface">{activeThread?.title || 'Nyra AI'}</h2>
             <span className="text-[9px] font-bold text-primary dark:text-inverse-primary uppercase tracking-wider block">Nyra Assistant</span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Outline index selector toggle */}
           <button 
             onClick={() => setShowOutline(!showOutline)}
             className={`p-2 rounded-xl transition-colors ${showOutline ? 'bg-primary/15 text-primary' : 'hover:bg-white/60 dark:hover:bg-white/10'}`}
@@ -164,10 +282,21 @@ export default function AIPage() {
         </div>
       </section>
 
-      {/* Messages logs stream */}
+      {/* Messages */}
       <section className="flex-1 flex flex-col gap-5 overflow-y-auto no-scrollbar py-2 min-h-[350px]">
+        {messages.length === 0 && !isTyping && (
+          <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+              <Sparkles className="w-8 h-8 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-serif font-bold text-lg text-on-surface mb-1">Hello{user?.name ? `, ${user.name}` : ''}! 🌸</h3>
+              <p className="text-sm text-on-surface-variant font-medium">I'm Nyra, your wellness companion.<br/>Ask me anything about your cycle, health, or mood!</p>
+            </div>
+          </div>
+        )}
         {messages.map((msg) => {
-          const isUser = msg.senderId === 'user-sarah';
+          const isUser = msg.senderId === 'user';
           const isSpeaking = speakingMessageId === msg.id;
 
           return (
@@ -202,7 +331,7 @@ export default function AIPage() {
                   )}
                 </div>
 
-                {/* Sub-toolbar below bubble: Speaker, Copy, Clock */}
+                {/* Sub-toolbar below bubble */}
                 <div className={`flex items-center gap-3 px-2 text-[10px] font-bold text-on-surface-variant/75 ${isUser ? 'justify-end' : 'justify-start'}`}>
                   <button 
                     onClick={() => handleSpeakText(msg.text, msg.id)}
@@ -216,7 +345,7 @@ export default function AIPage() {
                     className="hover:text-primary transition-colors p-0.5 rounded"
                     title="Copy Text"
                   >
-                    {isSpeaking && speakingMessageId === msg.id && msg.text !== 'Welcome' ? (
+                    {isSpeaking && speakingMessageId === msg.id ? (
                       <Check className="w-3.5 h-3.5 text-green-500" />
                     ) : (
                       <Copy className="w-3.5 h-3.5" />
@@ -225,7 +354,7 @@ export default function AIPage() {
                   <span>{getFormatTime(msg.timestamp)}</span>
                 </div>
 
-                {/* Double click Reaction Popup Selection overlay */}
+                {/* Double click Reaction Popup */}
                 <AnimatePresence>
                   {reactionMsgId === msg.id && (
                     <motion.div 
@@ -238,7 +367,10 @@ export default function AIPage() {
                         <button
                           key={emoji}
                           onClick={() => {
-                            addReaction(msg.id, emoji);
+                            setThreads(prev => prev.map(t => t.id === activeThread?.id ? {
+                              ...t,
+                              messages: t.messages.map(m => m.id === msg.id ? { ...m, reaction: emoji } : m)
+                            } : t));
                             setReactionMsgId(null);
                           }}
                           className="text-sm hover:scale-125 transition-transform"
@@ -275,39 +407,32 @@ export default function AIPage() {
         <div ref={chatEndRef} />
       </section>
 
-      {/* Floating Prompt input bar at the bottom */}
+      {/* Floating Prompt input bar */}
       <section className="fixed bottom-[88px] left-0 right-0 px-container-padding-mobile md:px-0 z-40 bg-gradient-to-t from-background via-background/95 to-transparent dark:from-[#0d0818] dark:via-[#0d0818]/95 pt-4 pb-2">
         <div className="max-w-[760px] mx-auto relative flex items-center gap-2">
-          
-          <button className="w-11 h-11 rounded-full glass-card flex items-center justify-center text-on-surface-variant border border-white/50 hover:bg-white transition-colors shrink-0 shadow-sm">
-            <Image className="w-5 h-5" />
-          </button>
 
           <div className="flex-1 glass-panel rounded-full p-2 flex items-center gap-2 border border-white/80 dark:border-white/10 shadow-lg relative">
             <input 
               type="text" 
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
               placeholder="Ask Nyra about your symptoms, cramps..."
               className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-sm font-semibold text-on-surface placeholder-on-surface-variant/40 px-3 h-10"
             />
             
-            <button className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-white/40 transition-colors shrink-0">
-              <Mic className="w-5 h-5" />
-            </button>
-
             <button 
               onClick={handleSend}
-              className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center shrink-0 shadow-md hover:opacity-90 active:scale-95 transition-all"
+              disabled={isTyping || !inputVal.trim()}
+              className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center shrink-0 shadow-md hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <ArrowUp className="w-5 h-5 stroke-[2.5]" />
+              {isTyping ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-5 h-5 stroke-[2.5]" />}
             </button>
           </div>
         </div>
       </section>
 
-      {/* 1. LEFT DRAWER: MULTIPLE CHAT THREADS LIST */}
+      {/* LEFT DRAWER: MULTIPLE CHAT THREADS LIST */}
       <AnimatePresence>
         {showThreadsDrawer && (
           <>
@@ -336,7 +461,7 @@ export default function AIPage() {
                   </button>
                 </div>
 
-                {/* + New Chat Button with gradient */}
+                {/* + New Chat Button */}
                 <button
                   onClick={handleCreateNewChat}
                   className="w-full bg-gradient-to-r from-primary to-secondary text-white font-bold text-sm py-3.5 rounded-full shadow-md shadow-primary/10 hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
@@ -344,9 +469,9 @@ export default function AIPage() {
                   <Plus className="w-4 h-4" /> New Chat
                 </button>
 
-                {/* Threads directories logs */}
+                {/* Threads list */}
                 <div className="flex flex-col gap-2 overflow-y-auto no-scrollbar max-h-[60vh]">
-                  {chatThreads.map((thread) => {
+                  {threads.map((thread) => {
                     const isActive = thread.id === activeThreadId;
                     const isEditing = editingThreadId === thread.id;
                     const lastMsg = thread.messages[thread.messages.length - 1]?.text || 'No messages yet';
@@ -354,12 +479,7 @@ export default function AIPage() {
                     return (
                       <div
                         key={thread.id}
-                        onClick={() => {
-                          if (!isEditing) {
-                            useStore.setState({ activeThreadId: thread.id });
-                            setShowThreadsDrawer(false);
-                          }
-                        }}
+                        onClick={() => !isEditing && handleSelectThread(thread.id)}
                         className={`flex flex-col justify-between p-4 rounded-xl border cursor-pointer transition-all ${
                           isActive 
                             ? 'bg-primary/5 border-primary shadow-sm' 
@@ -389,7 +509,7 @@ export default function AIPage() {
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
-                            {chatThreads.length > 1 && (
+                            {threads.length > 1 && (
                               <button 
                                 onClick={(e) => handleDelete(thread.id, e)}
                                 className="text-on-surface-variant hover:text-error p-0.5"
@@ -410,14 +530,14 @@ export default function AIPage() {
               </div>
 
               <div className="text-[10px] text-center text-on-surface-variant font-bold">
-                NYRA SECURE CHAT SYSTEM
+                NYRA SECURE AI SYSTEM
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* 2. RIGHT / CENTER POPUP DRAWER: OUTLINE CHAT INDEX */}
+      {/* OUTLINE INDEX */}
       <AnimatePresence>
         {showOutline && (
           <>

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useStore } from '../store/useStore';
-import { Calendar, Heart, Pencil, X, Check, Loader2 } from 'lucide-react';
+import { Calendar, Heart, Pencil, X, Check, Loader2, Camera, User } from 'lucide-react';
 import { apiUpdateProfile } from '../lib/api';
 
 const avatarPresets = [
@@ -27,9 +27,9 @@ export default function ProfilePage() {
   const name = user?.name || onboardingData.name || 'User';
   const age = user?.age || onboardingData.age || 0;
   const dob = user?.dateOfBirth || onboardingData.dob || '';
-  const avatarUrl = user?.avatarUrl || avatarPresets[0];
-  const cycleLength = onboardingData.averageCycleLength || 28;
-  const periodDuration = onboardingData.periodDuration || 5;
+  const avatarUrl = user?.avatarUrl || null;
+  const cycleLength = user?.cycleLength || onboardingData.averageCycleLength || 28;
+  const periodDuration = user?.periodDuration || onboardingData.periodDuration || 5;
   const goals = user?.goals && user.goals.length > 0 ? user.goals : onboardingData.goals || ['Track cycle'];
 
   // Modal State
@@ -40,6 +40,17 @@ export default function ProfilePage() {
   const [editAvatar, setEditAvatar] = useState(avatarUrl);
   const [editGoals, setEditGoals] = useState<string[]>(goals);
   const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setEditAvatar(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const headingCls = 'text-[#18003d] dark:text-[#eee6ff]';
   const labelCls   = 'text-[#3d3050] dark:text-[#c8bedd]';
@@ -94,12 +105,18 @@ export default function ProfilePage() {
 
       {/* ── Profile Header Card ── */}
       <section className="glass-card rounded-2xl p-6 border border-white/50 dark:border-[#3a2d58]/40 shadow-sm flex flex-col sm:flex-row items-center gap-6 animate-entrance">
-        <div className="w-20 h-20 rounded-full bg-surface-container-high overflow-hidden border-2 border-primary/20 shadow-md shrink-0">
-          <img
-            src={avatarUrl}
-            alt={`${name} Avatar`}
-            className="w-full h-full object-cover"
-          />
+        <div className="w-20 h-20 rounded-full bg-surface-container-high overflow-hidden border-2 border-primary/20 shadow-md shrink-0 flex items-center justify-center">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={`${name} Avatar`}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+              <User className="w-8 h-8 text-primary/60" />
+            </div>
+          )}
         </div>
         <div className="text-center sm:text-left flex-1 space-y-1">
           <h1 className={`font-serif font-bold text-2xl md:text-3xl ${headingCls}`}>{name}</h1>
@@ -225,22 +242,35 @@ export default function ProfilePage() {
             </div>
 
             <form onSubmit={handleSaveProfile} className="space-y-4">
-              {/* Avatar Selection */}
+              {/* Avatar Upload */}
               <div>
                 <label className="block text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider mb-2">Profile Picture</label>
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {avatarPresets.map((presetUrl, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setEditAvatar(presetUrl)}
-                      className={`w-12 h-12 rounded-full overflow-hidden border-2 transition-all shrink-0 ${
-                        editAvatar === presetUrl ? 'border-primary ring-2 ring-primary/40 scale-105' : 'border-transparent opacity-60 hover:opacity-100'
-                      }`}
-                    >
-                      <img src={presetUrl} alt="Preset avatar" className="w-full h-full object-cover" />
-                    </button>
-                  ))}
+                <div className="flex items-center gap-4">
+                  {/* Current avatar preview */}
+                  <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary/20 bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center shrink-0">
+                    {editAvatar ? (
+                      <img src={editAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-6 h-6 text-primary/60" />
+                    )}
+                  </div>
+                  {/* Upload button */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 py-3 rounded-xl border-2 border-dashed border-primary/30 dark:border-primary/40 bg-primary/5 dark:bg-primary/10 hover:bg-primary/10 transition-colors text-xs font-bold text-primary dark:text-[#d4b8ff] flex items-center justify-center gap-2"
+                  >
+                    <Camera className="w-4 h-4" />
+                    Upload from Camera / Gallery
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleAvatarFileChange}
+                    className="hidden"
+                  />
                 </div>
               </div>
 

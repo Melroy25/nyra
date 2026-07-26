@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiConnectPartner, apiRegenerateCode, apiGetMessages, apiSendMessage, apiAddReaction, apiGetPartnerDashboard } from '../lib/api';
+import { apiConnectPartner, apiRegenerateCode, apiGetMessages, apiSendMessage, apiAddReaction, apiGetPartnerDashboard, apiAiChat } from '../lib/api';
 import { useRealtimeChat } from '../hooks/useRealtimeChat';
 
 export default function PartnerPage() {
@@ -98,7 +98,7 @@ export default function PartnerPage() {
   const myName = user?.name || (isPartner ? 'Royal' : 'Melroy');
   const connectedPartnerName = user?.connectedPartner?.name || (isPartner ? 'Melroy' : 'Royal');
   const trackedUserName = isPartner ? connectedPartnerName : myName;
-  const displayPairingCode = user?.partnerCode || 'NYRA-82941';
+  const displayPairingCode = user?.partnerCode || '';
   const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
 
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -254,12 +254,38 @@ export default function PartnerPage() {
     setActiveMessageIdForReactions(null);
   };
 
-  // Handle Partner AI Chat query
-  const handleSendPartnerAi = (promptText?: string) => {
+  // Handle Partner AI Chat query (real API call)
+  const [isPartnerAiTyping, setIsPartnerAiTyping] = useState(false);
+  const handleSendPartnerAi = async (promptText?: string) => {
     const textToSend = promptText || partnerAiInput;
-    if (!textToSend.trim()) return;
-    addPartnerAiMessage(textToSend.trim());
+    if (!textToSend.trim() || isPartnerAiTyping) return;
     if (!promptText) setPartnerAiInput('');
+
+    // Optimistically add user message
+    const userMsg = {
+      id: `u-${Date.now()}`,
+      senderId: user?.id || 'user',
+      text: textToSend.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    addPartnerAiMessage(textToSend.trim());
+    setIsPartnerAiTyping(true);
+
+    try {
+      const { reply } = await apiAiChat(activePartnerAiThread?.id || 'auto', textToSend.trim(), 'partner');
+      // Add AI reply
+      const aiMsg = {
+        id: `ai-${Date.now()}`,
+        senderId: 'nyra-ai',
+        text: reply,
+        timestamp: new Date().toISOString(),
+      };
+      addPartnerAiMessage(reply);
+    } catch {
+      addPartnerAiMessage('I had trouble connecting. Please check your internet and try again.');
+    } finally {
+      setIsPartnerAiTyping(false);
+    }
   };
 
   // Partner AI Thread Handlers

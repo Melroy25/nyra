@@ -26,7 +26,18 @@ export default function Layout({ children }: LayoutProps) {
         router.replace('/partner');
       }
     }
-  }, [isPartnerMode, router.pathname, router]);
+    // If user has already completed onboarding and lands on /onboarding, redirect to dashboard
+    if (user && user.onboardingCompleted && router.pathname === '/onboarding') {
+      router.replace('/dashboard');
+    }
+    // If no token and user is null, and accessing protected page, redirect to login
+    if (!user && typeof window !== 'undefined' && !localStorage.getItem('nyra_token')) {
+      const protectedPaths = ['/dashboard', '/cycle', '/ai', '/selfcare', '/partner', '/profile', '/settings', '/mood', '/nutrition', '/symptoms', '/onboarding'];
+      if (protectedPaths.includes(router.pathname)) {
+        router.replace('/login');
+      }
+    }
+  }, [isPartnerMode, user, router.pathname, router]);
 
   // Navigation Items adapt if logged in as Partner vs User
   const navItems = isPartnerMode
@@ -64,9 +75,7 @@ export default function Layout({ children }: LayoutProps) {
     router.push('/login');
   };
 
-  const avatarSrc = isPartnerMode
-    ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'
-    : 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80';
+  const avatarSrc = user?.avatarUrl || null;
 
   return (
     <div className="bg-nebula text-on-surface min-h-screen pb-24 md:pb-6 relative flex flex-col font-sans transition-colors duration-300">
@@ -153,12 +162,18 @@ export default function Layout({ children }: LayoutProps) {
             </button>
 
             {/* Avatar */}
-            <div className="w-8 h-8 rounded-xl overflow-hidden border-2 border-primary/25 shadow-sm shrink-0 ml-1" title={user?.name || (isPartnerMode ? 'Partner' : 'User')}>
-              <img
-                src={avatarSrc}
-                alt={user?.name ? `${user.name} Avatar` : 'User Avatar'}
-                className="w-full h-full object-cover"
-              />
+            <div className="w-8 h-8 rounded-xl overflow-hidden border-2 border-primary/25 shadow-sm shrink-0 ml-1 bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center" title={user?.name || (isPartnerMode ? 'Partner' : 'User')}>
+              {avatarSrc ? (
+                <img
+                  src={avatarSrc}
+                  alt={user?.name ? `${user.name} Avatar` : 'User Avatar'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff]">
+                  {(user?.name || 'U').charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
           </div>
         </header>
