@@ -5,6 +5,8 @@ import { useStore } from '../store/useStore';
 import { Symptom } from '../types';
 import { motion } from 'framer-motion';
 
+import { apiSaveCycleLog } from '../lib/api';
+
 const symptomsList: Symptom[] = [
   { id: 'Cramps', name: 'Cramps', iconName: 'Droplet' },
   { id: 'Headache', name: 'Headache', iconName: 'Brain' },
@@ -33,7 +35,7 @@ export default function SymptomsPage() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const today = new Date().toISOString().split('T')[0];
     
     // Clear previous logged items first or set new items
@@ -48,12 +50,23 @@ export default function SymptomsPage() {
     setSeverity(today, severity);
     logNotes(today, notes);
     
+    try {
+      await apiSaveCycleLog({
+        date: today,
+        symptoms: selectedSymptoms,
+        severity,
+        notes: notes || null,
+      });
+    } catch (err) {
+      console.log('Saved symptoms locally:', err);
+    }
+
     recalculateCycleMetrics();
     setIsSaved(true);
     
     setTimeout(() => {
       router.push('/dashboard');
-    }, 1500);
+    }, 1200);
   };
 
   const getIcon = (iconName: string) => {

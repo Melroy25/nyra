@@ -141,17 +141,6 @@ export default function Layout({ children }: LayoutProps) {
               <Settings className="w-4 h-4" />
             </button>
 
-            {/* Notifications */}
-            <button
-              title="Notifications"
-              className="p-2 rounded-xl transition-colors relative
-                text-on-surface/60 hover:text-primary hover:bg-primary/10
-                dark:text-[#c8bedd] dark:hover:text-[#d4b8ff] dark:hover:bg-primary/20"
-            >
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-error rounded-full" />
-            </button>
-
             {/* Logout */}
             <button
               onClick={handleLogout}

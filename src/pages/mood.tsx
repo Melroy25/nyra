@@ -6,6 +6,8 @@ import { Check, Calendar } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { motion } from 'framer-motion';
 
+import { apiSaveCycleLog } from '../lib/api';
+
 export default function MoodPage() {
   const router = useRouter();
   const { cycleLogs, logMood, logNotes, recalculateCycleMetrics } = useStore();
@@ -43,17 +45,23 @@ export default function MoodPage() {
       mood: log.mood,
     }));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const today = new Date().toISOString().split('T')[0];
     logMood(today, selectedMood);
     if (notes) logNotes(today, notes);
+
+    try {
+      await apiSaveCycleLog({ date: today, mood: selectedMood, notes: notes || null });
+    } catch (err) {
+      console.log('Saved locally:', err);
+    }
     
     recalculateCycleMetrics();
     setIsSaved(true);
     
     setTimeout(() => {
       router.push('/dashboard');
-    }, 1500);
+    }, 1200);
   };
 
   return (

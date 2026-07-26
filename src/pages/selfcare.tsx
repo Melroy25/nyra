@@ -7,6 +7,10 @@ import {
 } from 'lucide-react';
 import { RoutineItem } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  apiGetRoutines, apiCreateRoutine, apiToggleRoutine, apiDeleteRoutine,
+  apiGetDailyLog, apiUpdateWaterIntake 
+} from '../lib/api';
 
 interface CareItem {
   id: string;

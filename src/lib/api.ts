@@ -137,3 +137,73 @@ export const apiAiChat = (threadId: string, message: string, aiType: 'nyra' | 'p
     method: 'POST',
     body: JSON.stringify({ threadId, message, aiType }),
   });
+
+// ── ROUTINES ──────────────────────────────────
+
+export const apiGetRoutines = () =>
+  request<{ routines: any[] }>('/api/routines');
+
+export const apiCreateRoutine = (data: { name: string; time?: string; frequency?: string; type?: string; amount?: string }) =>
+  request<{ routine: any }>('/api/routines', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const apiToggleRoutine = (id: string, completed: boolean) =>
+  request<{ routine: any }>('/api/routines', {
+    method: 'PATCH',
+    body: JSON.stringify({ id, completed }),
+  });
+
+export const apiDeleteRoutine = (id: string) =>
+  request<{ success: boolean }>(`/api/routines?id=${id}`, {
+    method: 'DELETE',
+  });
+
+// ── DAILY LOGS & WATER ────────────────────────
+
+export const apiGetDailyLog = () =>
+  request<{ log: any }>('/api/daily-logs');
+
+export const apiUpdateWaterIntake = (waterIntake: number, waterGoal?: number) =>
+  request<{ log: any }>('/api/daily-logs', {
+    method: 'POST',
+    body: JSON.stringify({ waterIntake, waterGoal }),
+  });
+
+// ── AI THREADS & HISTORY ──────────────────────
+
+export const apiGetAiThreads = () =>
+  request<{ threads: any[] }>('/api/ai/threads');
+
+export const apiCreateAiThread = (title?: string) =>
+  request<{ thread: any }>('/api/ai/threads', {
+    method: 'POST',
+    body: JSON.stringify({ title }),
+  });
+
+export const apiRenameAiThread = (threadId: string, title: string) =>
+  request<{ thread: any }>('/api/ai/threads', {
+    method: 'PATCH',
+    body: JSON.stringify({ threadId, title }),
+  });
+
+export const apiDeleteAiThread = (threadId: string) =>
+  request<{ success: boolean }>(`/api/ai/threads?threadId=${threadId}`, {
+    method: 'DELETE',
+  });
+
+export const apiGetAiMessages = (threadId: string) =>
+  request<{ messages: any[] }>(`/api/ai/messages?threadId=${threadId}`);
+
+// ── NOTIFICATION SETTINGS ─────────────────────
+
+export const apiGetNotificationSettings = () =>
+  request<{ settings: any }>('/api/settings/notifications');
+
+export const apiUpdateNotificationSettings = (updates: Record<string, any>) =>
+  request<{ settings: any }>('/api/settings/notifications', {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+

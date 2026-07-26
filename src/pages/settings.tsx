@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Bell, Shield, Download, Trash2, Check, Sparkles, ToggleLeft, ToggleRight, Smartphone, MonitorSmartphone } from 'lucide-react';
+import { ArrowLeft, Bell, Shield, Download, Trash2, Check, Sparkles, ToggleLeft, ToggleRight, Smartphone, MonitorSmartphone, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { apiGetNotificationSettings, apiUpdateNotificationSettings } from '../lib/api';
+import { requestNativeNotificationPermission, sendNativeNotification } from '../lib/pushNotifications';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -33,18 +35,18 @@ export default function SettingsPage() {
     }
   };
 
-  // Notification toggles
+  // Notification toggles — loaded from Supabase
+  const [settingsLoading, setSettingsLoading] = useState(true);
   const [reminders, setReminders] = useState({
     period: true,
     ovulation: true,
     water: false,
     medication: true,
-    selfCare: false,
-    insights: true,
-    messages: true,
+    partnerUpdates: true,
+    dailyCheckins: false,
   });
 
-  // Privacy toggles
+  // Privacy toggles (local only, no schema change needed)
   const [privacy, setPrivacy] = useState({
     sharePeriod: true,
     shareEnergy: true,
@@ -52,8 +54,54 @@ export default function SettingsPage() {
     shareMood: false,
   });
 
-  const toggleReminder = (key: keyof typeof reminders) => {
-    setReminders((prev) => ({ ...prev, [key]: !prev[key] }));
+  // Load notification settings from DB on mount
+  useEffect(() => {
+    apiGetNotificationSettings()
+      .then(({ settings }) => {
+        if (settings) {
+          setReminders({
+            period: settings.period_reminders ?? true,
+            ovulation: settings.fertile_window_alerts ?? true,
+            water: settings.water_reminders ?? false,
+            medication: settings.daily_checkins ?? true,
+            partnerUpdates: settings.partner_updates ?? true,
+            dailyCheckins: settings.daily_checkins ?? false,
+          });
+        }
+      })
+      .catch(() => {/* use defaults */})
+      .finally(() => setSettingsLoading(false));
+  }, []);
+
+  const toggleReminder = async (key: keyof typeof reminders) => {
+    const newVal = !reminders[key];
+    setReminders((prev) => ({ ...prev, [key]: newVal }));
+
+    // Request native notification permission when any toggle is turned ON
+    if (newVal) {
+      const granted = await requestNativeNotificationPermission();
+      if (granted) {
+        sendNativeNotification('Nyra Notifications Enabled 🌸', {
+          body: 'You will now receive real device notifications from Nyra.',
+          tag: 'nyra-perm',
+        });
+      }
+    }
+
+    // Map local keys to DB column names
+    const dbKeyMap: Record<string, string> = {
+      period: 'period_reminders',
+      ovulation: 'fertile_window_alerts',
+      water: 'water_reminders',
+      medication: 'daily_checkins',
+      partnerUpdates: 'partner_updates',
+      dailyCheckins: 'daily_checkins',
+    };
+    try {
+      await apiUpdateNotificationSettings({ [dbKeyMap[key]]: newVal });
+    } catch (err) {
+      console.log('Failed to sync setting:', err);
+    }
   };
 
   const togglePrivacy = (key: keyof typeof privacy) => {
@@ -65,7 +113,7 @@ export default function SettingsPage() {
     setTimeout(() => {
       setIsSaved(false);
       router.push('/profile');
-    }, 1500);
+    }, 1200);
   };
 
   return (
@@ -91,33 +139,45 @@ export default function SettingsPage() {
           <Bell className="w-4 h-4 text-primary" />
           <span>Notifications & Reminders</span>
         </h3>
+
+        {/* Native push notification note */}
+        <div className="flex items-start gap-3 bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-xl p-3">
+          <Smartphone className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+          <p className="text-xs text-primary dark:text-[#d4b8ff] font-semibold leading-relaxed">
+            Nyra uses your device's native notification system. Enable any toggle below to allow real push alerts — just like any other app.
+          </p>
+        </div>
         
         <div className="flex flex-col gap-3">
-          {[
-            { label: 'Period Reminders', desc: 'Get alerts 2 days before predicted period starts.', key: 'period' },
-            { label: 'Ovulation Reminders', desc: 'Alerts at the start of fertility windows.', key: 'ovulation' },
-            { label: 'Water Reminders', desc: 'Hourly alerts to keep hydration targets on track.', key: 'water' },
-            { label: 'Medication Reminders', desc: 'Alerts based on medicine timing checklists.', key: 'medication' },
-            { label: 'Self-Care Reminders', desc: 'Alerts suggesting relaxation yoga or sounds.', key: 'selfCare' },
-            { label: 'AI Insights alerts', desc: 'Daily dynamic suggestions notifications.', key: 'insights' },
-            { label: 'Partner Message alerts', desc: 'Get alerts when partner sends notes or stickers.', key: 'messages' },
-          ].map((item) => {
-            const isChecked = reminders[item.key as keyof typeof reminders];
-            return (
-              <div key={item.key} className="flex justify-between items-center py-2 border-b border-outline-variant/10">
-                <div className="space-y-0.5 pr-4">
-                  <h4 className="text-sm font-bold text-on-surface dark:text-[#eee6ff]">{item.label}</h4>
-                  <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] font-semibold leading-normal">{item.desc}</p>
+          {settingsLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+            </div>
+          ) : (
+            [
+              { label: 'Period Reminders', desc: 'Device alerts 2 days before your predicted period starts.', key: 'period' },
+              { label: 'Fertile Window Alerts', desc: 'Native alerts at the start of your ovulation window.', key: 'ovulation' },
+              { label: 'Water Reminders', desc: 'Hourly device alerts to hit your daily hydration goal.', key: 'water' },
+              { label: 'Daily Check-In', desc: 'Morning reminder to log your mood and symptoms.', key: 'dailyCheckins' },
+              { label: 'Partner Updates', desc: 'Get device alerts when your partner sends notes or stickers.', key: 'partnerUpdates' },
+            ].map((item) => {
+              const isChecked = reminders[item.key as keyof typeof reminders];
+              return (
+                <div key={item.key} className="flex justify-between items-center py-2 border-b border-outline-variant/10">
+                  <div className="space-y-0.5 pr-4">
+                    <h4 className="text-sm font-bold text-on-surface dark:text-[#eee6ff]">{item.label}</h4>
+                    <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] font-semibold leading-normal">{item.desc}</p>
+                  </div>
+                  <button 
+                    onClick={() => toggleReminder(item.key as keyof typeof reminders)}
+                    className={`p-1 transition-colors ${isChecked ? 'text-primary' : 'text-outline-variant'}`}
+                  >
+                    {isChecked ? <ToggleRight className="w-9 h-9" /> : <ToggleLeft className="w-9 h-9" />}
+                  </button>
                 </div>
-                <button 
-                  onClick={() => toggleReminder(item.key as keyof typeof reminders)}
-                  className={`p-1 transition-colors ${isChecked ? 'text-primary' : 'text-outline-variant'}`}
-                >
-                  {isChecked ? <ToggleRight className="w-9 h-9" /> : <ToggleLeft className="w-9 h-9" />}
-                </button>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </section>
 
