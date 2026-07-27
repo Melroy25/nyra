@@ -220,46 +220,72 @@ export default function OnboardingPage() {
                   </div>
 
                   {/* Clean styled slider 1 */}
-                  <div className="bg-white/40 dark:bg-[#1c1230]/60 p-4 rounded-2xl border border-outline-variant/30 dark:border-[#3a2d58]/60 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider">Average cycle length</label>
-                      <span className="text-sm font-bold text-primary dark:text-[#d4b8ff] bg-primary/10 dark:bg-primary/20 px-3 py-1 rounded-xl">{onboardingData.averageCycleLength} Days</span>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="21" 
-                      max="40" 
-                      value={onboardingData.averageCycleLength}
-                      onChange={(e) => updateOnboardingData({ averageCycleLength: parseInt(e.target.value) })}
-                      className="w-full h-2 bg-purple-200 dark:bg-[#3a2d58] rounded-lg appearance-none cursor-pointer accent-purple-600 dark:accent-purple-400 outline-none"
-                    />
-                    <div className="flex justify-between text-[11px] text-[#3d3050] dark:text-[#c8bedd] font-bold px-1">
-                      <span>21 Days</span>
-                      <span className="text-primary dark:text-[#d4b8ff]">28 Days (Avg)</span>
-                      <span>40 Days</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    const val = onboardingData.averageCycleLength || 28;
+                    const pct = (((val - 21) / (40 - 21)) * 100).toFixed(2);
+                    const avgPct = (((28 - 21) / (40 - 21)) * 100).toFixed(2);
+                    return (
+                      <div className="bg-white/40 dark:bg-[#1c1230]/60 p-4 rounded-2xl border border-outline-variant/30 dark:border-[#3a2d58]/60 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <label className="text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider">Average cycle length</label>
+                          <span className="text-sm font-bold text-primary dark:text-[#d4b8ff] bg-primary/10 dark:bg-primary/20 px-3 py-1 rounded-xl">{val} Days</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="21" 
+                          max="40" 
+                          value={val}
+                          onChange={(e) => updateOnboardingData({ averageCycleLength: parseInt(e.target.value) })}
+                          className="w-full cursor-pointer outline-none"
+                          style={{ '--value': `${pct}%` } as React.CSSProperties}
+                        />
+                        <div className="relative w-full h-5 text-[11px] text-[#3d3050] dark:text-[#c8bedd] font-bold mt-1">
+                          <span className="absolute left-0">21 Days</span>
+                          <span 
+                            className="absolute -translate-x-1/2 text-primary dark:text-[#d4b8ff] transition-all"
+                            style={{ left: `${avgPct}%` }}
+                          >
+                            28 Days (Avg)
+                          </span>
+                          <span className="absolute right-0">40 Days</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Clean styled slider 2 */}
-                  <div className="bg-white/40 dark:bg-[#1c1230]/60 p-4 rounded-2xl border border-outline-variant/30 dark:border-[#3a2d58]/60 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider">Average period duration</label>
-                      <span className="text-sm font-bold text-primary dark:text-[#d4b8ff] bg-primary/10 dark:bg-primary/20 px-3 py-1 rounded-xl">{onboardingData.periodDuration} Days</span>
-                    </div>
-                    <input 
-                      type="range" 
-                      min="3" 
-                      max="10" 
-                      value={onboardingData.periodDuration}
-                      onChange={(e) => updateOnboardingData({ periodDuration: parseInt(e.target.value) })}
-                      className="w-full h-2 bg-purple-200 dark:bg-[#3a2d58] rounded-lg appearance-none cursor-pointer accent-purple-600 dark:accent-purple-400 outline-none"
-                    />
-                    <div className="flex justify-between text-[11px] text-[#3d3050] dark:text-[#c8bedd] font-bold px-1">
-                      <span>3 Days</span>
-                      <span className="text-primary dark:text-[#d4b8ff]">5 Days (Avg)</span>
-                      <span>10 Days</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    const val = onboardingData.periodDuration || 5;
+                    const pct = (((val - 3) / (10 - 3)) * 100).toFixed(2);
+                    const avgPct = (((5 - 3) / (10 - 3)) * 100).toFixed(2);
+                    return (
+                      <div className="bg-white/40 dark:bg-[#1c1230]/60 p-4 rounded-2xl border border-outline-variant/30 dark:border-[#3a2d58]/60 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <label className="text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider">Average period duration</label>
+                          <span className="text-sm font-bold text-primary dark:text-[#d4b8ff] bg-primary/10 dark:bg-primary/20 px-3 py-1 rounded-xl">{val} Days</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="3" 
+                          max="10" 
+                          value={val}
+                          onChange={(e) => updateOnboardingData({ periodDuration: parseInt(e.target.value) })}
+                          className="w-full cursor-pointer outline-none"
+                          style={{ '--value': `${pct}%` } as React.CSSProperties}
+                        />
+                        <div className="relative w-full h-5 text-[11px] text-[#3d3050] dark:text-[#c8bedd] font-bold mt-1">
+                          <span className="absolute left-0">3 Days</span>
+                          <span 
+                            className="absolute -translate-x-1/2 text-primary dark:text-[#d4b8ff] transition-all"
+                            style={{ left: `${avgPct}%` }}
+                          >
+                            5 Days (Avg)
+                          </span>
+                          <span className="absolute right-0">10 Days</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </motion.div>
             )}

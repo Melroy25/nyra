@@ -229,10 +229,17 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* ─── Severity slider ─── */
+/* ─── Precision Range Slider ─── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  margin: 8px 0;
+}
 input[type="range"]::-webkit-slider-runnable-track {
-  background: linear-gradient(to right, #7c5cbf var(--value, 50%), #d0c8e0 var(--value, 50%));
-  height: 6px;
+  background: linear-gradient(to right, #7c5cbf var(--value, 50%), #e5d8ff var(--value, 50%));
+  height: 8px;
   border-radius: 9999px;
 }
 input[type="range"]::-webkit-slider-thumb {
@@ -242,14 +249,42 @@ input[type="range"]::-webkit-slider-thumb {
   background: #7c5cbf;
   border: 3px solid #ffffff;
   border-radius: 9999px;
-  box-shadow: 0 2px 8px rgba(124,92,191,0.4);
+  box-shadow: 0 2px 8px rgba(124, 92, 191, 0.4);
   cursor: pointer;
   -webkit-appearance: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 12px rgba(124, 92, 191, 0.6);
+}
+input[type="range"]::-moz-range-track {
+  background: linear-gradient(to right, #7c5cbf var(--value, 50%), #e5d8ff var(--value, 50%));
+  height: 8px;
+  border-radius: 9999px;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #7c5cbf;
+  border: 3px solid #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(124, 92, 191, 0.4);
+  cursor: pointer;
+}
+
 .dark input[type="range"]::-webkit-slider-runnable-track {
   background: linear-gradient(to right, #a07fe0 var(--value, 50%), #3a2d58 var(--value, 50%));
 }
 .dark input[type="range"]::-webkit-slider-thumb {
+  background: #a07fe0;
+  border-color: #1c1230;
+  box-shadow: 0 2px 8px rgba(160, 127, 224, 0.5);
+}
+.dark input[type="range"]::-moz-range-track {
+  background: linear-gradient(to right, #a07fe0 var(--value, 50%), #3a2d58 var(--value, 50%));
+}
+.dark input[type="range"]::-moz-range-thumb {
   background: #a07fe0;
   border-color: #1c1230;
 }
