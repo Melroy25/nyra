@@ -104,20 +104,36 @@ export default function App({ Component, pageProps }: AppProps) {
 
   // ── Global Chat Notification Poller (foreground — when app IS open) ──
   const knownMsgIdsRef = useRef<Set<string>>(new Set());
+  const knownMsgIdsSeededRef = useRef(false);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // Seed known IDs from localStorage ONCE on mount so we don't re-notify old messages
+    if (!knownMsgIdsSeededRef.current) {
+      knownMsgIdsSeededRef.current = true;
+      try {
+        const stored = localStorage.getItem('nyra_known_msg_ids');
+        if (stored) {
+          const ids: string[] = JSON.parse(stored);
+          ids.forEach((id) => knownMsgIdsRef.current.add(id));
+        }
+      } catch (e) {}
+    }
 
     const checkIncomingPartnerMessages = async () => {
       const token = localStorage.getItem('nyra_token');
       if (!token) return;
 
       // Skip notifications when user is actively on the chat tab and page is visible
-      const isOnChatPage = router.pathname === '/partner' &&
-        (router.query.tab === 'chat' || !router.query.tab) === false ||
-        (router.pathname === '/partner' && router.query.tab === 'chat');
-      if (isOnChatPage && document.visibilityState === 'visible') return;
+      const isOnChatPage =
+        router.pathname === '/partner' &&
+        router.query.tab === 'chat' &&
+        document.visibilityState === 'visible';
+      if (isOnChatPage) return;
 
       try {
+        // Background poll — no markRead/heartbeat, just check for new messages
         const { messages, partnerInfo } = await apiGetMessages('auto');
         if (!messages || messages.length === 0) return;
 
@@ -126,25 +142,38 @@ export default function App({ Component, pageProps }: AppProps) {
         })();
 
         const partnerName = partnerInfo?.name || 'Partner';
+        let newIdsAdded = false;
 
         messages.forEach((msg: any) => {
-          if (msg.sender_id !== currentUserId && knownMsgIdsRef.current.size > 0 && !knownMsgIdsRef.current.has(msg.id)) {
-            const bodyText = msg.text || (msg.sticker ? `Sent a sticker: ${msg.sticker}` : 'Sent an attachment 📎');
+          const isNew = msg.sender_id !== currentUserId && !knownMsgIdsRef.current.has(msg.id);
+          if (isNew) {
+            const bodyText = msg.text || (msg.sticker ? `Sent a sticker 😊` : 'Sent an attachment 📎');
             sendNativeNotification(`${partnerName} ❤️`, {
               body: bodyText,
               icon: partnerInfo?.avatar_url || '/logo.png',
               tag: `chat-${msg.id}`,
             });
           }
-          knownMsgIdsRef.current.add(msg.id);
+          if (!knownMsgIdsRef.current.has(msg.id)) {
+            knownMsgIdsRef.current.add(msg.id);
+            newIdsAdded = true;
+          }
         });
+
+        // Persist known IDs to localStorage (keep last 200) to survive page reloads
+        if (newIdsAdded) {
+          try {
+            const arr = Array.from(knownMsgIdsRef.current).slice(-200);
+            localStorage.setItem('nyra_known_msg_ids', JSON.stringify(arr));
+          } catch (e) {}
+        }
       } catch (err) {}
     };
 
     checkIncomingPartnerMessages();
     const interval = setInterval(checkIncomingPartnerMessages, 5000);
     return () => clearInterval(interval);
-  }, [user, router.pathname, router.query.tab]);
+  }, [user?.id, router.pathname, router.query.tab]);
 
   return (
     <Layout>

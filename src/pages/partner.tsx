@@ -252,12 +252,30 @@ export default function PartnerPage() {
   };
 
   // Polling for live chat messages when on 'chat' tab
+  // ── Instant cache load: show last messages immediately on mount ──────────
+  useEffect(() => {
+    if (activeTab !== 'chat') return;
+    try {
+      const cached = localStorage.getItem('nyra_chat_msg_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        }
+      }
+    } catch (e) {}
+  }, []); // Only on mount
+
+  // ── Live message polling ─────────────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'chat') return;
 
-    const fetchLiveMessages = () => {
-      apiGetMessages('auto')
+    let isActiveView = true; // Track if this effect is still mounted
+
+    const fetchLiveMessages = (opts: { markRead?: boolean; heartbeat?: boolean } = {}) => {
+      apiGetMessages('auto', opts)
         .then(({ messages: liveMsgs, threadId, partnerInfo }) => {
+          if (!isActiveView) return;
           if (threadId) setChatThreadId(threadId);
           if (partnerInfo) {
             setChatPartnerInfo((prev: any) =>
@@ -283,13 +301,13 @@ export default function PartnerPage() {
                 is_read: m.is_read,
               }));
 
-              // Preserve any pending optimistic messages (msg-xxx) that haven't been saved/returned yet
+              // Preserve pending optimistic messages not yet confirmed by server
               const pendingOptimistic = prev.filter(
                 (p) => p.id.startsWith('msg-') && !formatted.some((f) => f.text === p.text && f.senderId === p.senderId)
               );
               const merged = [...formatted, ...pendingOptimistic];
 
-              // Send browser system notification for newly arrived partner messages
+              // Send browser notification for newly arrived partner messages
               if (prev.length > 0 && merged.length > prev.length) {
                 const newIncoming = merged.filter(
                   (m) => !isMsgSentByMe(m) && !prev.some((p) => p.id === m.id)
@@ -299,7 +317,7 @@ export default function PartnerPage() {
                 });
               }
 
-              // Smart diff check to avoid unnecessary re-renders while typing or scrolling
+              // Smart diff to avoid unnecessary re-renders
               const isDifferent =
                 merged.length !== prev.length ||
                 merged.some(
@@ -309,16 +327,37 @@ export default function PartnerPage() {
                     prev[idx]?.text !== m.text ||
                     prev[idx]?.is_read !== m.is_read
                 );
-              return isDifferent ? merged : prev;
+
+              if (isDifferent) {
+                // Cache to localStorage for instant next load
+                try {
+                  localStorage.setItem('nyra_chat_msg_cache', JSON.stringify(merged.slice(-80)));
+                } catch (e) {}
+                return merged;
+              }
+              return prev;
             });
           }
         })
         .catch(() => {/* fallback */});
     };
 
-    fetchLiveMessages();
-    const interval = setInterval(fetchLiveMessages, 3000);
-    return () => clearInterval(interval);
+    // First fetch: mark as read + heartbeat (user just opened chat)
+    fetchLiveMessages({ markRead: true, heartbeat: true });
+
+    // Poll every 3s — regular poll (no markRead/heartbeat, those happen separately)
+    const interval = setInterval(() => fetchLiveMessages(), 3000);
+
+    // Heartbeat every 30s to update presence (keeps user "Online" while actively in chat)
+    const heartbeatInterval = setInterval(() => {
+      fetchLiveMessages({ markRead: true, heartbeat: true });
+    }, 30000);
+
+    return () => {
+      isActiveView = false;
+      clearInterval(interval);
+      clearInterval(heartbeatInterval);
+    };
   }, [activeTab]);
 
   // Auto-scroll chat to bottom ONLY when message count changes or switching tab

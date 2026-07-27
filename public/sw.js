@@ -103,6 +103,12 @@ async function bgCheckMessages() {
 
     if (messages.length === 0) return;
 
+    // On first run: seed known IDs without notifying (don't blast old messages)
+    if (bgKnownIds.size === 0) {
+      messages.forEach((msg) => bgKnownIds.add(msg.id));
+      return;
+    }
+
     // Check if user has any chat window open and focused
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const chatIsVisible = allClients.some(
@@ -112,14 +118,9 @@ async function bgCheckMessages() {
     const partnerName = partnerInfo.name || 'Partner';
     const partnerIcon = partnerInfo.avatar_url || '/logo.png';
 
-    // Seed known IDs on first run (don't notify for old messages)
-    if (bgKnownIds.size === 0) {
-      messages.forEach((msg) => bgKnownIds.add(msg.id));
-      return;
-    }
-
     for (const msg of messages) {
       if (msg.sender_id !== bgUserId && !bgKnownIds.has(msg.id)) {
+        bgKnownIds.add(msg.id);
         // Only show notification if chat is not visible
         if (!chatIsVisible) {
           const bodyText =
@@ -135,8 +136,9 @@ async function bgCheckMessages() {
             data: { url: '/partner?tab=chat' },
           });
         }
+      } else {
+        bgKnownIds.add(msg.id);
       }
-      bgKnownIds.add(msg.id);
     }
   } catch (e) {
     // Silently fail — network might be off

@@ -70,15 +70,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
   // ── GET: fetch messages + partner info ────────────────────────────────────
   if (req.method === 'GET') {
-    let { threadId } = req.query;
+    let { threadId, markRead, heartbeat } = req.query;
 
-    // Update active user's presence/activity timestamp
-    try {
-      await supabase
-        .from('users')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', authUser.userId);
-    } catch (e) {}
+    // Only update user's presence when chat tab is actively open (heartbeat=1)
+    // NOT on every background poll — prevents fake "Online" status
+    if (heartbeat === '1') {
+      try {
+        await supabase
+          .from('users')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', authUser.userId);
+      } catch (e) {}
+    }
 
     if (!threadId || threadId === 'auto') {
       const { data: profile } = await supabase
@@ -92,14 +95,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       threadId = tid;
     }
 
-    // Mark unread messages sent to this user as read
-    try {
-      await supabase
-        .from('chat_messages')
-        .update({ is_read: true })
-        .eq('thread_id', threadId)
-        .neq('sender_id', authUser.userId);
-    } catch (e) {}
+    // Only mark messages as read when the user has the chat tab OPEN (markRead=1)
+    // NOT during background polling — prevents premature blue ticks
+    if (markRead === '1') {
+      try {
+        await supabase
+          .from('chat_messages')
+          .update({ is_read: true })
+          .eq('thread_id', threadId)
+          .neq('sender_id', authUser.userId)
+          .eq('is_read', false);
+      } catch (e) {}
+    }
 
     const { data: messages, error } = await supabase
       .from('chat_messages')
