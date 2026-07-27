@@ -246,7 +246,7 @@ export default function AIPage() {
   }
 
   return (
-    <div className="max-w-[760px] mx-auto px-container-padding-mobile pt-4 pb-[130px] flex flex-col min-h-[85vh] relative overflow-hidden">
+    <div className="-mx-container-padding-mobile md:-mx-container-padding-desktop -mt-stack-md -mb-20 px-4 pt-4 pb-[90px] flex flex-col min-h-[calc(100vh-4.5rem)] relative overflow-hidden bg-white/60 dark:bg-[#100c20]/95">
       
       {/* Top chat bar */}
       <section className="flex justify-between items-center bg-white/40 dark:bg-surface-container/45 backdrop-blur-xl border border-white/40 dark:border-white/10 rounded-2xl px-4 py-3.5 mb-4 shadow-sm">

@@ -193,22 +193,44 @@ export default function PartnerPage() {
     const textToSend = chatInput.trim();
     setChatInput('');
 
+    const tempId = `msg-${Date.now()}`;
+    const myId = user?.id || (isPartner ? 'partner-john' : 'user-sarah');
+
+    // Add locally immediately so chat is instant and linked
+    const newMsg = {
+      id: tempId,
+      senderId: myId,
+      text: textToSend,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, newMsg]);
+
+    // Sync with Zustand store
+    addMessage(textToSend);
+
     // Call backend API
     try {
       const { message: sentMsg } = await apiSendMessage('auto', textToSend);
       if (sentMsg) {
-        setMessages((prev) => [...prev, {
-          id: sentMsg.id,
-          senderId: sentMsg.sender_id,
-          text: sentMsg.text,
-          sticker: sentMsg.sticker,
-          mediaUrl: sentMsg.media_url,
-          mediaType: sentMsg.media_type,
-          timestamp: sentMsg.created_at,
-        }]);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? {
+                  id: sentMsg.id,
+                  senderId: sentMsg.sender_id,
+                  text: sentMsg.text,
+                  sticker: sentMsg.sticker,
+                  mediaUrl: sentMsg.media_url,
+                  mediaType: sentMsg.media_type,
+                  timestamp: sentMsg.created_at,
+                }
+              : m
+          )
+        );
       }
     } catch (err) {
-      console.log('Chat send error:', err);
+      console.log('Chat backend sync fallback:', err);
     }
   };
 
@@ -244,9 +266,27 @@ export default function PartnerPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleSendSticker = (stickerLabel: string) => {
+  const handleSendSticker = async (stickerLabel: string) => {
+    const tempId = `msg-${Date.now()}`;
+    const myId = user?.id || (isPartner ? 'partner-john' : 'user-sarah');
+
+    const newMsg = {
+      id: tempId,
+      senderId: myId,
+      text: '',
+      sticker: stickerLabel,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, newMsg]);
     addMessage('', stickerLabel);
     setShowStickerDrawer(false);
+
+    try {
+      await apiSendMessage('auto', undefined, stickerLabel);
+    } catch (err) {
+      console.log('Sticker backend sync fallback:', err);
+    }
   };
 
   const handleReactionClick = (messageId: string, emoji: string) => {
@@ -624,7 +664,7 @@ export default function PartnerPage() {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
-            className="glass-card bg-white/80 dark:bg-[#16102a]/95 rounded-2xl border border-white/60 dark:border-[#3a2d58]/60 shadow-xl overflow-hidden flex flex-col h-[78vh]"
+            className="-mx-container-padding-mobile md:-mx-container-padding-desktop -mt-stack-md -mb-16 bg-white/95 dark:bg-[#120b24] shadow-2xl flex flex-col h-[calc(100vh-4.5rem)] relative z-20 overflow-hidden"
           >
             {/* Chat Header */}
             <div className="flex justify-between items-center bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-b border-black/8 dark:border-[#3a2d58]/60">
