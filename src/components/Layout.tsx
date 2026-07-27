@@ -54,7 +54,6 @@ export default function Layout({ children }: LayoutProps) {
         { label: 'Partner Chat', path: '/partner?tab=chat', icon: MessageCircle },
         { label: 'Partner AI',   path: '/partner?tab=ai',   icon: Sparkles },
         { label: 'Profile',      path: '/profile',          icon: User },
-        { label: 'Settings',     path: '/settings',         icon: Settings },
       ]
     : [
         { label: 'Home',      path: '/dashboard', icon: Home },
@@ -222,7 +221,7 @@ export default function Layout({ children }: LayoutProps) {
                 }`}
               >
                 <Icon className="w-5 h-5" />
-                {item.path.includes('/partner') && isMounted && unreadCount > 0 && (
+                {item.path === '/partner?tab=chat' && isMounted && unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-extrabold w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center border border-white dark:border-[#100c20] shadow-sm animate-pulse">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>

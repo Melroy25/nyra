@@ -764,27 +764,16 @@ export default function PartnerPage() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button 
-                  onClick={() => router.push('/partner?tab=chat')}
-                  className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2 hover:opacity-95 transition-all"
-                >
-                  <MessageCircle className="w-4 h-4" /> Open Chat
-                  {unreadCount > 0 && (
-                    <span className="bg-red-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-sm animate-bounce">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-                {isPartner && (
+              {isPartner && (
+                <div className="flex flex-wrap gap-2">
                   <button 
                     onClick={() => router.push('/partner?tab=ai')}
                     className="px-4 py-2.5 rounded-2xl border border-tertiary/40 bg-tertiary/10 text-tertiary font-bold text-xs flex items-center gap-2 hover:bg-tertiary/20 transition-all"
                   >
                     <Sparkles className="w-4 h-4" /> Ask Partner AI
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </section>
 
             {/* PARTNER CONNECTION CODE CARD (If not connected yet or partner mode) */}
