@@ -248,48 +248,90 @@ export default function AIPage() {
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-white dark:bg-[#100c20] flex flex-col overflow-hidden">
-      
-      {/* Top chat bar */}
-      <section className="flex justify-between items-center bg-white/80 dark:bg-[#16102a]/90 backdrop-blur-xl border-b border-black/8 dark:border-[#3a2d58]/60 px-4 py-3 shadow-sm shrink-0">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors text-on-surface"
-            title="Back to Dashboard"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={() => setShowThreadsDrawer(true)}
-            className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors"
-            title="Chat Threads"
-          >
-            <Menu className="w-5 h-5 text-on-surface" />
-          </button>
-          <img src="/logo.png" alt="Nyra Logo" className="w-8 h-8 rounded-full object-cover border border-white" />
-          <div>
-            <h2 className="font-serif font-bold text-sm text-on-surface truncate max-w-[150px] sm:max-w-[250px]">{activeThread?.title || 'Nyra AI'}</h2>
-            <span className="text-[9px] font-bold text-primary dark:text-inverse-primary uppercase tracking-wider block">Nyra Assistant</span>
+    <div className="fixed inset-0 z-50 p-2.5 sm:p-4 bg-[#0a0514]/60 backdrop-blur-md flex flex-col justify-center items-center overflow-hidden">
+      <div className="w-full h-full max-w-5xl bg-white dark:bg-[#120b24] rounded-3xl border border-black/10 dark:border-[#3a2d58]/80 shadow-2xl flex flex-col overflow-hidden relative">
+        
+        {/* Top chat bar */}
+        <section className="flex justify-between items-center bg-white/80 dark:bg-[#16102a]/90 backdrop-blur-xl border-b border-black/8 dark:border-[#3a2d58]/60 px-4 py-3 shadow-sm shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors text-on-surface"
+              title="Back to Dashboard"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => setShowThreadsDrawer(true)}
+              className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors"
+              title="Multiple Chat Threads"
+            >
+              <Menu className="w-5 h-5 text-primary" />
+            </button>
+            <img src="/logo.png" alt="Nyra Logo" className="w-8 h-8 rounded-full object-cover border border-white" />
+            <div>
+              <h2 className="font-serif font-bold text-sm text-on-surface truncate max-w-[140px] sm:max-w-[220px]">{activeThread?.title || 'Nyra AI'}</h2>
+              <span className="text-[9px] font-bold text-primary dark:text-inverse-primary uppercase tracking-wider block">Nyra Assistant</span>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              onClick={handleCreateNewChat}
+              title="Start New Chat Thread"
+              className="px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 font-bold text-xs flex items-center gap-1 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">New Chat</span>
+            </button>
+            <button 
+              onClick={() => setShowOutline(!showOutline)}
+              className={`p-2 rounded-xl transition-colors ${showOutline ? 'bg-primary/15 text-primary' : 'hover:bg-black/5 dark:hover:bg-white/10'}`}
+              title="Prompt-to-Prompt Index"
+            >
+              <ListFilter className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={toggleDarkMode}
+              className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors"
+            >
+              {darkMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4" />}
+            </button>
+          </div>
+        </section>
+
+        {/* Quick Prompts Bar */}
+        <div className="px-4 py-2 bg-white/40 dark:bg-[#100c20]/60 border-b border-black/8 dark:border-[#3a2d58]/40 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
           <button 
-            onClick={() => setShowOutline(!showOutline)}
-            className={`p-2 rounded-xl transition-colors ${showOutline ? 'bg-primary/15 text-primary' : 'hover:bg-white/60 dark:hover:bg-white/10'}`}
-            title="Chat Outline index"
+            onClick={() => { setInputVal("What are the best natural remedies for period cramps?"); }}
+            className="px-3 py-1 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-semibold shrink-0 transition-colors"
           >
-            <ListFilter className="w-4 h-4" />
+            🌸 Cramp relief tips?
           </button>
           <button 
-            onClick={toggleDarkMode}
-            className="p-2 hover:bg-white/60 dark:hover:bg-white/10 rounded-xl transition-colors"
+            onClick={() => { setInputVal("What foods should I eat during my current phase?"); }}
+            className="px-3 py-1 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-semibold shrink-0 transition-colors"
           >
-            {darkMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4" />}
+            🍫 Foods for my phase?
+          </button>
+          <button 
+            onClick={() => { setInputVal("What workouts are best for my current energy level?"); }}
+            className="px-3 py-1 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-semibold shrink-0 transition-colors"
+          >
+            🧘 Gentle workouts?
+          </button>
+          <button 
+            onClick={() => { setInputVal("How to manage mood swings and stress naturally?"); }}
+            className="px-3 py-1 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-semibold shrink-0 transition-colors"
+          >
+            ✨ Comfort & mood tips?
+          </button>
+          <button 
+            onClick={() => { setInputVal("How to reduce bloating and stay hydrated?"); }}
+            className="px-3 py-1 rounded-xl border border-primary/30 bg-primary/5 dark:bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-semibold shrink-0 transition-colors"
+          >
+            💧 Hydration advice?
           </button>
         </div>
-      </section>
 
       {/* Messages */}
       <section className="flex-1 flex flex-col gap-5 overflow-y-auto no-scrollbar py-2 min-h-[350px]">
@@ -589,6 +631,7 @@ export default function AIPage() {
         )}
       </AnimatePresence>
 
+      </div>
     </div>
   );
 }

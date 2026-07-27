@@ -1638,9 +1638,10 @@ export default function PartnerPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-white dark:bg-[#120b24] z-50 flex flex-col overflow-hidden"
+            className="fixed inset-0 z-50 p-2.5 sm:p-4 bg-[#0a0514]/60 backdrop-blur-md flex flex-col justify-center items-center overflow-hidden"
           >
-            {/* AI Header with Back Button, Thread Menu & Prompt Index Buttons */}
+            <div className="w-full h-full max-w-5xl bg-white dark:bg-[#120b24] rounded-3xl border border-black/10 dark:border-[#3a2d58]/80 shadow-2xl flex flex-col overflow-hidden relative">
+              {/* AI Header with Back Button, Thread Menu & Prompt Index Buttons */}
             <div className="flex justify-between items-center bg-white/80 dark:bg-[#1c1230]/90 backdrop-blur-md px-4 py-3 border-b border-black/8 dark:border-[#3a2d58]/60 shrink-0">
               <div className="flex items-center gap-2 sm:gap-3">
                 <button 
@@ -1911,6 +1912,7 @@ export default function PartnerPage() {
               )}
             </AnimatePresence>
 
+            </div>
           </motion.div>
         )}
 
