@@ -126,10 +126,17 @@ export const apiGetMessages = (threadId: string = 'auto', opts: { markRead?: boo
   return request<{ messages: any[]; threadId: string; partnerInfo: any | null }>(`/api/chat/messages?${params}`);
 };
 
-export const apiSendMessage = (threadId: string = 'auto', text?: string, sticker?: string, mediaUrl?: string, mediaType?: string) =>
+export const apiSendMessage = (
+  threadId: string = 'auto',
+  text?: string,
+  sticker?: string,
+  mediaUrl?: string,
+  mediaType?: string,
+  replyTo?: { id: string; senderName: string; text: string }
+) =>
   request<{ message: any; threadId: string }>('/api/chat/messages', {
     method: 'POST',
-    body: JSON.stringify({ threadId, text, sticker, mediaUrl, mediaType }),
+    body: JSON.stringify({ threadId, text, sticker, mediaUrl, mediaType, replyTo }),
   });
 
 export const apiAddReaction = (messageId: string, reaction: string) =>

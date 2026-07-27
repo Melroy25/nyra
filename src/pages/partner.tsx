@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { 
   Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, PlusCircle, Check, CheckCheck, HelpCircle, Bot,
   Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2,
-  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown, Bell, BellOff
+  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown, Bell, BellOff, Reply
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -96,7 +96,20 @@ export default function PartnerPage() {
   const [editText, setEditText] = useState('');
   const [showClearModal, setShowClearModal] = useState(false);
   const [chatThreadId, setChatThreadId] = useState<string | null>(null);
-  const [chatPartnerInfo, setChatPartnerInfo] = useState<any>(null);
+  const [chatPartnerInfo, setChatPartnerInfo] = useState<any>(() => user?.connectedPartner || null);
+  const [replyingToMessage, setReplyingToMessage] = useState<any | null>(null);
+  const [isChatLoading, setIsChatLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('nyra_chat_msg_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          return !(Array.isArray(parsed) && parsed.length > 0);
+        }
+      } catch (e) {}
+    }
+    return true;
+  });
   const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -189,8 +202,8 @@ export default function PartnerPage() {
 
   // Dynamic user & partner details — user is restored from cache by _app.tsx on mount
   const isPartner = user?.role === 'partner';
-  const myName = user?.name || (isPartner ? 'Royal' : 'Melroy');
-  const connectedPartnerName = user?.connectedPartner?.name || (isPartner ? 'Melroy' : 'Royal');
+  const myName = user?.name || 'User';
+  const connectedPartnerName = user?.connectedPartner?.name || chatPartnerInfo?.name || 'Partner';
   const trackedUserName = isPartner ? connectedPartnerName : myName;
   const displayPairingCode = user?.partnerCode || '';
   const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
@@ -299,13 +312,20 @@ export default function PartnerPage() {
                 mediaType: m.media_type,
                 timestamp: m.created_at,
                 is_read: m.is_read,
+                replyTo: m.reply_to || m.replyTo,
               }));
 
-              // Preserve pending optimistic messages not yet confirmed by server
-              const pendingOptimistic = prev.filter(
-                (p) => p.id.startsWith('msg-') && !formatted.some((f) => f.text === p.text && f.senderId === p.senderId)
-              );
-              const merged = [...formatted, ...pendingOptimistic];
+              // Keep ANY local message that is not yet in liveMsgs GET output (under 60s old)
+              // This guarantees sent messages NEVER vanish while waiting for database GET
+              const recentUnconfirmedLocalMsgs = prev.filter((p) => {
+                const isAlreadyInLive = formatted.some(
+                  (f) => f.id === p.id || (f.text === p.text && f.senderId === p.senderId)
+                );
+                if (isAlreadyInLive) return false;
+                const ageMs = Date.now() - new Date(p.timestamp || Date.now()).getTime();
+                return ageMs < 60000;
+              });
+              const merged = [...formatted, ...recentUnconfirmedLocalMsgs];
 
               // Send browser notification for newly arrived partner messages
               if (prev.length > 0 && merged.length > prev.length) {
@@ -329,7 +349,6 @@ export default function PartnerPage() {
                 );
 
               if (isDifferent) {
-                // Cache to localStorage for instant next load
                 try {
                   localStorage.setItem('nyra_chat_msg_cache', JSON.stringify(merged.slice(-80)));
                 } catch (e) {}
@@ -338,8 +357,11 @@ export default function PartnerPage() {
               return prev;
             });
           }
+          setIsChatLoading(false);
         })
-        .catch(() => {/* fallback */});
+        .catch(() => {
+          if (isActiveView) setIsChatLoading(false);
+        });
     };
 
     // First fetch: mark as read + heartbeat (user just opened chat)
@@ -402,13 +424,31 @@ export default function PartnerPage() {
     }
   };
 
+  const handleStartReply = (msg: any) => {
+    const senderName = isMsgSentByMe(msg) ? 'You' : (chatPartnerInfo?.name || connectedPartnerName || 'Partner');
+    setReplyingToMessage({
+      id: msg.id,
+      senderName,
+      text: msg.text || (msg.sticker ? `Sticker: ${msg.sticker}` : (msg.mediaUrl || msg.media_url ? 'Attachment 📎' : '')),
+    });
+    setContextMenu(null);
+  };
+
   const handleSendMessage = async () => {
     if (!chatInput.trim()) return;
     const textToSend = chatInput.trim();
+    const activeReply = replyingToMessage;
     setChatInput('');
+    setReplyingToMessage(null);
 
     const tempId = `msg-${Date.now()}`;
-    const myId = user?.id || (isPartner ? 'partner-john' : 'user-sarah');
+    const myId = user?.id || (isPartner ? 'partner' : 'user');
+
+    const replyPayload = activeReply ? {
+      id: activeReply.id,
+      senderName: activeReply.senderName,
+      text: activeReply.text,
+    } : undefined;
 
     // Add locally immediately so chat is instant and linked
     const newMsg = {
@@ -416,6 +456,7 @@ export default function PartnerPage() {
       senderId: myId,
       text: textToSend,
       timestamp: new Date().toISOString(),
+      replyTo: replyPayload,
     };
 
     setMessages((prev) => [...prev, newMsg]);
@@ -425,7 +466,7 @@ export default function PartnerPage() {
 
     // Call backend API
     try {
-      const { message: sentMsg } = await apiSendMessage('auto', textToSend);
+      const { message: sentMsg } = await apiSendMessage('auto', textToSend, undefined, undefined, undefined, replyPayload);
       if (sentMsg) {
         setMessages((prev) =>
           prev.map((m) =>
@@ -438,6 +479,7 @@ export default function PartnerPage() {
                   mediaUrl: sentMsg.media_url,
                   mediaType: sentMsg.media_type,
                   timestamp: sentMsg.created_at,
+                  replyTo: sentMsg.reply_to || replyPayload,
                 }
               : m
           )
@@ -570,9 +612,21 @@ export default function PartnerPage() {
     }
   };
 
-  const handleReactionClick = (messageId: string, emoji: string) => {
-    addReaction(messageId, emoji);
+  const handleReactionClick = async (messageId: string, emoji: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, reaction: m.reaction === emoji ? undefined : emoji }
+          : m
+      )
+    );
     setActiveMessageIdForReactions(null);
+
+    try {
+      await apiAddReaction(messageId, emoji);
+    } catch (err) {
+      console.error('Reaction sync error:', err);
+    }
   };
 
   // Handle Partner AI Chat query (real API call)
@@ -1045,7 +1099,22 @@ export default function PartnerPage() {
               className="flex-1 overflow-y-auto overscroll-contain p-4 pb-2 flex flex-col gap-3 bg-white dark:bg-[#0d0818] relative"
               onClick={() => { setContextMenu(null); setActiveMessageIdForReactions(null); }}
             >
-              {messages.length === 0 && (
+              {isChatLoading && messages.length === 0 ? (
+                <div className="flex-1 flex flex-col justify-end gap-3 p-2">
+                  <div className="flex justify-start">
+                    <div className="w-48 h-11 bg-black/5 dark:bg-white/5 rounded-2xl animate-pulse" />
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="w-56 h-12 bg-primary/15 rounded-2xl animate-pulse" />
+                  </div>
+                  <div className="flex justify-start">
+                    <div className="w-40 h-10 bg-black/5 dark:bg-white/5 rounded-2xl animate-pulse" />
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="w-64 h-14 bg-primary/15 rounded-2xl animate-pulse" />
+                  </div>
+                </div>
+              ) : messages.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3 text-center">
                   <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-3xl">❤️</div>
                   <div>
@@ -1053,7 +1122,7 @@ export default function PartnerPage() {
                     <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] mt-1">Send a message to {connectedPartnerName}</p>
                   </div>
                 </div>
-              )}
+              ) : null}
               {messages.map((msg) => {
                 const isSentByMe = isMsgSentByMe(msg);
                 const isReactionsActive = activeMessageIdForReactions === msg.id;
@@ -1122,6 +1191,17 @@ export default function PartnerPage() {
                               : 'bg-white dark:bg-[#1e1535] text-[#18003d] dark:text-[#eee6ff] rounded-bl-sm shadow-sm border border-black/6 dark:border-[#3a2d58]/60'
                           }`}
                         >
+                          {/* Quoted Reply Block (WhatsApp Style) */}
+                          {(msg.replyTo || msg.reply_to) && (() => {
+                            const q = msg.replyTo || msg.reply_to;
+                            return (
+                              <div className={`mb-1.5 p-2 rounded-xl border-l-4 ${isSentByMe ? 'bg-black/20 border-white/90 text-white' : 'bg-primary/10 border-primary text-[#18003d] dark:text-[#eee6ff]'} text-xs overflow-hidden`}>
+                                <span className="font-bold block text-[10px] opacity-90">{q.senderName || 'Replying'}</span>
+                                <p className="truncate opacity-80 text-[11px] mt-0.5">{q.text}</p>
+                              </div>
+                            );
+                          })()}
+
                           {msg.sticker ? (
                             <div className="text-center py-1">
                               <span className="text-4xl filter drop-shadow block mb-1">
@@ -1226,6 +1306,16 @@ export default function PartnerPage() {
                         </div>
                       </div>
 
+                      {/* Reply */}
+                      {msg && (
+                        <button
+                          onClick={() => handleStartReply(msg)}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-left hover:bg-black/5 dark:hover:bg-white/5 text-[#18003d] dark:text-[#eee6ff] transition-colors border-b border-black/5 dark:border-[#3a2d58]/60"
+                        >
+                          <Reply className="w-4 h-4 text-gray-400" /> Reply
+                        </button>
+                      )}
+
                       {/* Copy */}
                       {msg?.text && (
                         <button
@@ -1274,6 +1364,29 @@ export default function PartnerPage() {
                 })()}
               </AnimatePresence>
             </div>
+
+            {/* Reply Mode Bar (WhatsApp Style) */}
+            <AnimatePresence>
+              {replyingToMessage && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="bg-primary/10 dark:bg-primary/20 border-t border-primary/30 px-4 py-2 flex items-center justify-between gap-2"
+                >
+                  <div className="flex items-center gap-2.5 overflow-hidden border-l-4 border-primary pl-2.5 py-0.5">
+                    <Reply className="w-4 h-4 text-primary shrink-0" />
+                    <div className="truncate text-xs">
+                      <span className="font-bold text-primary block truncate">Replying to {replyingToMessage.senderName}</span>
+                      <span className="text-[#3d3050] dark:text-[#c8bedd] truncate block font-medium">{replyingToMessage.text}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setReplyingToMessage(null)} className="p-1 rounded-lg hover:bg-primary/10 text-primary shrink-0">
+                    <X className="w-4 h-4" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Edit Mode Bar */}
             <AnimatePresence>

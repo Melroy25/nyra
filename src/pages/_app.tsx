@@ -136,12 +136,9 @@ export default function App({ Component, pageProps }: AppProps) {
       const token = localStorage.getItem('nyra_token');
       if (!token) return;
 
-      // Skip notifications when user is actively on the chat tab and page is visible
-      const isOnChatPage =
-        router.pathname === '/partner' &&
-        router.query.tab === 'chat' &&
-        document.visibilityState === 'visible';
-      if (isOnChatPage) return;
+      // Skip notifications whenever user is on /partner page and window is visible
+      const isOnPartnerPage = router.pathname === '/partner' && document.visibilityState === 'visible';
+      if (isOnPartnerPage) return;
 
       try {
         // Background poll — no markRead/heartbeat, just check for new messages

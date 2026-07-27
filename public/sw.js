@@ -121,7 +121,7 @@ async function bgCheckMessages() {
     for (const msg of messages) {
       if (msg.sender_id !== bgUserId && !bgKnownIds.has(msg.id)) {
         bgKnownIds.add(msg.id);
-        // Only show notification if chat is not visible
+        // ONLY show push notification if chat tab is NOT visible
         if (!chatIsVisible) {
           const bodyText =
             msg.text ||
