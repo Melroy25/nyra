@@ -195,7 +195,7 @@ export default function Layout({ children }: LayoutProps) {
       </AnimatePresence>
 
       {/* ── Floating Bottom Navigation (Mobile) ── */}
-      {showNav && (
+      {showNav && !(router.pathname === '/partner' && router.query.tab === 'chat') && (
         <nav className="md:hidden fixed bottom-5 left-1/2 -translate-x-1/2 w-[92%] max-w-md rounded-2xl backdrop-blur-2xl shadow-xl z-50 flex justify-around items-center px-3 py-2 transition-all
           bg-white/90 border border-purple-200/60
           dark:bg-[#100c20]/95 dark:border-[#3a2d58]/70">

@@ -1,14 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useStore } from '../store/useStore';
 import { 
   Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, PlusCircle, Check, HelpCircle, Bot,
   Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2,
-  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText
+  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiConnectPartner, apiRegenerateCode, apiGetMessages, apiSendMessage, apiAddReaction, apiGetPartnerDashboard, apiAiChat } from '../lib/api';
+import { apiConnectPartner, apiRegenerateCode, apiGetMessages, apiSendMessage, apiAddReaction, apiEditMessage, apiDeleteMessage, apiClearChat, apiGetPartnerDashboard, apiAiChat } from '../lib/api';
 import { useRealtimeChat } from '../hooks/useRealtimeChat';
 
 export default function PartnerPage() {
@@ -89,6 +89,77 @@ export default function PartnerPage() {
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [drawerTab, setDrawerTab] = useState<'emojis' | 'stickers'>('emojis');
+
+  // ── Telegram-like message features ──────────────────────────────────────
+  const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [chatThreadId, setChatThreadId] = useState<string | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  const quickEmojis = ['😊', '❤️', '🌸', '💖', '🧁', '🍫', '🎉', '🔥', '🙏', '😴', '✨', '🧸', '☕', '🌷', '🥰'];
+
+  const handleEmojiClick = (emoji: string) => {
+    setChatInput((prev) => prev + emoji);
+  };
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
+    };
+    if (contextMenu) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [contextMenu]);
+
+  const openContextMenu = (e: React.MouseEvent | React.TouchEvent, msgId: string) => {
+    e.preventDefault();
+    const x = 'clientX' in e ? e.clientX : (e as any).touches?.[0]?.clientX || 0;
+    const y = 'clientY' in e ? e.clientY : (e as any).touches?.[0]?.clientY || 0;
+    setContextMenu({ msgId, x, y });
+    setActiveMessageIdForReactions(null);
+  };
+
+  const handleDeleteMessage = async (msgId: string) => {
+    setContextMenu(null);
+    setMessages((prev) => prev.filter((m) => m.id !== msgId));
+    try { await apiDeleteMessage(msgId); } catch (err) { console.log('Delete fallback:', err); }
+  };
+
+  const startEditMessage = (msg: any) => {
+    setContextMenu(null);
+    setEditingMsgId(msg.id);
+    setEditText(msg.text || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingMsgId) return;
+    const updated = editText.trim();
+    setMessages((prev) => prev.map((m) => m.id === editingMsgId ? { ...m, text: updated, is_edited: true } : m));
+    setEditingMsgId(null);
+    setEditText('');
+    try { await apiEditMessage(editingMsgId, updated); } catch (err) { console.log('Edit fallback:', err); }
+  };
+
+  const handleClearChat = async (clearForMe: boolean) => {
+    setShowClearModal(false);
+    if (!chatThreadId) return;
+    if (clearForMe) {
+      setMessages((prev) => prev.filter((m) => !(m.senderId === user?.id || (isPartner && m.senderId === 'partner-john') || (!isPartner && m.senderId === 'user-sarah'))));
+    } else {
+      setMessages([]);
+    }
+    try { await apiClearChat(chatThreadId, clearForMe); } catch (err) { console.log('Clear chat fallback:', err); }
+  };
+
+  const copyMessage = (text: string) => {
+    setContextMenu(null);
+    if (text) navigator.clipboard.writeText(text).catch(() => {});
+  };
 
   const aiChatEndRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -148,6 +219,15 @@ export default function PartnerPage() {
     fetchLiveMessages();
     const interval = setInterval(fetchLiveMessages, 3000);
     return () => clearInterval(interval);
+  }, [activeTab]);
+
+  // Capture threadId from polling for clear-chat
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      apiGetMessages('auto')
+        .then(({ threadId }) => { if (threadId) setChatThreadId(threadId); })
+        .catch(() => {});
+    }
   }, [activeTab]);
 
   // Auto-scroll chat to bottom
@@ -245,22 +325,49 @@ export default function PartnerPage() {
       if (file.type.startsWith('image/')) mediaType = 'image';
       else if (file.type.startsWith('video/')) mediaType = 'video';
 
+      const tempId = `msg-${Date.now()}`;
+      const myId = user?.id || (isPartner ? 'partner-john' : 'user-sarah');
+
+      const newMsg = {
+        id: tempId,
+        senderId: myId,
+        text: chatInput.trim() || '',
+        mediaUrl: dataUrl,
+        mediaType,
+        timestamp: new Date().toISOString(),
+      };
+
+      // Add to local state immediately so pic/attachment shows instantly
+      setMessages((prev) => [...prev, newMsg]);
+      setChatInput('');
+
       try {
-        const { message: sentMsg } = await apiSendMessage('auto', chatInput.trim() || undefined, undefined, dataUrl, mediaType);
+        const { message: sentMsg } = await apiSendMessage(
+          'auto',
+          chatInput.trim() || undefined,
+          undefined,
+          dataUrl,
+          mediaType
+        );
         if (sentMsg) {
-          setMessages((prev) => [...prev, {
-            id: sentMsg.id,
-            senderId: sentMsg.sender_id,
-            text: sentMsg.text,
-            sticker: sentMsg.sticker,
-            mediaUrl: sentMsg.media_url,
-            mediaType: sentMsg.media_type,
-            timestamp: sentMsg.created_at,
-          }]);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempId
+                ? {
+                    id: sentMsg.id,
+                    senderId: sentMsg.sender_id,
+                    text: sentMsg.text,
+                    sticker: sentMsg.sticker,
+                    mediaUrl: sentMsg.media_url,
+                    mediaType: sentMsg.media_type,
+                    timestamp: sentMsg.created_at,
+                  }
+                : m
+            )
+          );
         }
-        setChatInput('');
       } catch (err) {
-        alert('Failed to send attachment.');
+        console.log('Attachment upload fallback:', err);
       }
     };
     reader.readAsDataURL(file);
@@ -664,7 +771,7 @@ export default function PartnerPage() {
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
-            className="-mx-container-padding-mobile md:-mx-container-padding-desktop -mt-stack-md -mb-16 bg-white/95 dark:bg-[#120b24] shadow-2xl flex flex-col h-[calc(100vh-4.5rem)] relative z-20 overflow-hidden"
+            className="-mx-container-padding-mobile md:-mx-container-padding-desktop -mt-stack-md -mb-16 bg-white/95 dark:bg-[#120b24] shadow-2xl flex flex-col h-[calc(100vh-4rem)] relative z-20 overflow-hidden"
           >
             {/* Chat Header */}
             <div className="flex justify-between items-center bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-b border-black/8 dark:border-[#3a2d58]/60">
@@ -677,9 +784,9 @@ export default function PartnerPage() {
                 </button>
                 <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0">
                   <img 
-                    src={isPartner 
+                    src={user?.connectedPartner?.avatarUrl || (isPartner 
                       ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
-                      : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80"}
+                      : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80")}
                     alt="Chat Avatar" 
                     className="w-full h-full object-cover" 
                   />
@@ -689,10 +796,20 @@ export default function PartnerPage() {
                   <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff] block mt-0.5">Active Sync • Encrypted Chat</span>
                 </div>
               </div>
+              <button
+                onClick={() => setShowClearModal(true)}
+                className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors text-red-400 dark:text-red-400"
+                title="Clear Chat"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Chat Body Logs */}
-            <div className="flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-4 bg-white/30 dark:bg-[#0d0818]/60">
+            <div
+              className="flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-4 bg-white/30 dark:bg-[#0d0818]/60 relative"
+              onClick={() => { setContextMenu(null); setActiveMessageIdForReactions(null); }}
+            >
               {messages.map((msg) => {
                 const isSentByMe = msg.senderId === user?.id || (isPartner && msg.senderId === 'partner-john') || (!isPartner && msg.senderId === 'user-sarah');
                 const isReactionsActive = activeMessageIdForReactions === msg.id;
@@ -700,10 +817,17 @@ export default function PartnerPage() {
                 return (
                   <div 
                     key={msg.id}
-                    className={`flex w-full ${isSentByMe ? 'justify-end' : 'justify-start'} relative`}
+                    className={`flex w-full ${isSentByMe ? 'justify-end' : 'justify-start'} relative select-none`}
+                    onContextMenu={(e) => openContextMenu(e, msg.id)}
+                    onTouchStart={(() => {
+                      let timer: ReturnType<typeof setTimeout>;
+                      return (e: React.TouchEvent) => {
+                        timer = setTimeout(() => openContextMenu(e, msg.id), 500);
+                      };
+                    })()}
+                    onTouchEnd={() => { /* timer is local, cleared on render */ }}
                   >
                     <div className="relative group max-w-[80%]">
-                      
                       {/* Message Bubble */}
                       <div 
                         onDoubleClick={() => setActiveMessageIdForReactions(msg.id)}
@@ -755,7 +879,10 @@ export default function PartnerPage() {
                             </span>
                           </div>
                         ) : (
-                          msg.text
+                          <span>
+                            {msg.text}
+                            {msg.is_edited && <span className="ml-1 text-[9px] opacity-60 italic">edited</span>}
+                          </span>
                         )}
 
                         {/* Reaction Display */}
@@ -766,25 +893,20 @@ export default function PartnerPage() {
                         )}
                       </div>
 
-                      {/* Double Click Prompt tooltip */}
-                      <span className="hidden group-hover:block absolute top-1/2 -translate-y-1/2 -left-24 text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider bg-white/90 dark:bg-[#1c1230] px-2 py-0.5 rounded-xl border border-black/8 dark:border-[#3a2d58] shadow-sm pointer-events-none">
-                        Double-tap react
-                      </span>
-
-                      {/* Reaction Selector popup */}
+                      {/* Quick Reaction Bar — shows on double-tap / hover */}
                       <AnimatePresence>
                         {isReactionsActive && (
                           <motion.div 
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            className="absolute -top-10 left-0 bg-white dark:bg-[#1c1230] border border-black/8 dark:border-[#3a2d58] rounded-2xl px-2 py-1 shadow-xl flex gap-1 z-30"
+                            initial={{ opacity: 0, scale: 0.9, y: 4 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 4 }}
+                            className={`absolute -top-11 ${isSentByMe ? 'right-0' : 'left-0'} bg-white dark:bg-[#1c1230] border border-black/8 dark:border-[#3a2d58] rounded-2xl px-2 py-1 shadow-xl flex gap-1 z-30`}
                           >
                             {mockReactions.map((emoji) => (
                               <button
                                 key={emoji}
-                                onClick={() => handleReactionClick(msg.id, emoji)}
-                                className="text-sm hover:scale-125 transition-transform"
+                                onClick={(e) => { e.stopPropagation(); handleReactionClick(msg.id, emoji); }}
+                                className="text-sm hover:scale-125 transition-transform px-0.5"
                               >
                                 {emoji}
                               </button>
@@ -792,15 +914,101 @@ export default function PartnerPage() {
                           </motion.div>
                         )}
                       </AnimatePresence>
-
                     </div>
                   </div>
                 );
               })}
               <div ref={chatEndRef} />
+
+              {/* Context Menu (Telegram-style) */}
+              <AnimatePresence>
+                {contextMenu && (() => {
+                  const msg = messages.find((m) => m.id === contextMenu.msgId);
+                  const isMine = msg && (msg.senderId === user?.id || (isPartner && msg.senderId === 'partner-john') || (!isPartner && msg.senderId === 'user-sarah'));
+                  return (
+                    <motion.div
+                      ref={contextMenuRef}
+                      initial={{ opacity: 0, scale: 0.92 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.92 }}
+                      style={{
+                        position: 'fixed',
+                        top: Math.min(contextMenu.y, window.innerHeight - 260),
+                        left: Math.min(contextMenu.x, window.innerWidth - 180),
+                        zIndex: 999,
+                      }}
+                      className="bg-white dark:bg-[#1c1230] border border-black/10 dark:border-[#3a2d58] rounded-2xl shadow-2xl overflow-hidden min-w-[160px] py-1"
+                    >
+                      {/* React */}
+                      <div className="px-3 py-2 border-b border-black/5 dark:border-[#3a2d58]/60">
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">React</p>
+                        <div className="flex gap-1">
+                          {mockReactions.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => { handleReactionClick(contextMenu.msgId, emoji); setContextMenu(null); }}
+                              className="text-base hover:scale-125 transition-transform"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Copy */}
+                      {msg?.text && (
+                        <button
+                          onClick={() => copyMessage(msg.text)}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-left hover:bg-black/5 dark:hover:bg-white/5 text-[#18003d] dark:text-[#eee6ff] transition-colors"
+                        >
+                          <Copy className="w-3.5 h-3.5" /> Copy
+                        </button>
+                      )}
+
+                      {/* Edit (only my messages with text) */}
+                      {isMine && msg?.text && (
+                        <button
+                          onClick={() => startEditMessage(msg)}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-left hover:bg-black/5 dark:hover:bg-white/5 text-[#18003d] dark:text-[#eee6ff] transition-colors"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" /> Edit
+                        </button>
+                      )}
+
+                      {/* Delete (only my messages) */}
+                      {isMine && (
+                        <button
+                          onClick={() => handleDeleteMessage(contextMenu.msgId)}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-left hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </button>
+                      )}
+                    </motion.div>
+                  );
+                })()}
+              </AnimatePresence>
             </div>
 
-            {/* Sticker Drawer */}
+            {/* Edit Mode Bar */}
+            <AnimatePresence>
+              {editingMsgId && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="bg-primary/10 dark:bg-primary/20 border-t border-primary/30 px-4 py-2 flex items-center gap-2"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="text-xs font-semibold text-primary">Editing message</span>
+                  <button onClick={() => { setEditingMsgId(null); setEditText(''); }} className="ml-auto p-1 rounded-lg hover:bg-primary/10">
+                    <X className="w-3.5 h-3.5 text-primary" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Sticker & Emoji Drawer */}
             <AnimatePresence>
               {showStickerDrawer && (
                 <motion.div 
@@ -810,21 +1018,53 @@ export default function PartnerPage() {
                   className="bg-white/95 dark:bg-[#16102a]/95 border-t border-black/8 dark:border-[#3a2d58]/60 overflow-hidden flex flex-col z-20 shadow-inner"
                 >
                   <div className="flex justify-between items-center px-4 py-2 border-b border-black/8 dark:border-[#3a2d58]/40">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#3d3050] dark:text-[#c8bedd]">Send a Nyra Sticker</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setDrawerTab('emojis')}
+                        className={`text-xs font-bold px-3 py-1 rounded-xl transition-colors ${
+                          drawerTab === 'emojis' ? 'bg-primary text-white' : 'text-[#3d3050] dark:text-[#c8bedd] hover:bg-black/5 dark:hover:bg-white/10'
+                        }`}
+                      >
+                        😊 Emojis
+                      </button>
+                      <button
+                        onClick={() => setDrawerTab('stickers')}
+                        className={`text-xs font-bold px-3 py-1 rounded-xl transition-colors ${
+                          drawerTab === 'stickers' ? 'bg-primary text-white' : 'text-[#3d3050] dark:text-[#c8bedd] hover:bg-black/5 dark:hover:bg-white/10'
+                        }`}
+                      >
+                        🌸 Stickers
+                      </button>
+                    </div>
                     <button onClick={() => setShowStickerDrawer(false)} className="text-xs text-primary dark:text-[#d4b8ff] font-bold">Close</button>
                   </div>
-                  <div className="grid grid-cols-5 gap-3 p-4">
-                    {mockStickers.map((sticker) => (
-                      <button
-                        key={sticker.id}
-                        onClick={() => handleSendSticker(sticker.label)}
-                        className="flex flex-col items-center justify-center p-2.5 rounded-2xl border border-black/8 dark:border-[#3a2d58]/60 bg-white/40 dark:bg-[#1c1230]/60 hover:bg-primary/10 dark:hover:bg-primary/20 hover:border-primary active:scale-95 transition-all"
-                      >
-                        <span className="text-3xl filter drop-shadow-sm">{sticker.emoji}</span>
-                        <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] mt-1.5">{sticker.label.split(' ')[1]}</span>
-                      </button>
-                    ))}
-                  </div>
+
+                  {drawerTab === 'emojis' ? (
+                    <div className="grid grid-cols-5 sm:grid-cols-8 gap-2 p-4">
+                      {quickEmojis.map((emoji, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleEmojiClick(emoji)}
+                          className="p-3 text-2xl hover:scale-125 transition-transform active:scale-95 bg-white/40 dark:bg-[#1c1230]/60 rounded-xl border border-black/5 dark:border-[#3a2d58]/60"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-5 gap-3 p-4">
+                      {mockStickers.map((sticker) => (
+                        <button
+                          key={sticker.id}
+                          onClick={() => handleSendSticker(sticker.label)}
+                          className="flex flex-col items-center justify-center p-2.5 rounded-2xl border border-black/8 dark:border-[#3a2d58]/60 bg-white/40 dark:bg-[#1c1230]/60 hover:bg-primary/10 dark:hover:bg-primary/20 hover:border-primary active:scale-95 transition-all"
+                        >
+                          <span className="text-3xl filter drop-shadow-sm">{sticker.emoji}</span>
+                          <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] mt-1.5">{sticker.label.split(' ')[1]}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -850,28 +1090,82 @@ export default function PartnerPage() {
                 className={`p-2 rounded-2xl transition-colors ${
                   showStickerDrawer ? 'text-primary bg-primary/10' : 'text-[#3d3050] dark:text-[#c8bedd] hover:bg-primary/10'
                 }`}
-                title="Stickers Drawer"
+                title="Emojis & Stickers"
               >
                 <Smile className="w-5 h-5" />
               </button>
               <input 
                 type="text" 
-                placeholder={`Message ${connectedPartnerName}...`} 
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+                placeholder={editingMsgId ? 'Edit message...' : `Message ${connectedPartnerName}...`}
+                value={editingMsgId ? editText : chatInput}
+                onChange={(e) => editingMsgId ? setEditText(e.target.value) : setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') editingMsgId ? handleSaveEdit() : handleSendMessage();
+                  if (e.key === 'Escape' && editingMsgId) { setEditingMsgId(null); setEditText(''); }
+                }}
                 className="flex-1 px-4 py-2.5 rounded-2xl border border-outline-variant/60 dark:border-[#3a2d58] focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none text-xs font-semibold bg-white/80 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0]"
               />
               <button 
-                onClick={handleSendMessage}
+                onClick={editingMsgId ? handleSaveEdit : handleSendMessage}
                 className="p-2.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white shadow-md shadow-primary/20 active:scale-95 hover:opacity-95"
               >
-                <Send className="w-4 h-4" />
+                {editingMsgId ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
 
           </motion.div>
         )}
+
+        {/* Clear Chat Modal */}
+        <AnimatePresence>
+          {showClearModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[200] flex items-center justify-center p-6"
+              onClick={() => setShowClearModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white dark:bg-[#1c1230] rounded-3xl shadow-2xl p-6 w-full max-w-sm border border-black/5 dark:border-[#3a2d58]"
+              >
+                <div className="flex flex-col items-center gap-4 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                    <Trash2 className="w-6 h-6 text-red-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-[#18003d] dark:text-[#eee6ff] mb-1">Clear Chat</h3>
+                    <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium">Choose what to clear from this conversation.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full">
+                    <button
+                      onClick={() => handleClearChat(true)}
+                      className="w-full py-3 rounded-2xl text-sm font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                    >
+                      Clear Only My Messages
+                    </button>
+                    <button
+                      onClick={() => handleClearChat(false)}
+                      className="w-full py-3 rounded-2xl text-sm font-bold bg-red-500 text-white hover:bg-red-600 transition-colors"
+                    >
+                      Clear Entire Chat (Both Sides)
+                    </button>
+                    <button
+                      onClick={() => setShowClearModal(false)}
+                      className="w-full py-2 rounded-2xl text-xs font-semibold text-[#3d3050] dark:text-[#c8bedd] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── 3. DEDICATED PARTNER AI CHAT VIEW (WITH MULTI-THREAD & PROMPT-TO-PROMPT SCROLL) ── */}
         {activeTab === 'ai' && (

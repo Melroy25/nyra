@@ -130,6 +130,24 @@ export const apiAddReaction = (messageId: string, reaction: string) =>
     body: JSON.stringify({ messageId, reaction }),
   });
 
+export const apiEditMessage = (messageId: string, text: string) =>
+  request<{ message: any }>('/api/chat/messages', {
+    method: 'PATCH',
+    body: JSON.stringify({ messageId, text }),
+  });
+
+export const apiDeleteMessage = (messageId: string) =>
+  request<{ success: boolean }>('/api/chat/messages', {
+    method: 'DELETE',
+    body: JSON.stringify({ messageId }),
+  });
+
+export const apiClearChat = (threadId: string, clearForMe: boolean) =>
+  request<{ success: boolean; cleared: string }>('/api/chat/messages', {
+    method: 'DELETE',
+    body: JSON.stringify({ threadId, clearForMe }),
+  });
+
 // ── AI CHAT ───────────────────────────────────
 
 export const apiAiChat = (threadId: string, message: string, aiType: 'nyra' | 'partner' = 'nyra') =>
