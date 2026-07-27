@@ -7,7 +7,7 @@ import { apiLogin, apiRegister, apiPartnerCodeLogin } from '../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setUser, darkMode, toggleDarkMode } = useStore();
+  const { setUser, seedCycleLogs, darkMode, toggleDarkMode } = useStore();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => { setIsMounted(true); }, []);
@@ -49,6 +49,14 @@ export default function LoginPage() {
         partnerCode: user.partnerCode,
         connectedPartnerCode: user.connectedPartnerId,
       });
+      // Seed calendar with period, predicted, and ovulation days from signup data
+      if (user.lastPeriodDate) {
+        seedCycleLogs(
+          user.lastPeriodDate,
+          user.periodDuration || 5,
+          user.cycleLength || 28
+        );
+      }
       if (!user.onboardingCompleted && user.role === 'user') {
         router.push('/onboarding');
       } else if (user.role === 'partner') {

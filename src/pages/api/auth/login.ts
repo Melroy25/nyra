@@ -116,6 +116,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         dateOfBirth: userProfile.date_of_birth,
         cycleLength: userProfile.cycle_length,
         periodDuration: userProfile.period_duration,
+        lastPeriodDate: userProfile.last_period_date || null,
         goals: userProfile.goals || [],
         partnerCode: userProfile.partner_code,
         connectedPartnerId: userProfile.connected_partner_id,

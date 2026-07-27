@@ -11,6 +11,7 @@ export default function App({ Component, pageProps }: AppProps) {
   const recalculateCycleMetrics = useStore((state) => state.recalculateCycleMetrics);
   const darkMode = useStore((state) => state.darkMode);
   const setUser = useStore((state) => state.setUser);
+  const seedCycleLogs = useStore((state) => state.seedCycleLogs);
   const updateOnboardingData = useStore((state) => state.updateOnboardingData);
 
   // ── Sync dark mode class on the <html> element on every change ──
@@ -37,11 +38,19 @@ export default function App({ Component, pageProps }: AppProps) {
               name: user.name || '',
               age: user.age || 0,
               dob: user.dateOfBirth || '',
+              lastPeriodDate: user.lastPeriodDate || '',
               averageCycleLength: user.cycleLength || 28,
               periodDuration: user.periodDuration || 5,
               goals: user.goals || [],
             });
-
+            // Seed calendar with period/predicted/ovulation days from signup data
+            if (user.lastPeriodDate) {
+              seedCycleLogs(
+                user.lastPeriodDate,
+                user.periodDuration || 5,
+                user.cycleLength || 28
+              );
+            }
             // ── Schedule native push notifications based on user settings ──
             scheduleNativeNotifications();
           }
@@ -60,7 +69,7 @@ export default function App({ Component, pageProps }: AppProps) {
         .then((reg) => console.log('Nyra PWA Service Worker Registered:', reg.scope))
         .catch((err) => console.log('Service Worker Registration Failed:', err));
     }
-  }, [recalculateCycleMetrics, setUser, updateOnboardingData]);
+  }, [recalculateCycleMetrics, setUser, seedCycleLogs, updateOnboardingData]);
 
   return (
     <Layout>

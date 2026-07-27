@@ -62,6 +62,7 @@ interface AppState {
   logNotes: (date: string, notes: string) => void;
   setSeverity: (date: string, severity: number) => void;
   recalculateCycleMetrics: () => void;
+  seedCycleLogs: (lastPeriodDate: string, periodDuration: number, cycleLength: number) => void;
 
   // Chat Actions
   setActiveThreadId: (id: string) => void;
@@ -188,6 +189,15 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Auth actions
   setUser: (user) => set({ user }),
+  seedCycleLogs: (lastPeriodDate, periodDuration, cycleLength) => {
+    // Only seed if no existing real period logs
+    const existing = get().cycleLogs.filter((l) => l.isPeriod && !l.isPredicted);
+    if (existing.length === 0 && lastPeriodDate) {
+      const logs = generateInitialCycleLogs(lastPeriodDate, periodDuration, cycleLength);
+      set({ cycleLogs: logs });
+      get().recalculateCycleMetrics();
+    }
+  },
   setOnboardingStep: (onboardingStep) => set({ onboardingStep }),
   updateOnboardingData: (data) =>
     set((state) => ({

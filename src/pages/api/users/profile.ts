@@ -37,6 +37,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       dateOfBirth: rawUser.date_of_birth,
       cycleLength: rawUser.cycle_length || 28,
       periodDuration: rawUser.period_duration || 5,
+      lastPeriodDate: rawUser.last_period_date || null,
       goals: rawUser.goals || [],
       partnerCode: rawUser.partner_code,
       connectedPartnerId: rawUser.connected_partner_id,
