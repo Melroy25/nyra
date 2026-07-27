@@ -16,6 +16,7 @@ export default function App({ Component, pageProps }: AppProps) {
   const setUser = useStore((state) => state.setUser);
   const seedCycleLogs = useStore((state) => state.seedCycleLogs);
   const updateOnboardingData = useStore((state) => state.updateOnboardingData);
+  const setUnreadCount = useStore((state) => state.setUnreadCount);
 
   // ── Sync dark mode class on the <html> element on every change ──
   useEffect(() => {
@@ -96,7 +97,6 @@ export default function App({ Component, pageProps }: AppProps) {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
         .then(() => {
-          console.log('Nyra SW registered');
           // Use .ready so we always get the truly-active SW (not null on first visit)
           return navigator.serviceWorker.ready;
         })
@@ -105,8 +105,17 @@ export default function App({ Component, pageProps }: AppProps) {
           const uid = (() => {
             try { return JSON.parse(localStorage.getItem('nyra_cached_user') || '{}')?.id; } catch (e) { return null; }
           })();
+          // Restore known IDs so SW doesn't re-notify old messages
+          const knownIdsArr = (() => {
+            try { return JSON.parse(localStorage.getItem('nyra_known_msg_ids') || '[]'); } catch (e) { return []; }
+          })();
           if (t && reg.active) {
-            reg.active.postMessage({ type: 'START_BG_POLL', token: t, userId: uid });
+            reg.active.postMessage({
+              type: 'START_BG_POLL',
+              token: t,
+              userId: uid,
+              knownIds: knownIdsArr,
+            });
           }
         })
         .catch((err) => console.warn('SW registration failed:', err));
@@ -136,18 +145,31 @@ export default function App({ Component, pageProps }: AppProps) {
       const token = localStorage.getItem('nyra_token');
       if (!token) return;
 
-      // Skip notifications whenever user is on /partner page and window is visible
-      const isOnPartnerPage = router.pathname === '/partner' && document.visibilityState === 'visible';
-      if (isOnPartnerPage) return;
-
       try {
         // Background poll — no markRead/heartbeat, just check for new messages
         const { messages, partnerInfo } = await apiGetMessages('auto');
-        if (!messages || messages.length === 0) return;
+        if (!messages || messages.length === 0) {
+          useStore.getState().setUnreadCount(0);
+          return;
+        }
 
         const currentUserId = user?.id || (() => {
           try { return JSON.parse(localStorage.getItem('nyra_cached_user') || '{}')?.id; } catch (e) { return null; }
         })();
+
+        // Compute unread count for badges across app
+        const unreadCount = messages.filter(
+          (m: any) => m.sender_id !== currentUserId && !m.is_read
+        ).length;
+        useStore.getState().setUnreadCount(unreadCount);
+
+        // ONLY skip push notification if user is actively viewing the CHAT tab while window is visible
+        const isActivelyChatting =
+          router.pathname === '/partner' &&
+          router.query.tab === 'chat' &&
+          document.visibilityState === 'visible';
+
+        if (isActivelyChatting) return;
 
         const partnerName = partnerInfo?.name || 'Partner';
         let newIdsAdded = false;

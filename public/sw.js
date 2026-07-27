@@ -109,10 +109,11 @@ async function bgCheckMessages() {
       return;
     }
 
-    // Check if user has any chat window open and focused
+    // Check if user has the CHAT tab open AND it's visible (foreground)
+    // If app is closed, minimized, or on another page → show notification
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const chatIsVisible = allClients.some(
-      (c) => c.url.includes('/partner') && c.visibilityState === 'visible'
+    const chatTabFocused = allClients.some(
+      (c) => c.url.includes('/partner') && c.url.includes('tab=chat') && c.visibilityState === 'visible'
     );
 
     const partnerName = partnerInfo.name || 'Partner';
@@ -121,8 +122,8 @@ async function bgCheckMessages() {
     for (const msg of messages) {
       if (msg.sender_id !== bgUserId && !bgKnownIds.has(msg.id)) {
         bgKnownIds.add(msg.id);
-        // ONLY show push notification if chat tab is NOT visible
-        if (!chatIsVisible) {
+        // Show push notification unless the user is actively IN the chat tab
+        if (!chatTabFocused) {
           const bodyText =
             msg.text ||
             (msg.sticker ? `Sent a sticker 😊` : 'Sent an attachment 📎');

@@ -16,6 +16,8 @@ export default function PartnerPage() {
   const { 
     user, 
     setUser,
+    unreadCount,
+    setUnreadCount,
     chatThreads, 
     activeThreadId, 
     addMessage, 
@@ -226,6 +228,11 @@ export default function PartnerPage() {
           }
         })
         .catch((err: any) => console.log('Partner dashboard load:', err));
+    }
+
+    // Clear unread badge whenever user opens the chat tab
+    if (activeTab === 'chat') {
+      setUnreadCount(0);
     }
   }, [activeTab]);
 
@@ -763,6 +770,11 @@ export default function PartnerPage() {
                   className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2 hover:opacity-95 transition-all"
                 >
                   <MessageCircle className="w-4 h-4" /> Open Chat
+                  {unreadCount > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-sm animate-bounce">
+                      {unreadCount}
+                    </span>
+                  )}
                 </button>
                 {isPartner && (
                   <button 

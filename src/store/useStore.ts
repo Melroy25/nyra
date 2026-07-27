@@ -34,6 +34,8 @@ interface AppState {
   // Multiple Chat Threads
   chatThreads: ChatThread[];
   activeThreadId: string;
+  unreadCount: number;
+  setUnreadCount: (count: number) => void;
 
   // Partner AI Chat Threads
   partnerAiThreads: ChatThread[];
@@ -156,6 +158,8 @@ export const useStore = create<AppState>((set, get) => ({
     }
   ],
   activeThreadId: 'thread-1',
+  unreadCount: 0,
+  setUnreadCount: (count) => set({ unreadCount: count }),
 
   // Partner AI Chat state
   partnerAiThreads: [

@@ -11,7 +11,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
-  const { user, setUser, darkMode, toggleDarkMode } = useStore();
+  const { user, setUser, darkMode, toggleDarkMode, unreadCount } = useStore();
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => { setIsMounted(true); }, []);
 
@@ -215,13 +215,18 @@ export default function Layout({ children }: LayoutProps) {
               <Link
                 key={item.path}
                 href={item.path}
-                className={`flex flex-col items-center justify-center rounded-xl w-11 h-11 transition-all duration-300 ${
+                className={`flex flex-col items-center justify-center rounded-xl w-11 h-11 transition-all duration-300 relative ${
                   active
                     ? 'bg-primary text-white shadow-md shadow-primary/30'
                     : 'text-on-surface/55 dark:text-[#c8bedd] hover:bg-primary/10 hover:text-primary dark:hover:text-[#d4b8ff]'
                 }`}
               >
                 <Icon className="w-5 h-5" />
+                {item.path.includes('/partner') && isMounted && unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-extrabold w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center border border-white dark:border-[#100c20] shadow-sm animate-pulse">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
                 <span className="sr-only">{item.label}</span>
               </Link>
             );
