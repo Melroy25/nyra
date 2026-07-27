@@ -4,7 +4,6 @@ import { mockMoods } from '../data/mood';
 import { useStore } from '../store/useStore';
 import { Check, Calendar } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { motion } from 'framer-motion';
 
 import { apiSaveCycleLog } from '../lib/api';
 
@@ -43,6 +42,7 @@ export default function MoodPage() {
       date: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       score: moodScoreMap[log.mood || 'Calm'] || 4,
       mood: log.mood,
+      notes: log.notes || '',
     }));
 
   const handleSave = async () => {
@@ -70,12 +70,12 @@ export default function MoodPage() {
       {/* Page Header */}
       <section className="flex flex-col gap-unit animate-entrance">
         <h1 className="font-serif font-bold text-3xl md:text-5xl text-tertiary">Log Mood</h1>
-        <p className="text-sm text-on-surface-variant">Sync your emotional rhythms with your cycle.</p>
+        <p className="text-sm text-on-surface-variant dark:text-[#c8bedd]">Sync your emotional rhythms with your cycle.</p>
       </section>
 
       {/* Mood Selector Grid */}
       <section className="flex flex-col gap-stack-sm">
-        <h2 className="font-semibold text-sm text-on-surface mb-2">How do you feel in this moment?</h2>
+        <h2 className="font-semibold text-sm text-on-surface dark:text-[#eee6ff] mb-2">How do you feel in this moment?</h2>
         
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
           {mockMoods.map((mood) => {
@@ -84,14 +84,14 @@ export default function MoodPage() {
               <button
                 key={mood.id}
                 onClick={() => setSelectedMood(mood.name)}
-                className={`glass-card rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all border ${
+                className={`glass-card rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all border ${
                   isSelected
-                    ? 'border-primary ring-2 ring-primary bg-primary/5 scale-[0.98]'
-                    : 'border-outline-variant/40 bg-white/40 hover:bg-white/70'
+                    ? 'border-primary ring-2 ring-primary bg-primary/10 dark:bg-primary/20 scale-[0.98]'
+                    : 'border-outline-variant/40 dark:border-[#3a2d58] bg-white/40 dark:bg-[#1c1230]/40 hover:bg-white/70'
                 }`}
               >
                 <span className="text-3xl filter drop-shadow-sm">{mood.emoji}</span>
-                <span className="font-semibold text-xs text-on-surface">{mood.name}</span>
+                <span className="font-semibold text-xs text-on-surface dark:text-[#eee6ff]">{mood.name}</span>
               </button>
             );
           })}
@@ -100,12 +100,12 @@ export default function MoodPage() {
 
       {/* Additional Notes */}
       <section className="flex flex-col gap-stack-sm">
-        <h2 className="font-semibold text-sm text-on-surface">Notes (Triggers, physical symptoms connection)</h2>
+        <h2 className="font-semibold text-sm text-on-surface dark:text-[#eee6ff]">Notes (Triggers, physical symptoms connection)</h2>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="I noticed I have minor sugar cravings or feel a bit more reflective..."
-          className="w-full min-h-[100px] glass-card rounded-xl p-4 font-semibold text-sm text-on-surface placeholder-outline focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-transparent resize-none transition-shadow"
+          className="w-full min-h-[100px] glass-card rounded-2xl p-4 font-semibold text-sm text-on-surface dark:text-[#eee6ff] placeholder-outline dark:placeholder-[#c8bedd]/50 focus:outline-none focus:ring-2 focus:ring-primary/40 border border-white/50 dark:border-[#3a2d58] resize-none transition-shadow"
         />
       </section>
 
@@ -127,13 +127,13 @@ export default function MoodPage() {
       </div>
 
       {/* Mood History Chart */}
-      <section className="glass-card rounded-xl p-6 shadow-sm border border-white/40">
+      <section className="glass-card rounded-2xl p-6 shadow-sm border border-white/40 dark:border-[#3a2d58]/50">
         <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+          <div className="flex items-center gap-2 text-primary dark:text-[#d4b8ff] font-bold text-sm">
             <Calendar className="w-4 h-4" />
             <span>Mood History Trends</span>
           </div>
-          <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Last 7 logs</span>
+          <span className="text-[10px] font-bold text-outline dark:text-[#c8bedd] uppercase tracking-wider">Last 7 logs</span>
         </div>
 
         {chartData.length > 0 ? (
@@ -151,7 +151,7 @@ export default function MoodPage() {
                 />
                 <Tooltip 
                   formatter={(value: any, name: any, props: any) => [props.payload.mood, 'Mood']}
-                  contentStyle={{ background: 'rgba(255, 255, 255, 0.9)', borderRadius: '1rem', border: '1px solid #eaddff' }}
+                  contentStyle={{ background: 'rgba(255, 255, 255, 0.95)', borderRadius: '1rem', border: '1px solid #eaddff', color: '#18003d' }}
                 />
                 <Line 
                   type="monotone" 
@@ -165,7 +165,7 @@ export default function MoodPage() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="h-48 flex items-center justify-center text-sm text-on-surface-variant italic">
+          <div className="h-48 flex items-center justify-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic">
             Log some moods to populate your history trends graph.
           </div>
         )}
