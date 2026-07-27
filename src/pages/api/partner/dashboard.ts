@@ -73,8 +73,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
     // 4. Extract latest symptoms, mood, cravings, energy
     const latestLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
-    const latestSymptoms = latestLog?.symptoms || [];
-    const latestMood = latestLog?.mood || 'Calm';
+    const latestSymptoms: string[] = Array.isArray(latestLog?.symptoms) ? latestLog.symptoms : [];
+    const latestMood: string = latestLog?.mood || (currentPhase.includes('Ovulation') ? 'Energetic & Happy' : currentPhase.includes('Menstrual') ? 'Sensitive & Resting' : 'Calm & Balanced');
 
     // Cravings & Energy logic
     let energyLevel = 'Normal Energy';
@@ -87,45 +87,29 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     let cravings = 'Dark Chocolate & Chamomile Tea';
     if (latestSymptoms.includes('Cramps') || latestSymptoms.includes('Bloating')) {
       cravings = 'Warm Herbal Tea & Dark Chocolate';
-    } else if (latestSymptoms.includes('Fatigue')) {
+    } else if (latestSymptoms.includes('Fatigue') || energyLevel === 'Low Energy') {
       cravings = 'Magnesium Smoothie & Fresh Fruit';
     }
 
-    // 5. Generate AI Suggestions for Partner based on real phase
-    let suggestions = [
+    // 5. Generate AI Suggestions for Partner based on real phase & user data
+    const suggestions = [
       {
-        title: 'Offer a cozy evening at home',
-        desc: `Her energy in ${currentPhase} is lower. Warm tea and a relaxed evening will mean a lot.`,
+        title: `Craving Alert: ${cravings}`,
+        desc: `Based on ${targetUser.name}'s current ${currentPhase} phase and logged data, surprising her with ${cravings.toLowerCase()} will brighten her day!`,
       },
       {
-        title: 'Bring a small treat',
-        desc: `Her body requires nourishing snacks. Picking up ${cravings.toLowerCase()} on your way home is a great surprise!`,
+        title: currentPhase.includes('Menstrual') ? 'Comfort & Heating Support' : currentPhase.includes('Ovulation') ? 'Date Night & Social Outing' : 'Cozy Evening & Rest',
+        desc: currentPhase.includes('Menstrual') 
+          ? `${targetUser.name} is on Day ${currentDay} of her period. Provide a warm heating pad or herbal tea to soothe her cramps.`
+          : currentPhase.includes('Ovulation')
+          ? `${targetUser.name}'s energy and mood are at their peak right now! Great time for a date night.`
+          : `Her energy level is in ${currentPhase}. A quiet evening and helping with small chores will mean a lot to her.`,
+      },
+      {
+        title: 'Emotional & Care Support',
+        desc: `Her current mood is "${latestMood}". Be an attentive listener, offer a warm hug, and give her extra reassurance today.`,
       },
     ];
-
-    if (currentPhase.includes('Menstrual')) {
-      suggestions = [
-        {
-          title: 'Provide a heating pad or warm tea',
-          desc: `${targetUser.name} is on Day ${currentDay} of her period. Warmth helps relax uterine muscles and soothe cramps.`,
-        },
-        {
-          title: 'Take care of heavy household tasks',
-          desc: `Her body is expending energy right now. Helping with chores gives her time to rest.`,
-        },
-      ];
-    } else if (currentPhase.includes('Ovulation')) {
-      suggestions = [
-        {
-          title: 'Plan a fun active outing',
-          desc: `${targetUser.name}'s energy and mood are at their peak during Ovulation! Great time for a date night.`,
-        },
-        {
-          title: 'Celebrate & connect',
-          desc: `Her social energy is high right now. Shared activities feel extra special today.`,
-        },
-      ];
-    }
 
     return res.status(200).json({
       isConnected: true,

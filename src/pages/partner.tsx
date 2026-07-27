@@ -383,16 +383,6 @@ export default function PartnerPage() {
               });
               const merged = [...formatted, ...recentUnconfirmedLocalMsgs];
 
-              // Send browser notification for newly arrived partner messages
-              if (prev.length > 0 && merged.length > prev.length) {
-                const newIncoming = merged.filter(
-                  (m) => !isMsgSentByMe(m) && !prev.some((p) => p.id === m.id)
-                );
-                newIncoming.forEach((m) => {
-                  triggerNotification(m, partnerInfo?.name || connectedPartnerName, partnerInfo?.avatar_url);
-                });
-              }
-
               // Smart diff to avoid unnecessary re-renders
               const isDifferent =
                 merged.length !== prev.length ||
@@ -1005,30 +995,32 @@ export default function PartnerPage() {
                     </div>
                   </div>
 
-                  {/* Cravings & Energy summary */}
+                  {/* Mood & Symptoms summary */}
                   <div className="md:col-span-4 flex flex-col gap-4">
-                    {/* Energy */}
+                    {/* Mood */}
                     <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-5 border border-white/50 dark:border-[#3a2d58]/60 shadow-sm flex items-center gap-4 flex-1">
-                      <div className="w-10 h-10 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary border border-secondary/20 shrink-0">
-                        <Heart className="w-5 h-5 fill-current" />
+                      <div className="w-10 h-10 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary border border-secondary/20 shrink-0 text-lg">
+                        😊
                       </div>
                       <div>
-                        <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-0.5">Energy Level</span>
+                        <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-0.5">Mood</span>
                         <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">
-                          {dashboardData?.cycleMetrics?.energyLevel || 'Low Energy'}
+                          {dashboardData?.cycleMetrics?.latestMood || 'Calm & Balanced'}
                         </span>
                       </div>
                     </div>
                     
-                    {/* Cravings */}
+                    {/* Symptoms */}
                     <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-5 border border-white/50 dark:border-[#3a2d58]/60 shadow-sm flex items-center gap-4 flex-1">
                       <div className="w-10 h-10 rounded-2xl bg-tertiary/10 flex items-center justify-center text-tertiary border border-tertiary/20 shrink-0 text-lg">
                         🌸
                       </div>
                       <div>
-                        <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-0.5">Cravings</span>
-                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">
-                          {dashboardData?.cycleMetrics?.cravings || 'Chocolate'}
+                        <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-0.5">Symptoms</span>
+                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff] truncate max-w-[180px] block">
+                          {dashboardData?.cycleMetrics?.latestSymptoms?.length 
+                            ? dashboardData.cycleMetrics.latestSymptoms.join(', ')
+                            : 'No symptoms logged today'}
                         </span>
                       </div>
                     </div>
@@ -1643,14 +1635,21 @@ export default function PartnerPage() {
         {activeTab === 'ai' && (
           <motion.div 
             key="ai-support"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="glass-card bg-white/80 dark:bg-[#16102a]/95 rounded-3xl border border-white/60 dark:border-[#3a2d58]/60 shadow-xl overflow-hidden flex flex-col h-[calc(100vh-170px)] min-h-[480px] relative"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-white dark:bg-[#120b24] z-50 flex flex-col overflow-hidden"
           >
-            {/* AI Header with Thread Menu & Prompt Index Buttons */}
-            <div className="flex justify-between items-center bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-b border-black/8 dark:border-[#3a2d58]/60">
-              <div className="flex items-center gap-3">
+            {/* AI Header with Back Button, Thread Menu & Prompt Index Buttons */}
+            <div className="flex justify-between items-center bg-white/80 dark:bg-[#1c1230]/90 backdrop-blur-md px-4 py-3 border-b border-black/8 dark:border-[#3a2d58]/60 shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <button 
+                  onClick={() => router.push('/partner?tab=dashboard')}
+                  className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors text-[#3d3050] dark:text-[#c8bedd]"
+                  title="Back to Dashboard"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
                 <button 
                   onClick={() => setShowAiThreadsDrawer(!showAiThreadsDrawer)}
                   className="p-2 hover:bg-primary/10 dark:hover:bg-primary/20 rounded-xl transition-colors text-[#3d3050] dark:text-[#c8bedd]"
@@ -1662,7 +1661,7 @@ export default function PartnerPage() {
                   <Sparkles className="w-5 h-5 animate-pulse" />
                 </div>
                 <div>
-                  <h3 className="font-serif font-bold text-sm text-[#18003d] dark:text-[#eee6ff] truncate max-w-[180px] sm:max-w-[280px]">
+                  <h3 className="font-serif font-bold text-sm text-[#18003d] dark:text-[#eee6ff] truncate max-w-[150px] sm:max-w-[250px]">
                     {activePartnerAiThread?.title || 'Partner AI Support'}
                   </h3>
                   <span className="text-[10px] font-bold text-tertiary block mt-0.5">Specialized Cycle Advice for Partners</span>

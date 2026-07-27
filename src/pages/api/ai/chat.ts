@@ -40,26 +40,45 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       threadId = existingThread?.id;
     }
 
-    // 2. Fetch user profile + recent cycle logs for context
-    const { data: userProfile } = await supabase
+    // 2. Fetch current user & determine target female user ID
+    const { data: me } = await supabase
+      .from('users')
+      .select('id, name, age, role, connected_partner_id, cycle_length, period_duration')
+      .eq('id', authUser.userId)
+      .maybeSingle();
+
+    const isPartner = aiType === 'partner' || me?.role === 'partner';
+    const targetUserId = isPartner && me?.connected_partner_id ? me.connected_partner_id : authUser.userId;
+
+    // Fetch target user profile
+    const { data: targetProfile } = await supabase
       .from('users')
       .select('name, age, cycle_length, period_duration')
-      .eq('id', authUser.userId)
+      .eq('id', targetUserId)
       .maybeSingle();
 
     // Fetch actual last period log (not predicted)
     const { data: lastActualLog } = await supabase
       .from('cycle_logs')
-      .select('date')
-      .eq('user_id', authUser.userId)
+      .select('date, symptoms, mood')
+      .eq('user_id', targetUserId)
       .eq('is_period', true)
       .order('date', { ascending: false })
       .limit(1)
       .maybeSingle();
 
+    // Fetch latest general cycle log for symptoms & mood
+    const { data: latestLog } = await supabase
+      .from('cycle_logs')
+      .select('symptoms, mood')
+      .eq('user_id', targetUserId)
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     const lastPeriodDate = lastActualLog?.date || null;
-    const cycleLength = Math.max(21, userProfile?.cycle_length || 28);
-    const periodDuration = Math.max(3, userProfile?.period_duration || 5);
+    const cycleLength = Math.max(21, targetProfile?.cycle_length || 28);
+    const periodDuration = Math.max(3, targetProfile?.period_duration || 5);
 
     let currentDay = 1;
     let currentPhase = 'Follicular';
@@ -73,7 +92,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
         currentDay = 1;
       }
     } else {
-      currentDay = 7; // Safe mid-follicular default when no logs exist
+      currentDay = 14; // Default mid-cycle when no log available
     }
 
     // Phase bounds
@@ -81,6 +100,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     else if (currentDay <= Math.floor(cycleLength * 0.46)) currentPhase = 'Follicular';
     else if (currentDay <= Math.floor(cycleLength * 0.58)) currentPhase = 'Ovulation';
     else currentPhase = 'Luteal';
+
+    const latestSymptoms: string[] = Array.isArray(latestLog?.symptoms) ? latestLog.symptoms : [];
+    const latestMood: string = latestLog?.mood || (currentPhase === 'Ovulation' ? 'Energetic & Happy' : currentPhase === 'Menstrual' ? 'Sensitive & Resting' : 'Calm & Balanced');
+    const symptomsText = latestSymptoms.length > 0 ? latestSymptoms.join(', ') : 'No specific symptoms logged today';
 
     // 3. Fetch last 10 AI messages for conversation context
     const { data: previousMessages } = await supabase
@@ -93,13 +116,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     const conversationHistory = (previousMessages || []).reverse();
 
     // 4. Build system prompt
-    const userName = userProfile?.name || 'there';
-    const systemPrompt = aiType === 'partner'
-      ? `You are Nyra, an empathetic AI wellness assistant specifically advising a partner on how to support their partner (${userName}) during her menstrual cycle.
-         Target User Data: ${userName} is currently on Cycle Day ${currentDay} of ${cycleLength}, Phase: ${currentPhase}.
-         Always answer the partner's questions with actionable, warm advice about supporting ${userName}. Keep responses under 4 sentences.`
-      : `You are Nyra, a warm, empathetic AI wellness companion for women's health.
-         User: ${userName}, Age: ${userProfile?.age || 'unknown'}, currently on Cycle Day ${currentDay} of ${cycleLength} (${currentPhase} phase).
+    const femaleName = targetProfile?.name || 'your partner';
+    const systemPrompt = isPartner
+      ? `You are Nyra Partner AI, an empathetic AI wellness assistant specifically advising a partner on how to support their partner (${femaleName}) during her cycle.
+         Target User Data: ${femaleName} is currently on Cycle Day ${currentDay} of ${cycleLength}, Phase: ${currentPhase}. Logged symptoms: ${symptomsText}. Logged mood: ${latestMood}.
+         Always answer the partner's questions with actionable, warm, respectful advice on how to support ${femaleName}. Keep responses concise (under 4 sentences).`
+      : `You are Nyra AI, a warm, empathetic AI wellness companion for women's health.
+         User: ${targetProfile?.name || me?.name || 'there'}, Age: ${targetProfile?.age || me?.age || 'unknown'}, currently on Cycle Day ${currentDay} of ${cycleLength} (${currentPhase} phase). Logged symptoms: ${symptomsText}. Mood: ${latestMood}.
          Provide personalized, caring, evidence-based advice in 2-4 sentences with emojis.`;
 
     // 5. Save user message to DB
@@ -150,7 +173,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
     // 7. Smart contextual fallback
     if (!aiReply) {
-      aiReply = buildSmartFallback(message, currentPhase, currentDay, userName, aiType);
+      aiReply = buildSmartFallback(message, currentPhase, currentDay, femaleName, aiType);
     }
 
     // 8. Save AI reply to DB

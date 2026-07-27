@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { useStore } from '../store/useStore';
 import { 
   Sparkles, Send, Mic, ArrowUp, Menu, X, Edit3, Trash2, ListFilter, 
-  Volume2, Copy, Smile, Image, Moon, Sun, Bell, Check, ChevronRight, Plus, Loader2
+  Volume2, Copy, Smile, Image, Moon, Sun, Bell, Check, ChevronRight, Plus, Loader2, ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiAiChat, apiGetAiThreads, apiCreateAiThread, apiRenameAiThread, apiDeleteAiThread, apiGetAiMessages } from '../lib/api';
@@ -22,6 +23,7 @@ interface AiThread {
 }
 
 export default function AIPage() {
+  const router = useRouter();
   const { user, darkMode, toggleDarkMode } = useStore();
 
   const [threads, setThreads] = useState<AiThread[]>([]);
@@ -246,21 +248,28 @@ export default function AIPage() {
   }
 
   return (
-    <div className="-mx-container-padding-mobile md:-mx-container-padding-desktop -mt-stack-md -mb-20 px-4 pt-4 pb-[90px] flex flex-col min-h-[calc(100vh-4.5rem)] relative overflow-hidden bg-white/60 dark:bg-[#100c20]/95">
+    <div className="fixed inset-0 z-40 bg-white dark:bg-[#100c20] flex flex-col overflow-hidden">
       
       {/* Top chat bar */}
-      <section className="flex justify-between items-center bg-white/40 dark:bg-surface-container/45 backdrop-blur-xl border border-white/40 dark:border-white/10 rounded-2xl px-4 py-3.5 mb-4 shadow-sm">
-        <div className="flex items-center gap-3">
+      <section className="flex justify-between items-center bg-white/80 dark:bg-[#16102a]/90 backdrop-blur-xl border-b border-black/8 dark:border-[#3a2d58]/60 px-4 py-3 shadow-sm shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors text-on-surface"
+            title="Back to Dashboard"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           <button 
             onClick={() => setShowThreadsDrawer(true)}
-            className="p-2 hover:bg-white/60 dark:hover:bg-white/10 rounded-xl transition-colors"
+            className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors"
             title="Chat Threads"
           >
             <Menu className="w-5 h-5 text-on-surface" />
           </button>
           <img src="/logo.png" alt="Nyra Logo" className="w-8 h-8 rounded-full object-cover border border-white" />
           <div>
-            <h2 className="font-serif font-bold text-sm text-on-surface">{activeThread?.title || 'Nyra AI'}</h2>
+            <h2 className="font-serif font-bold text-sm text-on-surface truncate max-w-[150px] sm:max-w-[250px]">{activeThread?.title || 'Nyra AI'}</h2>
             <span className="text-[9px] font-bold text-primary dark:text-inverse-primary uppercase tracking-wider block">Nyra Assistant</span>
           </div>
         </div>
@@ -407,28 +416,24 @@ export default function AIPage() {
         <div ref={chatEndRef} />
       </section>
 
-      {/* Floating Prompt input bar */}
-      <section className="fixed bottom-[88px] left-0 right-0 px-container-padding-mobile md:px-0 z-40 bg-gradient-to-t from-background via-background/95 to-transparent dark:from-[#0d0818] dark:via-[#0d0818]/95 pt-4 pb-2">
+      {/* Input bar */}
+      <section className="bg-white/80 dark:bg-[#16102a]/95 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 shrink-0">
         <div className="max-w-[760px] mx-auto relative flex items-center gap-2">
-
-          <div className="flex-1 glass-panel rounded-full p-2 flex items-center gap-2 border border-white/80 dark:border-white/10 shadow-lg relative">
-            <input 
-              type="text" 
-              value={inputVal}
-              onChange={(e) => setInputVal(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-              placeholder="Ask Nyra about your symptoms, cramps..."
-              className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-sm font-semibold text-on-surface placeholder-on-surface-variant/40 px-3 h-10"
-            />
-            
-            <button 
-              onClick={handleSend}
-              disabled={isTyping || !inputVal.trim()}
-              className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center shrink-0 shadow-md hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isTyping ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-5 h-5 stroke-[2.5]" />}
-            </button>
-          </div>
+          <input 
+            type="text" 
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+            placeholder="Ask Nyra about your symptoms, cramps, or cycle..."
+            className="flex-1 px-4 py-2.5 rounded-2xl border border-outline-variant/60 dark:border-[#3a2d58] focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none text-xs font-semibold bg-white/80 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0]"
+          />
+          <button 
+            onClick={handleSend}
+            disabled={isTyping || !inputVal.trim()}
+            className="p-2.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white shadow-md shadow-primary/20 active:scale-95 hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isTyping ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4 stroke-[2.5]" />}
+          </button>
         </div>
       </section>
 
