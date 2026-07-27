@@ -63,6 +63,10 @@ interface AppState {
   setSeverity: (date: string, severity: number) => void;
   recalculateCycleMetrics: () => void;
   seedCycleLogs: (lastPeriodDate: string, periodDuration: number, cycleLength: number) => void;
+  deleteMoodLog: (date: string) => void;
+  deleteSymptomLog: (date: string) => void;
+  deletePeriodLog: (date: string) => void;
+  setCycleLogs: (logs: CycleLog[]) => void;
 
   // Chat Actions
   setActiveThreadId: (id: string) => void;
@@ -126,7 +130,9 @@ export const useStore = create<AppState>((set, get) => ({
   isPartnerConnected: false,
 
   // Cycle state
-  cycleLogs: [],
+  cycleLogs: typeof window !== 'undefined' && localStorage.getItem('nyra_cycle_logs')
+    ? JSON.parse(localStorage.getItem('nyra_cycle_logs') || '[]')
+    : [],
   currentCycleDay: 1,
   currentCyclePhase: 'Follicular',
   nextPeriodDaysLeft: 28,
@@ -190,11 +196,14 @@ export const useStore = create<AppState>((set, get) => ({
   // Auth actions
   setUser: (user) => set({ user }),
   seedCycleLogs: (lastPeriodDate, periodDuration, cycleLength) => {
-    // Only seed if no existing real period logs
+    // Only seed if localStorage & state have zero real period logs
     const existing = get().cycleLogs.filter((l) => l.isPeriod && !l.isPredicted);
     if (existing.length === 0 && lastPeriodDate) {
       const logs = generateInitialCycleLogs(lastPeriodDate, periodDuration, cycleLength);
       set({ cycleLogs: logs });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
+      }
       get().recalculateCycleMetrics();
     }
   },
@@ -246,6 +255,7 @@ export const useStore = create<AppState>((set, get) => ({
       } else {
         logs.push({ date, isPeriod: true, isPredicted: false, isOvulation: false, flow: 'medium', symptoms: [], mood: null });
       }
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };
     }),
 
@@ -256,6 +266,7 @@ export const useStore = create<AppState>((set, get) => ({
       if (index > -1) {
         logs[index] = { ...logs[index], isPeriod: false, flow: null };
       }
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };
     }),
 
@@ -269,6 +280,7 @@ export const useStore = create<AppState>((set, get) => ({
       } else {
         logs.push({ date, isPeriod, isPredicted: false, isOvulation: false, flow, symptoms: [], mood: null });
       }
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };
     }),
 
@@ -284,6 +296,7 @@ export const useStore = create<AppState>((set, get) => ({
       } else {
         logs.push({ date, isPeriod: false, isPredicted: false, isOvulation: false, flow: null, symptoms: [symptom], mood: null });
       }
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };
     }),
 
@@ -295,6 +308,7 @@ export const useStore = create<AppState>((set, get) => ({
         const symptoms = logs[index].symptoms.filter((s) => s !== symptom);
         logs[index] = { ...logs[index], symptoms };
       }
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };
     }),
 
@@ -307,6 +321,7 @@ export const useStore = create<AppState>((set, get) => ({
       } else {
         logs.push({ date, isPeriod: false, isPredicted: false, isOvulation: false, flow: null, symptoms: [], mood });
       }
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };
     }),
 
@@ -319,6 +334,7 @@ export const useStore = create<AppState>((set, get) => ({
       } else {
         logs.push({ date, isPeriod: false, isPredicted: false, isOvulation: false, flow: null, symptoms: [], mood: null, notes });
       }
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };
     }),
 
@@ -331,8 +347,41 @@ export const useStore = create<AppState>((set, get) => ({
       } else {
         logs.push({ date, isPeriod: false, isPredicted: false, isOvulation: false, flow: null, symptoms: [], mood: null, severity });
       }
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };
     }),
+
+  deleteMoodLog: (date) =>
+    set((state) => {
+      const logs = state.cycleLogs
+        .map((l) => (l.date === date ? { ...l, mood: null, notes: '' } : l))
+        .filter((l) => l.isPeriod || l.isOvulation || (l.symptoms && l.symptoms.length > 0) || l.mood !== null);
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
+      return { cycleLogs: logs };
+    }),
+
+  deleteSymptomLog: (date) =>
+    set((state) => {
+      const logs = state.cycleLogs
+        .map((l) => (l.date === date ? { ...l, symptoms: [], severity: undefined } : l))
+        .filter((l) => l.isPeriod || l.isOvulation || (l.symptoms && l.symptoms.length > 0) || l.mood !== null);
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
+      return { cycleLogs: logs };
+    }),
+
+  deletePeriodLog: (date) =>
+    set((state) => {
+      const logs = state.cycleLogs
+        .map((l) => (l.date === date ? { ...l, isPeriod: false, flow: null } : l))
+        .filter((l) => l.isPeriod || l.isOvulation || (l.symptoms && l.symptoms.length > 0) || l.mood !== null);
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
+      return { cycleLogs: logs };
+    }),
+
+  setCycleLogs: (logs) => {
+    if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
+    set({ cycleLogs: logs });
+  },
 
   recalculateCycleMetrics: () => {
     const rawDate = get().onboardingData.lastPeriodDate;

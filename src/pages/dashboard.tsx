@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Sparkles, Calendar, Smile, Activity, Moon, HeartPulse, ArrowRight, Loader2, Droplet, Plus, RotateCcw, Clock, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { Sparkles, Calendar, Smile, Activity, Moon, HeartPulse, ArrowRight, Loader2, Droplet, Plus, RotateCcw, Clock, ChevronDown, ChevronUp, FileText, Trash2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion } from 'framer-motion';
 import { apiGetCycleMetrics } from '../lib/api';
@@ -9,7 +9,7 @@ export default function DashboardPage() {
   const router = useRouter();
   
   // Fetch values from Zustand store
-  const { user, cycleLogs, waterIntake, waterGoal, addWater, resetWater } = useStore();
+  const { user, cycleLogs, waterIntake, waterGoal, addWater, resetWater, deleteMoodLog, deleteSymptomLog, deletePeriodLog } = useStore();
 
   const name = user?.name || 'User';
 
@@ -333,22 +333,29 @@ export default function DashboardPage() {
               {displayedMoodLogs.map((log, idx) => (
                 <div 
                   key={idx}
-                  className="bg-white/40 dark:bg-[#1c1230]/40 p-4 rounded-xl border border-outline-variant/30 dark:border-[#3a2d58]/60 flex flex-col sm:flex-row justify-between sm:items-center gap-2"
+                  className="bg-white/40 dark:bg-[#1c1230]/40 p-4 rounded-xl border border-outline-variant/30 dark:border-[#3a2d58]/60 flex items-center justify-between gap-2"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <span className="text-2xl shrink-0">{moodEmojiMap[log.mood || 'Calm'] || '🧘'}</span>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{log.mood}</span>
                         <span className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] bg-tertiary/10 px-2 py-0.5 rounded-md">
                           {formatDateLabel(log.date)}
                         </span>
                       </div>
-                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium mt-0.5 leading-relaxed">
+                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium mt-0.5 leading-relaxed truncate">
                         {log.notes ? `"${log.notes}"` : 'No additional notes'}
                       </p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => deleteMoodLog(log.date)}
+                    title="Delete mood entry"
+                    className="p-2 rounded-xl text-on-surface-variant/60 hover:text-rose-500 hover:bg-rose-500/10 transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -385,13 +392,13 @@ export default function DashboardPage() {
               {displayedSymptomLogs.map((log, idx) => (
                 <div 
                   key={idx}
-                  className="bg-white/40 dark:bg-[#1c1230]/40 p-4 rounded-xl border border-outline-variant/30 dark:border-[#3a2d58]/60 flex flex-col sm:flex-row justify-between sm:items-center gap-2"
+                  className="bg-white/40 dark:bg-[#1c1230]/40 p-4 rounded-xl border border-outline-variant/30 dark:border-[#3a2d58]/60 flex items-center justify-between gap-2"
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
                     <div className="w-8 h-8 rounded-xl bg-secondary/15 flex items-center justify-center text-secondary shrink-0 mt-0.5">
                       <Activity className="w-4 h-4" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">
                           {log.symptoms && log.symptoms.length > 0 ? log.symptoms.join(', ') : 'General Symptoms'}
@@ -405,11 +412,18 @@ export default function DashboardPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium mt-0.5 leading-relaxed">
+                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium mt-0.5 leading-relaxed truncate">
                         {log.notes ? `"${log.notes}"` : 'No additional notes'}
                       </p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => deleteSymptomLog(log.date)}
+                    title="Delete symptom entry"
+                    className="p-2 rounded-xl text-on-surface-variant/60 hover:text-rose-500 hover:bg-rose-500/10 transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -446,7 +460,7 @@ export default function DashboardPage() {
               {displayedPeriodLogs.map((log, idx) => (
                 <div 
                   key={idx}
-                  className="bg-white/40 dark:bg-[#1c1230]/40 p-4 rounded-xl border border-outline-variant/30 dark:border-[#3a2d58]/60 flex justify-between items-center"
+                  className="bg-white/40 dark:bg-[#1c1230]/40 p-4 rounded-xl border border-outline-variant/30 dark:border-[#3a2d58]/60 flex justify-between items-center gap-2"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-xl bg-rose-500/15 flex items-center justify-center text-rose-500 shrink-0">
@@ -461,6 +475,13 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
+                  <button
+                    onClick={() => deletePeriodLog(log.date)}
+                    title="Delete period entry"
+                    className="p-2 rounded-xl text-on-surface-variant/60 hover:text-rose-500 hover:bg-rose-500/10 transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>
