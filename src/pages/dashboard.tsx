@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Sparkles, Calendar, Smile, Activity, Moon, HeartPulse, ArrowRight, Loader2, Droplet, Plus, RotateCcw, TrendingUp } from 'lucide-react';
+import { Sparkles, Calendar, Smile, Activity, Moon, HeartPulse, ArrowRight, Loader2, Droplet, Plus, RotateCcw, Clock, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion } from 'framer-motion';
 import { apiGetCycleMetrics } from '../lib/api';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -24,6 +23,11 @@ export default function DashboardPage() {
     todaySymptoms: string[];
   } | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(true);
+
+  // Toggle states for "See More" (showing 5 items vs all)
+  const [showAllMoods, setShowAllMoods] = useState(false);
+  const [showAllSymptoms, setShowAllSymptoms] = useState(false);
+  const [showAllPeriods, setShowAllPeriods] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -83,52 +87,34 @@ export default function DashboardPage() {
   };
   const insight = phaseInsight[currentCyclePhase] || 'Track your cycle daily to receive personalised insights.';
 
-  // ── Graph 1: Mood History Trends Data ──
-  const moodScoreMap: Record<string, number> = {
-    'Happy': 5, 'Calm': 4, 'Emotional': 3, 'Anxious': 2, 'Irritated': 1, 'Sad': 0,
+  // ── Mood Logs (Sorted newest first) ──
+  const moodEmojiMap: Record<string, string> = {
+    'Happy': '🌸', 'Calm': '🧘', 'Emotional': '💖', 'Anxious': '😰', 'Irritated': '😠', 'Sad': '🥺',
   };
-  const moodChartData = cycleLogs
-    .filter((log) => log.mood !== null)
-    .slice(-7)
-    .map((log) => ({
-      date: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      score: moodScoreMap[log.mood || 'Calm'] || 4,
-      mood: log.mood,
-    }));
+  const allMoodLogs = [...cycleLogs]
+    .filter((l) => l.mood !== null)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const displayedMoodLogs = showAllMoods ? allMoodLogs : allMoodLogs.slice(0, 5);
 
-  // ── Graph 2: Symptom Severity Trends Data ──
-  const symptomChartData = cycleLogs
-    .filter((log) => (log.symptoms && log.symptoms.length > 0) || log.severity !== undefined)
-    .slice(-7)
-    .map((log) => ({
-      date: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      severity: log.severity !== undefined ? log.severity : 5,
-      symptomsText: log.symptoms && log.symptoms.length > 0 ? log.symptoms.join(', ') : 'None',
-    }));
+  // ── Symptom Logs (Sorted newest first) ──
+  const allSymptomLogs = [...cycleLogs]
+    .filter((l) => (l.symptoms && l.symptoms.length > 0) || l.severity !== undefined)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const displayedSymptomLogs = showAllSymptoms ? allSymptomLogs : allSymptomLogs.slice(0, 5);
 
-  // ── Graph 3: Period Consistency Data ──
-  const targetAvg = user?.cycleLength || 28;
-  const periodStartDates = cycleLogs
+  // ── Period Logs (Grouped by consecutive dates, sorted newest first) ──
+  const periodLogs = [...cycleLogs]
     .filter((l) => l.isPeriod && !l.isPredicted)
-    .map((l) => l.date)
-    .sort();
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const displayedPeriodLogs = showAllPeriods ? periodLogs : periodLogs.slice(0, 5);
 
-  const monthStarts: { month: string; date: string }[] = [];
-  for (const d of periodStartDates) {
-    const m = d.substring(0, 7);
-    if (!monthStarts.find((x) => x.month === m)) {
-      monthStarts.push({ month: m, date: d });
+  const formatDateLabel = (isoDate: string) => {
+    try {
+      return new Date(isoDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return isoDate;
     }
-  }
-
-  const periodConsistencyPoints = [];
-  for (let i = 1; i < monthStarts.length; i++) {
-    const prev = new Date(monthStarts[i - 1].date);
-    const curr = new Date(monthStarts[i].date);
-    const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
-    const label = new Date(monthStarts[i].date).toLocaleString('en-US', { month: 'short' });
-    periodConsistencyPoints.push({ label, days: diffDays });
-  }
+  };
 
   return (
     <div className="max-w-[1200px] mx-auto px-container-padding-mobile md:px-container-padding-desktop pt-stack-md pb-16">
@@ -314,105 +300,173 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* ── WELLNESS ANALYTICS & TRENDS GRAPHS (SCROLL DOWN ON DASHBOARD) ── */}
+      {/* ── TEXT-BASED WELLNESS LOG HISTORY (SCROLL DOWN ON DASHBOARD) ── */}
       <section className="space-y-6">
         <div className="flex items-center gap-2 mb-2">
-          <TrendingUp className="w-5 h-5 text-primary dark:text-[#d4b8ff]" />
-          <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Wellness Analytics &amp; History Trends</h3>
+          <Clock className="w-5 h-5 text-primary dark:text-[#d4b8ff]" />
+          <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Wellness Activity &amp; Log History</h3>
         </div>
 
-        {/* 1. Mood Trends Graph */}
+        {/* 1. Mood Logs Feed */}
         <div className="glass-card rounded-2xl p-6 shadow-sm border border-white/40 dark:border-[#3a2d58]/50">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-4 border-b border-black/5 dark:border-[#3a2d58]/40 pb-3">
             <div className="flex items-center gap-2 text-tertiary font-bold text-sm">
               <Smile className="w-4 h-4" />
-              <span>Mood History Trends</span>
+              <span>Mood Log History</span>
             </div>
-            <span className="text-[10px] font-bold text-outline dark:text-[#c8bedd] uppercase tracking-wider">Last 7 Logs</span>
+            {allMoodLogs.length > 5 && (
+              <button
+                onClick={() => setShowAllMoods(!showAllMoods)}
+                className="text-xs font-bold text-tertiary hover:underline flex items-center gap-1"
+              >
+                {showAllMoods ? (
+                  <>Show Less <ChevronUp className="w-3.5 h-3.5" /></>
+                ) : (
+                  <>See More ({allMoodLogs.length}) <ChevronDown className="w-3.5 h-3.5" /></>
+                )}
+              </button>
+            )}
           </div>
 
-          {moodChartData.length > 0 ? (
-            <div className="w-full h-56 text-xs font-semibold">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={moodChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2D3FF" opacity={0.3} />
-                  <XAxis dataKey="date" stroke="#7a7583" tickLine={false} />
-                  <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} stroke="#7a7583" tickLine={false} />
-                  <Tooltip 
-                    formatter={(val: any, name: any, props: any) => [props.payload.mood, 'Mood']}
-                    contentStyle={{ background: 'rgba(255, 255, 255, 0.95)', borderRadius: '1rem', border: '1px solid #eaddff', color: '#18003d' }}
-                  />
-                  <Line type="monotone" dataKey="score" stroke="#a0517a" strokeWidth={3} dot={{ r: 5, fill: '#a0517a', strokeWidth: 2, stroke: '#ffffff' }} />
-                </LineChart>
-              </ResponsiveContainer>
+          {displayedMoodLogs.length > 0 ? (
+            <div className="space-y-3">
+              {displayedMoodLogs.map((log, idx) => (
+                <div 
+                  key={idx}
+                  className="bg-white/40 dark:bg-[#1c1230]/40 p-4 rounded-xl border border-outline-variant/30 dark:border-[#3a2d58]/60 flex flex-col sm:flex-row justify-between sm:items-center gap-2"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl shrink-0">{moodEmojiMap[log.mood || 'Calm'] || '🧘'}</span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{log.mood}</span>
+                        <span className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] bg-tertiary/10 px-2 py-0.5 rounded-md">
+                          {formatDateLabel(log.date)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium mt-0.5 leading-relaxed">
+                        {log.notes ? `"${log.notes}"` : 'No additional notes'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="h-36 flex items-center justify-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic">
-              Log moods on the Log Mood page to populate your emotional trends graph here.
+            <div className="py-8 text-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic">
+              No mood logs recorded yet. Tap &quot;Log Mood&quot; above to add your first entry.
             </div>
           )}
         </div>
 
-        {/* 2. Symptom Severity Graph */}
+        {/* 2. Symptom Logs Feed */}
         <div className="glass-card rounded-2xl p-6 shadow-sm border border-white/40 dark:border-[#3a2d58]/50">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-4 border-b border-black/5 dark:border-[#3a2d58]/40 pb-3">
             <div className="flex items-center gap-2 text-secondary dark:text-[#ccbeff] font-bold text-sm">
               <Activity className="w-4 h-4" />
-              <span>Symptom Intensity Trends</span>
+              <span>Symptom Log History</span>
             </div>
-            <span className="text-[10px] font-bold text-outline dark:text-[#c8bedd] uppercase tracking-wider">Logged History</span>
+            {allSymptomLogs.length > 5 && (
+              <button
+                onClick={() => setShowAllSymptoms(!showAllSymptoms)}
+                className="text-xs font-bold text-secondary dark:text-[#ccbeff] hover:underline flex items-center gap-1"
+              >
+                {showAllSymptoms ? (
+                  <>Show Less <ChevronUp className="w-3.5 h-3.5" /></>
+                ) : (
+                  <>See More ({allSymptomLogs.length}) <ChevronDown className="w-3.5 h-3.5" /></>
+                )}
+              </button>
+            )}
           </div>
 
-          {symptomChartData.length > 0 ? (
-            <div className="w-full h-56 text-xs font-semibold">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={symptomChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2D3FF" opacity={0.3} />
-                  <XAxis dataKey="date" stroke="#7a7583" tickLine={false} />
-                  <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} stroke="#7a7583" tickLine={false} />
-                  <Tooltip 
-                    formatter={(val: any, name: any, props: any) => [`${val}/10 Pain (${props.payload.symptomsText})`, 'Severity']}
-                    contentStyle={{ background: 'rgba(255, 255, 255, 0.95)', borderRadius: '1rem', border: '1px solid #eaddff', color: '#18003d' }}
-                  />
-                  <Line type="monotone" dataKey="severity" stroke="#7c5cbf" strokeWidth={3} dot={{ r: 5, fill: '#7c5cbf', strokeWidth: 2, stroke: '#ffffff' }} />
-                </LineChart>
-              </ResponsiveContainer>
+          {displayedSymptomLogs.length > 0 ? (
+            <div className="space-y-3">
+              {displayedSymptomLogs.map((log, idx) => (
+                <div 
+                  key={idx}
+                  className="bg-white/40 dark:bg-[#1c1230]/40 p-4 rounded-xl border border-outline-variant/30 dark:border-[#3a2d58]/60 flex flex-col sm:flex-row justify-between sm:items-center gap-2"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-secondary/15 flex items-center justify-center text-secondary shrink-0 mt-0.5">
+                      <Activity className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">
+                          {log.symptoms && log.symptoms.length > 0 ? log.symptoms.join(', ') : 'General Symptoms'}
+                        </span>
+                        <span className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] bg-secondary/10 px-2 py-0.5 rounded-md">
+                          {formatDateLabel(log.date)}
+                        </span>
+                        {log.severity !== undefined && (
+                          <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
+                            Pain: {log.severity}/10
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium mt-0.5 leading-relaxed">
+                        {log.notes ? `"${log.notes}"` : 'No additional notes'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="h-36 flex items-center justify-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic">
-              Log symptoms on the Symptoms page to populate your intensity graph here.
+            <div className="py-8 text-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic">
+              No symptom logs recorded yet. Tap &quot;Symptoms&quot; above to log what you&apos;re feeling.
             </div>
           )}
         </div>
 
-        {/* 3. Period Consistency Graph */}
+        {/* 3. Period Log History */}
         <div className="glass-card rounded-2xl p-6 shadow-sm border border-white/40 dark:border-[#3a2d58]/50">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2 text-primary dark:text-[#d4b8ff] font-bold text-sm">
-              <Calendar className="w-4 h-4" />
-              <span>Period Consistency &amp; Cycle Lengths</span>
+          <div className="flex justify-between items-center mb-4 border-b border-black/5 dark:border-[#3a2d58]/40 pb-3">
+            <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+              <Droplet className="w-4 h-4 fill-current" />
+              <span>Period Log History</span>
             </div>
-            <span className="text-[10px] font-bold text-outline dark:text-[#c8bedd] uppercase tracking-wider">{targetAvg}d Target</span>
+            {displayedPeriodLogs.length > 5 && (
+              <button
+                onClick={() => setShowAllPeriods(!showAllPeriods)}
+                className="text-xs font-bold text-rose-500 hover:underline flex items-center gap-1"
+              >
+                {showAllPeriods ? (
+                  <>Show Less <ChevronUp className="w-3.5 h-3.5" /></>
+                ) : (
+                  <>See More ({periodLogs.length}) <ChevronDown className="w-3.5 h-3.5" /></>
+                )}
+              </button>
+            )}
           </div>
 
-          {periodConsistencyPoints.length > 0 ? (
-            <div className="w-full h-56 text-xs font-semibold">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={periodConsistencyPoints} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2D3FF" opacity={0.3} />
-                  <XAxis dataKey="label" stroke="#7a7583" tickLine={false} />
-                  <YAxis domain={[20, 36]} stroke="#7a7583" tickLine={false} />
-                  <Tooltip 
-                    formatter={(val: any) => [`${val} Days`, 'Cycle Length']}
-                    contentStyle={{ background: 'rgba(255, 255, 255, 0.95)', borderRadius: '1rem', border: '1px solid #eaddff', color: '#18003d' }}
-                  />
-                  <Line type="monotone" dataKey="days" stroke="#e11d48" strokeWidth={3} dot={{ r: 5, fill: '#e11d48', strokeWidth: 2, stroke: '#ffffff' }} />
-                </LineChart>
-              </ResponsiveContainer>
+          {displayedPeriodLogs.length > 0 ? (
+            <div className="space-y-3">
+              {displayedPeriodLogs.map((log, idx) => (
+                <div 
+                  key={idx}
+                  className="bg-white/40 dark:bg-[#1c1230]/40 p-4 rounded-xl border border-outline-variant/30 dark:border-[#3a2d58]/60 flex justify-between items-center"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-rose-500/15 flex items-center justify-center text-rose-500 shrink-0">
+                      <Droplet className="w-4 h-4 fill-current" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff] block">
+                        Period Logged
+                      </span>
+                      <span className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium">
+                        {formatDateLabel(log.date)} {log.flow ? `• ${log.flow.toUpperCase()} Flow` : ''}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="h-36 flex items-center justify-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic text-center p-4">
-              Log at least 2 period starts across different months to view your period consistency trend graph here.
+            <div className="py-8 text-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic">
+              No period logs recorded yet. Use the cycle calendar to mark period dates.
             </div>
           )}
         </div>
