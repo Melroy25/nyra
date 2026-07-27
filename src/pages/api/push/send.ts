@@ -2,12 +2,24 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import webpush from 'web-push';
 import { supabaseAdmin } from '../../../lib/supabase';
 
-// Configure VAPID details once
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || 'mailto:support@nyraapp.com',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '',
-  process.env.VAPID_PRIVATE_KEY || ''
-);
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BL34zJyImY_UP4WVQfQ2uRbSBthKCEW9_JxzfHH5b1OG_SBLN7suf7w9DNnUpbePB4nA4OApotINSAN7pQenGGo';
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '2DRaSgyapjAO7JwSSYLY6CduhnUucPQ2vel2IKH89DU';
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:support@nyraapp.com';
+
+let vapidConfigured = false;
+function initVapid() {
+  if (vapidConfigured) return true;
+  try {
+    if (vapidPublicKey && vapidPrivateKey) {
+      webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+      vapidConfigured = true;
+      return true;
+    }
+  } catch (e) {
+    console.warn('[webpush] init error:', e);
+  }
+  return false;
+}
 
 /**
  * Send a Web Push notification to all devices of a specific user.
@@ -18,6 +30,8 @@ export async function sendPushToUser(
   payload: { title: string; body: string; icon?: string; url?: string; tag?: string }
 ) {
   try {
+    if (!initVapid()) return;
+
     const supabase = supabaseAdmin();
     const { data: subs, error } = await supabase
       .from('push_subscriptions')
@@ -43,7 +57,6 @@ export async function sendPushToUser(
             })
           );
         } catch (err: any) {
-          // 410 Gone = subscription expired/unsubscribed, clean it up
           if (err.statusCode === 410 || err.statusCode === 404) {
             deadEndpoints.push(row.endpoint);
           }
@@ -51,7 +64,6 @@ export async function sendPushToUser(
       })
     );
 
-    // Remove dead subscriptions
     if (deadEndpoints.length > 0) {
       await supabase
         .from('push_subscriptions')
