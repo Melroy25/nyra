@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { withAuth, AuthUser } from '../../../lib/withAuth';
+import { sendPushToUser } from '../push/send';
 
 export const config = {
   api: {
@@ -200,6 +201,44 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     if (error) {
       console.error('[chat POST] insert error:', error);
       return res.status(500).json({ error: error.message });
+    }
+
+    // ── Server-side Web Push: wake recipient device even when screen is off ──
+    try {
+      // Find which user in this thread is NOT the sender (the recipient)
+      const { data: thread } = await supabase
+        .from('chat_threads')
+        .select('user_id, partner_id')
+        .eq('id', threadId)
+        .maybeSingle();
+
+      const recipientId = thread
+        ? (thread.user_id === authUser.userId ? thread.partner_id : thread.user_id)
+        : null;
+
+      if (recipientId) {
+        // Get sender name for notification title
+        const { data: sender } = await supabase
+          .from('users')
+          .select('name, avatar_url')
+          .eq('id', authUser.userId)
+          .maybeSingle();
+
+        const senderName = sender?.name || 'Partner';
+        const bodyText = text || (sticker ? 'Sent a sticker 😊' : 'Sent an attachment 📎');
+
+        // Fire-and-forget — don't block the response
+        sendPushToUser(recipientId, {
+          title: `${senderName} ❤️`,
+          body: bodyText,
+          icon: sender?.avatar_url || '/logo.png',
+          url: '/partner?tab=chat',
+          tag: `chat-${message?.id || Date.now()}`,
+        }).catch(() => {});
+      }
+    } catch (pushErr) {
+      // Never fail the message send because of push notification error
+      console.warn('[chat POST] push notification error:', pushErr);
     }
 
     return res.status(201).json({ message, threadId });

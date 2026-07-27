@@ -97,6 +97,7 @@ export default function PartnerPage() {
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [showClearModal, setShowClearModal] = useState(false);
+  const [undoToast, setUndoToast] = useState<{ label: string; onUndo: () => void; timeoutId: ReturnType<typeof setTimeout> } | null>(null);
   const [chatThreadId, setChatThreadId] = useState<string | null>(null);
   const [chatPartnerInfo, setChatPartnerInfo] = useState<any>(() => user?.connectedPartner || null);
   const [replyingToMessage, setReplyingToMessage] = useState<any | null>(null);
@@ -162,10 +163,39 @@ export default function PartnerPage() {
     setActiveMessageIdForReactions(null);
   };
 
-  const handleDeleteMessage = async (msgId: string) => {
+  const handleDeleteMessage = (msgId: string) => {
     setContextMenu(null);
+    // Optimistically hide the message
+    const deletedMsg = messages.find((m) => m.id === msgId);
     setMessages((prev) => prev.filter((m) => m.id !== msgId));
-    try { await apiDeleteMessage(msgId); } catch (err) { console.log('Delete fallback:', err); }
+
+    // Clear any existing undo toast
+    if (undoToast) clearTimeout(undoToast.timeoutId);
+
+    // 5-second countdown before actual deletion
+    const timeoutId = setTimeout(async () => {
+      setUndoToast(null);
+      try { await apiDeleteMessage(msgId); } catch (err) { console.log('Delete fallback:', err); }
+    }, 5000);
+
+    setUndoToast({
+      label: 'Message deleted',
+      onUndo: () => {
+        clearTimeout(timeoutId);
+        setUndoToast(null);
+        // Restore the deleted message
+        if (deletedMsg) {
+          setMessages((prev) => {
+            const already = prev.some((m) => m.id === msgId);
+            if (already) return prev;
+            return [...prev, deletedMsg].sort((a, b) =>
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            );
+          });
+        }
+      },
+      timeoutId,
+    });
   };
 
   const startEditMessage = (msg: any) => {
@@ -186,12 +216,31 @@ export default function PartnerPage() {
   const handleClearChat = async (clearForMe: boolean) => {
     setShowClearModal(false);
     if (!chatThreadId) return;
+
+    const prevMessages = [...messages];
     if (clearForMe) {
       setMessages((prev) => prev.filter((m) => !(m.senderId === user?.id || (isPartner && m.senderId === 'partner-john') || (!isPartner && m.senderId === 'user-sarah'))));
     } else {
       setMessages([]);
     }
-    try { await apiClearChat(chatThreadId, clearForMe); } catch (err) { console.log('Clear chat fallback:', err); }
+
+    if (undoToast) clearTimeout(undoToast.timeoutId);
+
+    const label = clearForMe ? 'Your messages cleared' : 'Entire chat cleared';
+    const timeoutId = setTimeout(async () => {
+      setUndoToast(null);
+      try { await apiClearChat(chatThreadId, clearForMe); } catch (err) { console.log('Clear chat fallback:', err); }
+    }, 5000);
+
+    setUndoToast({
+      label,
+      onUndo: () => {
+        clearTimeout(timeoutId);
+        setUndoToast(null);
+        setMessages(prevMessages);
+      },
+      timeoutId,
+    });
   };
 
   const copyMessage = (text: string) => {
@@ -1077,17 +1126,6 @@ export default function PartnerPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={requestNotifPermission}
-                      className={`p-2 rounded-xl transition-colors ${
-                        notifPermission === 'granted'
-                          ? 'text-primary bg-primary/10 hover:bg-primary/20'
-                          : 'text-gray-400 hover:bg-black/5 dark:hover:bg-white/10'
-                      }`}
-                      title={notifPermission === 'granted' ? 'Notifications Enabled 🔔' : 'Enable Mobile/Desktop Notifications'}
-                    >
-                      {notifPermission === 'granted' ? <Bell className="w-4 h-4 text-primary" /> : <BellOff className="w-4 h-4" />}
-                    </button>
-                    <button
                       onClick={() => setShowClearModal(true)}
                       className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors text-red-400 dark:text-red-400"
                       title="Clear Chat"
@@ -1369,6 +1407,26 @@ export default function PartnerPage() {
                 })()}
               </AnimatePresence>
             </div>
+
+            {/* Undo Toast (delete/clear with 5s window) */}
+            <AnimatePresence>
+              {undoToast && (
+                <motion.div
+                  initial={{ y: 30, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: 30, opacity: 0 }}
+                  className="bg-[#1c1230] text-white px-4 py-3 flex items-center justify-between gap-3 border-t border-[#3a2d58]"
+                >
+                  <span className="text-sm font-medium">{undoToast.label}</span>
+                  <button
+                    onClick={undoToast.onUndo}
+                    className="text-xs font-extrabold text-yellow-300 uppercase tracking-wide px-3 py-1.5 rounded-xl hover:bg-white/10 transition-colors shrink-0"
+                  >
+                    UNDO
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Reply Mode Bar (WhatsApp Style) */}
             <AnimatePresence>
