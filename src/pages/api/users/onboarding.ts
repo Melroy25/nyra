@@ -29,6 +29,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
         name,
         age,
         date_of_birth: dateOfBirth,
+        last_period_date: lastPeriodDate || null,
         cycle_length: cycleLength,
         period_duration: periodDuration,
         goals,

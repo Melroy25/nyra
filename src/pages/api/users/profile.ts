@@ -28,6 +28,28 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       connectedPartner = partner;
     }
 
+    // Fallback: if last_period_date missing on user row, pull earliest real period from cycle_logs
+    let lastPeriodDate = rawUser.last_period_date || null;
+    if (!lastPeriodDate) {
+      const { data: firstLog } = await supabase
+        .from('cycle_logs')
+        .select('date')
+        .eq('user_id', authUser.userId)
+        .eq('is_period', true)
+        .eq('is_predicted', false)
+        .order('date', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (firstLog?.date) {
+        lastPeriodDate = firstLog.date;
+        // Back-fill the users table so future calls are fast
+        await supabase
+          .from('users')
+          .update({ last_period_date: lastPeriodDate })
+          .eq('id', authUser.userId);
+      }
+    }
+
     const formattedUser = {
       id: rawUser.id,
       email: rawUser.email,
@@ -37,7 +59,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       dateOfBirth: rawUser.date_of_birth,
       cycleLength: rawUser.cycle_length || 28,
       periodDuration: rawUser.period_duration || 5,
-      lastPeriodDate: rawUser.last_period_date || null,
+      lastPeriodDate,
       goals: rawUser.goals || [],
       partnerCode: rawUser.partner_code,
       connectedPartnerId: rawUser.connected_partner_id,
