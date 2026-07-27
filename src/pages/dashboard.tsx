@@ -29,6 +29,62 @@ export default function DashboardPage() {
   const [showAllSymptoms, setShowAllSymptoms] = useState(false);
   const [showAllPeriods, setShowAllPeriods] = useState(false);
 
+  // Undo delete toast state with 5-second countdown
+  const [pendingDelete, setPendingDelete] = useState<{
+    type: 'mood' | 'symptom' | 'period';
+    date: string;
+    label: string;
+    secondsLeft: number;
+    timerId: any;
+    intervalId: any;
+  } | null>(null);
+
+  const requestDelete = (type: 'mood' | 'symptom' | 'period', date: string, label: string) => {
+    if (pendingDelete) {
+      executeDelete(pendingDelete.type, pendingDelete.date);
+      clearTimeout(pendingDelete.timerId);
+      clearInterval(pendingDelete.intervalId);
+    }
+
+    let seconds = 5;
+
+    const intervalId = setInterval(() => {
+      seconds -= 1;
+      if (seconds >= 0) {
+        setPendingDelete((prev) => (prev ? { ...prev, secondsLeft: seconds } : null));
+      }
+    }, 1000);
+
+    const timerId = setTimeout(() => {
+      clearInterval(intervalId);
+      executeDelete(type, date);
+      setPendingDelete(null);
+    }, 5000);
+
+    setPendingDelete({
+      type,
+      date,
+      label,
+      secondsLeft: 5,
+      timerId,
+      intervalId,
+    });
+  };
+
+  const executeDelete = (type: 'mood' | 'symptom' | 'period', date: string) => {
+    if (type === 'mood') deleteMoodLog(date);
+    if (type === 'symptom') deleteSymptomLog(date);
+    if (type === 'period') deletePeriodLog(date);
+  };
+
+  const cancelDelete = () => {
+    if (pendingDelete) {
+      clearTimeout(pendingDelete.timerId);
+      clearInterval(pendingDelete.intervalId);
+      setPendingDelete(null);
+    }
+  };
+
   useEffect(() => {
     if (user?.id) {
       setMetricsLoading(true);
@@ -92,19 +148,19 @@ export default function DashboardPage() {
     'Happy': '🌸', 'Calm': '🧘', 'Emotional': '💖', 'Anxious': '😰', 'Irritated': '😠', 'Sad': '🥺',
   };
   const allMoodLogs = [...cycleLogs]
-    .filter((l) => l.mood !== null)
+    .filter((l) => l.mood !== null && !(pendingDelete?.type === 'mood' && pendingDelete?.date === l.date))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const displayedMoodLogs = showAllMoods ? allMoodLogs : allMoodLogs.slice(0, 5);
 
   // ── Symptom Logs (Sorted newest first) ──
   const allSymptomLogs = [...cycleLogs]
-    .filter((l) => (l.symptoms && l.symptoms.length > 0) || l.severity !== undefined)
+    .filter((l) => ((l.symptoms && l.symptoms.length > 0) || l.severity !== undefined) && !(pendingDelete?.type === 'symptom' && pendingDelete?.date === l.date))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const displayedSymptomLogs = showAllSymptoms ? allSymptomLogs : allSymptomLogs.slice(0, 5);
 
   // ── Period Logs (Grouped by consecutive dates, sorted newest first) ──
   const periodLogs = [...cycleLogs]
-    .filter((l) => l.isPeriod && !l.isPredicted)
+    .filter((l) => l.isPeriod && !l.isPredicted && !(pendingDelete?.type === 'period' && pendingDelete?.date === l.date))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const displayedPeriodLogs = showAllPeriods ? periodLogs : periodLogs.slice(0, 5);
 
@@ -350,7 +406,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => deleteMoodLog(log.date)}
+                    onClick={() => requestDelete('mood', log.date, `Mood Log (${log.mood})`)}
                     title="Delete mood entry"
                     className="p-2 rounded-xl text-on-surface-variant/60 hover:text-rose-500 hover:bg-rose-500/10 transition-colors shrink-0"
                   >
@@ -418,7 +474,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => deleteSymptomLog(log.date)}
+                    onClick={() => requestDelete('symptom', log.date, `Symptom Log (${formatDateLabel(log.date)})`)}
                     title="Delete symptom entry"
                     className="p-2 rounded-xl text-on-surface-variant/60 hover:text-rose-500 hover:bg-rose-500/10 transition-colors shrink-0"
                   >
@@ -476,7 +532,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => deletePeriodLog(log.date)}
+                    onClick={() => requestDelete('period', log.date, `Period Log (${formatDateLabel(log.date)})`)}
                     title="Delete period entry"
                     className="p-2 rounded-xl text-on-surface-variant/60 hover:text-rose-500 hover:bg-rose-500/10 transition-colors shrink-0"
                   >
@@ -493,6 +549,27 @@ export default function DashboardPage() {
         </div>
 
       </section>
+
+      {/* ── Undo Floating Toast Notification (5s Countdown) ── */}
+      {pendingDelete && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md bg-[#18003d] dark:bg-[#251845] text-white p-4 rounded-2xl shadow-2xl border border-white/20 flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-200">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-rose-500/25 border border-rose-500/40 flex items-center justify-center text-rose-300 font-serif font-bold text-xs shrink-0">
+              {pendingDelete.secondsLeft}s
+            </div>
+            <p className="text-xs font-semibold truncate">
+              Deleting <span className="font-bold text-rose-300">{pendingDelete.label}</span>... Undo in {pendingDelete.secondsLeft}s
+            </p>
+          </div>
+
+          <button
+            onClick={cancelDelete}
+            className="px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs shadow-sm transition-all shrink-0 flex items-center gap-1.5 active:scale-95 border border-white/20"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Undo
+          </button>
+        </div>
+      )}
 
     </div>
   );
