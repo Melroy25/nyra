@@ -16,6 +16,7 @@ export interface User {
   role: 'user' | 'partner';
   avatarUrl?: string;
   onboardingCompleted?: boolean;
+  lastPeriodDate?: string;
 }
 
 export type FlowLevel = 'light' | 'medium' | 'heavy';

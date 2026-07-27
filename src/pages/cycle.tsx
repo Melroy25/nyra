@@ -76,6 +76,59 @@ export default function CyclePage() {
     logFlow(selectedDate, selectedLog?.flow === level ? null : level);
   };
 
+  // ── DYNAMIC PREDICTION ENGINE FOR FUTURE CYCLES ──
+  const actualPeriodLogs = cycleLogs
+    .filter((l) => l.isPeriod && !l.isPredicted)
+    .map((l) => l.date)
+    .sort();
+
+  let latestPeriodStartDate = user?.lastPeriodDate || onboardingData.lastPeriodDate || null;
+  if (actualPeriodLogs.length > 0) {
+    const sorted = [...actualPeriodLogs].sort();
+    let lastBlockStart = sorted[0];
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = new Date(sorted[i - 1]);
+      const curr = new Date(sorted[i]);
+      const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays > 2) {
+        lastBlockStart = sorted[i];
+      }
+    }
+    latestPeriodStartDate = lastBlockStart;
+  }
+
+  const cycleLength = user?.cycleLength || onboardingData.averageCycleLength || 28;
+  const periodDuration = user?.periodDuration || onboardingData.periodDuration || 5;
+
+  const isPredictedPeriodDay = (dateStr: string): boolean => {
+    if (!latestPeriodStartDate) return false;
+    const startMs = new Date(latestPeriodStartDate).getTime();
+    const targetMs = new Date(dateStr).getTime();
+    if (isNaN(startMs) || isNaN(targetMs)) return false;
+
+    const diffDays = Math.round((targetMs - startMs) / (1000 * 60 * 60 * 24));
+    if (diffDays < periodDuration) return false;
+
+    const cycleIndex = Math.floor(diffDays / cycleLength);
+    const dayInCycle = diffDays % cycleLength;
+
+    return cycleIndex >= 1 && dayInCycle >= 0 && dayInCycle < periodDuration;
+  };
+
+  const isPredictedOvulationDay = (dateStr: string): boolean => {
+    if (!latestPeriodStartDate) return false;
+    const startMs = new Date(latestPeriodStartDate).getTime();
+    const targetMs = new Date(dateStr).getTime();
+    if (isNaN(startMs) || isNaN(targetMs)) return false;
+
+    const diffDays = Math.round((targetMs - startMs) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return false;
+
+    const dayInCycle = diffDays % cycleLength;
+    const ovCenter = cycleLength - 14;
+    return dayInCycle >= ovCenter - 1 && dayInCycle <= ovCenter + 1;
+  };
+
   const getDayStyle = (dateStr: string, isCurrentMonth: boolean) => {
     const log = cycleLogs.find((l) => l.date === dateStr);
     const isSelected = dateStr === selectedDate;
@@ -83,12 +136,16 @@ export default function CyclePage() {
     let cls = 'aspect-square flex flex-col items-center justify-center rounded-xl font-semibold text-sm transition-all cursor-pointer relative select-none ';
     if (!isCurrentMonth) { cls += 'opacity-25 '; }
 
-    if (log?.isPeriod) {
-      cls += 'bg-rose-500/15 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-400/50 font-bold ';
-    } else if (log?.isPredicted) {
-      cls += 'border-2 border-dashed border-rose-400/70 dark:border-rose-400/50 text-rose-400 dark:text-rose-400/80 ';
-    } else if (log?.isOvulation) {
-      cls += 'bg-violet-500/15 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-400/40 ';
+    const isActualPeriod = log?.isPeriod && !log?.isPredicted;
+    const isPredicted = log?.isPredicted || isPredictedPeriodDay(dateStr);
+    const isOvulation = log?.isOvulation || isPredictedOvulationDay(dateStr);
+
+    if (isActualPeriod) {
+      cls += 'bg-rose-500/20 dark:bg-rose-500/30 text-rose-600 dark:text-rose-400 border-2 border-rose-500 font-bold shadow-sm ';
+    } else if (isPredicted) {
+      cls += 'border-2 border-dashed border-rose-400/90 dark:border-rose-400/70 text-rose-500 dark:text-rose-400 font-bold bg-rose-500/5 ';
+    } else if (isOvulation) {
+      cls += 'bg-violet-500/20 dark:bg-violet-500/30 text-violet-600 dark:text-violet-400 border border-violet-400/50 font-bold ';
     } else {
       cls += 'text-on-surface dark:text-[#eee6ff] hover:bg-white/50 dark:hover:bg-white/8 ';
     }
@@ -111,60 +168,6 @@ export default function CyclePage() {
       : `Your cycle has been tracked across ${loggedCount} months. Keep logging symptoms and moods for peak accuracy.`;
 
   const safeCycleDay = isNaN(Number(currentCycleDay)) || !currentCycleDay ? 1 : Number(currentCycleDay);
-  const targetAvg = user?.cycleLength || onboardingData.averageCycleLength || 28;
-
-  // ── REAL Graph: derive cycle lengths from actual logged period start dates ──
-  const periodStartDates = cycleLogs
-    .filter((l) => l.isPeriod && !l.isPredicted)
-    .map((l) => l.date)
-    .sort();
-
-  // Group by month: pick the earliest period date per calendar month as the "start"
-  const monthStarts: { month: string; date: string }[] = [];
-  for (const d of periodStartDates) {
-    const m = d.substring(0, 7);
-    if (!monthStarts.find((x) => x.month === m)) {
-      monthStarts.push({ month: m, date: d });
-    }
-  }
-
-  // Compute gap between consecutive period starts (= cycle length for that cycle)
-  interface GraphPoint { label: string; days: number; isReal: boolean }
-  const realGraphPoints: GraphPoint[] = [];
-  for (let i = 1; i < monthStarts.length; i++) {
-    const prev = new Date(monthStarts[i - 1].date);
-    const curr = new Date(monthStarts[i].date);
-    const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
-    const label = new Date(monthStarts[i].date).toLocaleString('en-US', { month: 'short' });
-    realGraphPoints.push({ label, days: diffDays, isReal: true });
-  }
-
-  // Show state when there is 0 or 1 logged month (no cycle length calculable yet)
-  const hasEnoughData = realGraphPoints.length >= 1;
-
-  // For Y-axis: compute min/max from actual data, or use reasonable defaults
-  const allDays = realGraphPoints.map((p) => p.days);
-  const rawMin = allDays.length > 0 ? Math.min(...allDays) : targetAvg - 4;
-  const rawMax = allDays.length > 0 ? Math.max(...allDays) : targetAvg + 4;
-  const yPad = 3;
-  const minVal = Math.max(0, rawMin - yPad);
-  const maxVal = rawMax + yPad;
-
-  // Chart dimensions
-  const W = 480;
-  const H = 110;
-  const PAD_L = 44; // left padding for Y-axis labels
-  const PAD_R = 10;
-  const PAD_T = 20; // top padding for value labels
-  const PAD_B = 10;
-  const chartW = W - PAD_L - PAD_R;
-  const chartH = H - PAD_T - PAD_B;
-
-  const getY = (days: number) => PAD_T + chartH - ((days - minVal) / Math.max(maxVal - minVal, 1)) * chartH;
-  const getX = (idx: number, total: number) => PAD_L + (total <= 1 ? chartW / 2 : (idx / (total - 1)) * chartW);
-
-  const targetY = getY(targetAvg);
-  const yTicks = [minVal, Math.round((minVal + maxVal) / 2), maxVal];
 
   return (
     <div className="max-w-[1200px] mx-auto px-container-padding-mobile md:px-container-padding-desktop pt-stack-md pb-16 flex flex-col gap-stack-lg">
@@ -173,7 +176,7 @@ export default function CyclePage() {
       <section className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-entrance">
         <div>
           <h1 className="font-serif font-bold text-3xl md:text-4xl text-on-surface dark:text-[#eee6ff]">Cycle Tracking</h1>
-          <p className="text-xs font-semibold text-on-surface-variant dark:text-[#c8bedd] mt-1">
+          <p className="text-sm font-semibold text-on-surface-variant dark:text-[#c8bedd] mt-1">
             Day {safeCycleDay} &bull; <span className="text-primary dark:text-[#d4b8ff]">{currentCyclePhase} Phase</span>
           </p>
         </div>
@@ -224,6 +227,7 @@ export default function CyclePage() {
         <div className="grid grid-cols-7 gap-1">
           {generateDays().map((day, idx) => {
             const log = cycleLogs.find((l) => l.date === day.dateStr);
+            const isActual = log?.isPeriod && !log?.isPredicted;
             return (
               <button
                 key={idx}
@@ -231,7 +235,7 @@ export default function CyclePage() {
                 className={getDayStyle(day.dateStr, day.isCurrentMonth)}
               >
                 <span className="text-xs">{day.dayNum}</span>
-                {log?.isPeriod && (
+                {isActual && (
                   <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-rose-500 block" />
                 )}
               </button>
@@ -256,7 +260,7 @@ export default function CyclePage() {
 
           <div className="grid grid-cols-3 gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-rose-500/15 border border-rose-400/50 flex items-center justify-center shrink-0">
+              <span className="w-7 h-7 rounded-xl bg-rose-500/20 border-2 border-rose-500 flex items-center justify-center shrink-0">
                 <Droplet className="w-3 h-3 text-rose-500 fill-rose-500" />
               </span>
               <div>
@@ -265,8 +269,8 @@ export default function CyclePage() {
               </div>
             </div>
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl border-2 border-dashed border-rose-400/70 flex items-center justify-center shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-400/70" />
+              <span className="w-7 h-7 rounded-xl border-2 border-dashed border-rose-400/90 flex items-center justify-center shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400/90" />
               </span>
               <div>
                 <p className="text-xs font-bold text-on-surface dark:text-[#eee6ff] leading-none">Predicted</p>
@@ -274,7 +278,7 @@ export default function CyclePage() {
               </div>
             </div>
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-violet-500/15 border border-violet-400/40 flex items-center justify-center shrink-0">
+              <span className="w-7 h-7 rounded-xl bg-violet-500/20 border border-violet-400/50 flex items-center justify-center shrink-0">
                 <span className="w-2 h-2 rounded-full bg-violet-500" />
               </span>
               <div>
@@ -287,7 +291,7 @@ export default function CyclePage() {
           {showLegendInfo && (
             <div className="mt-4 p-4 rounded-2xl bg-primary/5 dark:bg-[#1c1230] border border-primary/15 dark:border-[#3a2d58] space-y-2.5 text-xs text-on-surface-variant dark:text-[#c8bedd] font-medium leading-relaxed">
               <p><span className="font-bold text-rose-500">🩸 Pink/Rose filled cells</span> — Days you manually marked as period days. Tap any day first, then press the &quot;Mark as Period&quot; button.</p>
-              <p><span className="font-bold text-rose-400">Dashed circles</span> — Nyra&apos;s prediction of your next period, based on your average cycle length entered during signup. Gets more accurate as you log more periods.</p>
+              <p><span className="font-bold text-rose-400">Dashed circles</span> — Nyra&apos;s prediction of your upcoming period, automatically calculated from your last logged period and cycle length. Updates in real-time!</p>
               <p><span className="font-bold text-violet-500">Purple cells</span> — Your estimated ovulation window (typically ~14 days before your next period). These are your most fertile days.</p>
             </div>
           )}
@@ -362,155 +366,6 @@ export default function CyclePage() {
             </div>
           </div>
         </div>
-      </section>
-
-      {/* ── PERIOD CONSISTENCY GRAPH ── */}
-      <section className="glass-card rounded-2xl p-5 md:p-7 shadow-sm border border-white/50 dark:border-[#3a2d58]/50">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6">
-          <div>
-            <h3 className="font-serif font-bold text-lg text-on-surface dark:text-[#eee6ff] flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary dark:text-[#d4b8ff]" />
-              Period Consistency
-            </h3>
-            <p className="text-[11px] text-on-surface-variant dark:text-[#c8bedd] font-medium mt-0.5">
-              Number of days between each period start — updates as you log more cycles
-            </p>
-          </div>
-          <div className="flex items-center gap-4 text-[11px] font-bold shrink-0">
-            <span className="flex items-center gap-1.5 text-primary dark:text-[#d4b8ff]">
-              <span className="w-5 h-[3px] bg-primary dark:bg-[#d4b8ff] rounded-full inline-block" />
-              Cycle length
-            </span>
-            <span className="flex items-center gap-1.5 text-rose-400">
-              <span className="w-5 inline-block border-t-2 border-dashed border-rose-400" />
-              {targetAvg}d avg
-            </span>
-          </div>
-        </div>
-
-        {!hasEnoughData ? (
-          /* ── Empty State ── */
-          <div className="flex flex-col items-center justify-center py-10 gap-4 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-primary/8 dark:bg-[#1c1230] border border-primary/20 dark:border-[#3a2d58] flex items-center justify-center">
-              <TrendingUp className="w-8 h-8 text-primary/40 dark:text-[#d4b8ff]/40" />
-            </div>
-            <div>
-              <p className="font-bold text-sm text-on-surface dark:text-[#eee6ff]">Not enough data yet</p>
-              <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] mt-1 max-w-[240px] leading-relaxed">
-                Log at least <strong>2 period start dates</strong> across different months to see your cycle length trends here.
-              </p>
-            </div>
-          </div>
-        ) : (
-          /* ── Real SVG Chart ── */
-          <div className="w-full overflow-x-auto">
-            <div style={{ minWidth: '280px' }}>
-              <svg
-                viewBox={`0 0 ${W} ${H + 4}`}
-                className="w-full"
-                style={{ height: '180px' }}
-                preserveAspectRatio="xMidYMid meet"
-              >
-                {/* Y-axis grid lines + labels */}
-                {yTicks.map((val) => {
-                  const y = getY(val);
-                  return (
-                    <g key={val}>
-                      <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="currentColor" strokeWidth="0.5" opacity="0.12" className="text-on-surface dark:text-white" />
-                      <text x={PAD_L - 6} y={y + 4} textAnchor="end" fontSize="9" fill="currentColor" opacity="0.5" className="text-on-surface dark:text-white">
-                        {val}d
-                      </text>
-                    </g>
-                  );
-                })}
-
-                {/* Target Average dashed line */}
-                <line
-                  x1={PAD_L} y1={targetY} x2={W - PAD_R} y2={targetY}
-                  stroke="#f43f5e" strokeWidth="1.5" strokeDasharray="5 4" opacity="0.6"
-                />
-
-                {/* Gradient area fill under the line */}
-                {realGraphPoints.length > 1 && (() => {
-                  const pts = realGraphPoints.map((p, i) => ({ x: getX(i, realGraphPoints.length), y: getY(p.days) }));
-                  const areaD = `M ${pts[0].x} ${getY(minVal)} L ${pts.map((p) => `${p.x} ${p.y}`).join(' L ')} L ${pts[pts.length - 1].x} ${getY(minVal)} Z`;
-                  return (
-                    <>
-                      <defs>
-                        <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#7c5cbf" stopOpacity="0.25" />
-                          <stop offset="100%" stopColor="#7c5cbf" stopOpacity="0.01" />
-                        </linearGradient>
-                      </defs>
-                      <path d={areaD} fill="url(#lineGrad)" />
-                    </>
-                  );
-                })()}
-
-                {/* Line */}
-                {realGraphPoints.length >= 2 && (() => {
-                  const pts = realGraphPoints.map((p, i) => `${getX(i, realGraphPoints.length)} ${getY(p.days)}`);
-                  return (
-                    <polyline
-                      points={pts.join(', ')}
-                      fill="none"
-                      stroke="#7c5cbf"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  );
-                })()}
-
-                {/* Data Points + Labels */}
-                {realGraphPoints.map((p, i) => {
-                  const x = getX(i, realGraphPoints.length);
-                  const y = getY(p.days);
-                  const isAboveTarget = p.days > targetAvg;
-                  return (
-                    <g key={i}>
-                      {/* Glow */}
-                      <circle cx={x} cy={y} r="8" fill="#7c5cbf" opacity="0.12" />
-                      {/* Dot */}
-                      <circle cx={x} cy={y} r="4.5" fill="#7c5cbf" stroke="white" strokeWidth="2" />
-                      {/* Value label */}
-                      <text
-                        x={x}
-                        y={y - 11}
-                        textAnchor="middle"
-                        fontSize="9.5"
-                        fontWeight="700"
-                        fill={isAboveTarget ? '#f43f5e' : '#7c5cbf'}
-                      >
-                        {p.days}d
-                      </text>
-                      {/* Month label */}
-                      <text
-                        x={x}
-                        y={H + 2}
-                        textAnchor="middle"
-                        fontSize="9"
-                        fontWeight="600"
-                        fill="currentColor"
-                        opacity="0.55"
-                        className="text-on-surface dark:text-white"
-                      >
-                        {p.label}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
-          </div>
-        )}
-
-        {/* Bottom note */}
-        <p className="text-[10px] text-on-surface-variant/60 dark:text-[#c8bedd]/50 font-medium mt-4 text-center">
-          {hasEnoughData
-            ? `Showing ${realGraphPoints.length} recorded cycle${realGraphPoints.length > 1 ? 's' : ''}. Values above ${targetAvg}d (your average) shown in red.`
-            : `Your target average cycle length is ${targetAvg} days. Data will appear as you log more periods.`}
-        </p>
       </section>
 
     </div>
