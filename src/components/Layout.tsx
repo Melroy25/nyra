@@ -79,7 +79,7 @@ export default function Layout({ children }: LayoutProps) {
   const avatarSrc = user?.avatarUrl || null;
 
   return (
-    <div className="bg-nebula text-on-surface min-h-screen pb-24 md:pb-6 relative flex flex-col font-sans transition-colors duration-300">
+    <div className={`bg-nebula text-on-surface min-h-screen ${(router.pathname === '/partner' && router.query.tab === 'chat') ? '' : 'pb-24 md:pb-6'} relative flex flex-col font-sans transition-colors duration-300`}>
 
       {/* ── Sticky Header ── */}
       {showNav && (
