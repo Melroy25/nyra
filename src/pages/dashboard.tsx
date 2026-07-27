@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Sparkles, Calendar, Smile, Activity, Moon, HeartPulse, ArrowRight, Loader2, Droplet, Plus, RotateCcw } from 'lucide-react';
+import { Sparkles, Calendar, Smile, Activity, Moon, HeartPulse, ArrowRight, Loader2, Droplet, Plus, RotateCcw, TrendingUp } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion } from 'framer-motion';
 import { apiGetCycleMetrics } from '../lib/api';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 export default function DashboardPage() {
   const router = useRouter();
   
   // Fetch values from Zustand store
-  const { user, waterIntake, waterGoal, addWater, resetWater } = useStore();
+  const { user, cycleLogs, waterIntake, waterGoal, addWater, resetWater } = useStore();
 
   const name = user?.name || 'User';
 
@@ -57,7 +58,7 @@ export default function DashboardPage() {
   // Progress fraction for the ring
   const progressFraction = Math.max(0.02, currentCycleDay / (cycleMetrics?.cycleLength ?? 28));
 
-  // Quick actions layout (Log Mood, Symptoms, Water Tracker)
+  // Quick actions layout (Log Mood, Symptoms, Add Water)
   const quickActions = [
     { label: 'Log Mood', icon: Smile,    path: '/mood',     color: 'text-tertiary',  iconBg: 'bg-tertiary/10 dark:bg-tertiary/20' },
     { label: 'Symptoms', icon: Activity, path: '/symptoms', color: 'text-secondary', iconBg: 'bg-secondary/10 dark:bg-secondary/20' },
@@ -82,8 +83,55 @@ export default function DashboardPage() {
   };
   const insight = phaseInsight[currentCyclePhase] || 'Track your cycle daily to receive personalised insights.';
 
+  // ── Graph 1: Mood History Trends Data ──
+  const moodScoreMap: Record<string, number> = {
+    'Happy': 5, 'Calm': 4, 'Emotional': 3, 'Anxious': 2, 'Irritated': 1, 'Sad': 0,
+  };
+  const moodChartData = cycleLogs
+    .filter((log) => log.mood !== null)
+    .slice(-7)
+    .map((log) => ({
+      date: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      score: moodScoreMap[log.mood || 'Calm'] || 4,
+      mood: log.mood,
+    }));
+
+  // ── Graph 2: Symptom Severity Trends Data ──
+  const symptomChartData = cycleLogs
+    .filter((log) => (log.symptoms && log.symptoms.length > 0) || log.severity !== undefined)
+    .slice(-7)
+    .map((log) => ({
+      date: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      severity: log.severity !== undefined ? log.severity : 5,
+      symptomsText: log.symptoms && log.symptoms.length > 0 ? log.symptoms.join(', ') : 'None',
+    }));
+
+  // ── Graph 3: Period Consistency Data ──
+  const targetAvg = user?.cycleLength || 28;
+  const periodStartDates = cycleLogs
+    .filter((l) => l.isPeriod && !l.isPredicted)
+    .map((l) => l.date)
+    .sort();
+
+  const monthStarts: { month: string; date: string }[] = [];
+  for (const d of periodStartDates) {
+    const m = d.substring(0, 7);
+    if (!monthStarts.find((x) => x.month === m)) {
+      monthStarts.push({ month: m, date: d });
+    }
+  }
+
+  const periodConsistencyPoints = [];
+  for (let i = 1; i < monthStarts.length; i++) {
+    const prev = new Date(monthStarts[i - 1].date);
+    const curr = new Date(monthStarts[i].date);
+    const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+    const label = new Date(monthStarts[i].date).toLocaleString('en-US', { month: 'short' });
+    periodConsistencyPoints.push({ label, days: diffDays });
+  }
+
   return (
-    <div className="max-w-[1200px] mx-auto px-container-padding-mobile md:px-container-padding-desktop pt-stack-md pb-12">
+    <div className="max-w-[1200px] mx-auto px-container-padding-mobile md:px-container-padding-desktop pt-stack-md pb-16">
       
       {/* Welcome Greeting */}
       <section className="mb-stack-lg animate-entrance">
@@ -264,6 +312,111 @@ export default function DashboardPage() {
             );
           })}
         </div>
+      </section>
+
+      {/* ── WELLNESS ANALYTICS & TRENDS GRAPHS (SCROLL DOWN ON DASHBOARD) ── */}
+      <section className="space-y-6">
+        <div className="flex items-center gap-2 mb-2">
+          <TrendingUp className="w-5 h-5 text-primary dark:text-[#d4b8ff]" />
+          <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Wellness Analytics &amp; History Trends</h3>
+        </div>
+
+        {/* 1. Mood Trends Graph */}
+        <div className="glass-card rounded-2xl p-6 shadow-sm border border-white/40 dark:border-[#3a2d58]/50">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2 text-tertiary font-bold text-sm">
+              <Smile className="w-4 h-4" />
+              <span>Mood History Trends</span>
+            </div>
+            <span className="text-[10px] font-bold text-outline dark:text-[#c8bedd] uppercase tracking-wider">Last 7 Logs</span>
+          </div>
+
+          {moodChartData.length > 0 ? (
+            <div className="w-full h-56 text-xs font-semibold">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={moodChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2D3FF" opacity={0.3} />
+                  <XAxis dataKey="date" stroke="#7a7583" tickLine={false} />
+                  <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} stroke="#7a7583" tickLine={false} />
+                  <Tooltip 
+                    formatter={(val: any, name: any, props: any) => [props.payload.mood, 'Mood']}
+                    contentStyle={{ background: 'rgba(255, 255, 255, 0.95)', borderRadius: '1rem', border: '1px solid #eaddff', color: '#18003d' }}
+                  />
+                  <Line type="monotone" dataKey="score" stroke="#a0517a" strokeWidth={3} dot={{ r: 5, fill: '#a0517a', strokeWidth: 2, stroke: '#ffffff' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-36 flex items-center justify-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic">
+              Log moods on the Log Mood page to populate your emotional trends graph here.
+            </div>
+          )}
+        </div>
+
+        {/* 2. Symptom Severity Graph */}
+        <div className="glass-card rounded-2xl p-6 shadow-sm border border-white/40 dark:border-[#3a2d58]/50">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2 text-secondary dark:text-[#ccbeff] font-bold text-sm">
+              <Activity className="w-4 h-4" />
+              <span>Symptom Intensity Trends</span>
+            </div>
+            <span className="text-[10px] font-bold text-outline dark:text-[#c8bedd] uppercase tracking-wider">Logged History</span>
+          </div>
+
+          {symptomChartData.length > 0 ? (
+            <div className="w-full h-56 text-xs font-semibold">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={symptomChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2D3FF" opacity={0.3} />
+                  <XAxis dataKey="date" stroke="#7a7583" tickLine={false} />
+                  <YAxis domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} stroke="#7a7583" tickLine={false} />
+                  <Tooltip 
+                    formatter={(val: any, name: any, props: any) => [`${val}/10 Pain (${props.payload.symptomsText})`, 'Severity']}
+                    contentStyle={{ background: 'rgba(255, 255, 255, 0.95)', borderRadius: '1rem', border: '1px solid #eaddff', color: '#18003d' }}
+                  />
+                  <Line type="monotone" dataKey="severity" stroke="#7c5cbf" strokeWidth={3} dot={{ r: 5, fill: '#7c5cbf', strokeWidth: 2, stroke: '#ffffff' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-36 flex items-center justify-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic">
+              Log symptoms on the Symptoms page to populate your intensity graph here.
+            </div>
+          )}
+        </div>
+
+        {/* 3. Period Consistency Graph */}
+        <div className="glass-card rounded-2xl p-6 shadow-sm border border-white/40 dark:border-[#3a2d58]/50">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2 text-primary dark:text-[#d4b8ff] font-bold text-sm">
+              <Calendar className="w-4 h-4" />
+              <span>Period Consistency &amp; Cycle Lengths</span>
+            </div>
+            <span className="text-[10px] font-bold text-outline dark:text-[#c8bedd] uppercase tracking-wider">{targetAvg}d Target</span>
+          </div>
+
+          {periodConsistencyPoints.length > 0 ? (
+            <div className="w-full h-56 text-xs font-semibold">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={periodConsistencyPoints} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2D3FF" opacity={0.3} />
+                  <XAxis dataKey="label" stroke="#7a7583" tickLine={false} />
+                  <YAxis domain={[20, 36]} stroke="#7a7583" tickLine={false} />
+                  <Tooltip 
+                    formatter={(val: any) => [`${val} Days`, 'Cycle Length']}
+                    contentStyle={{ background: 'rgba(255, 255, 255, 0.95)', borderRadius: '1rem', border: '1px solid #eaddff', color: '#18003d' }}
+                  />
+                  <Line type="monotone" dataKey="days" stroke="#e11d48" strokeWidth={3} dot={{ r: 5, fill: '#e11d48', strokeWidth: 2, stroke: '#ffffff' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-36 flex items-center justify-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic text-center p-4">
+              Log at least 2 period starts across different months to view your period consistency trend graph here.
+            </div>
+          )}
+        </div>
+
       </section>
 
     </div>

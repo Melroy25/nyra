@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { Droplet, Brain, Sparkles, Wind, Battery, Activity, Frown, Sparkle, Plus, Check, Calendar, X } from 'lucide-react';
+import { Droplet, Brain, Sparkles, Wind, Battery, Activity, Frown, Sparkle, Plus, Check, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Symptom } from '../types';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 import { apiSaveCycleLog } from '../lib/api';
 
@@ -20,11 +19,17 @@ const initialSymptomsList: Symptom[] = [
 
 export default function SymptomsPage() {
   const router = useRouter();
-  const { cycleLogs, logSymptom, removeSymptom, setSeverity, logNotes, recalculateCycleMetrics } = useStore();
+  const { logSymptom, removeSymptom, setSeverity, logNotes, recalculateCycleMetrics } = useStore();
 
   const [symptomsList, setSymptomsList] = useState<Symptom[]>(initialSymptomsList);
-  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>(['Bloating']);
-  const [severity, setSeverityVal] = useState<number>(5);
+  const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>(['Cramps', 'Bloating']);
+  
+  // Individual Pain Level / Severity per symptom (e.g. { Cramps: 7, Bloating: 4 })
+  const [severities, setSeverities] = useState<Record<string, number>>({
+    'Cramps': 7,
+    'Bloating': 4,
+  });
+
   const [notes, setNotes] = useState<string>('');
   const [isSaved, setIsSaved] = useState(false);
 
@@ -35,9 +40,17 @@ export default function SymptomsPage() {
   const toggleSymptom = (id: string) => {
     if (selectedSymptoms.includes(id)) {
       setSelectedSymptoms(selectedSymptoms.filter((s) => s !== id));
+      const nextSev = { ...severities };
+      delete nextSev[id];
+      setSeverities(nextSev);
     } else {
       setSelectedSymptoms([...selectedSymptoms, id]);
+      setSeverities({ ...severities, [id]: 5 });
     }
+  };
+
+  const handleSeverityChange = (id: string, val: number) => {
+    setSeverities({ ...severities, [id]: val });
   };
 
   const handleAddCustomSymptom = (e: React.FormEvent) => {
@@ -49,9 +62,11 @@ export default function SymptomsPage() {
       const newSym: Symptom = { id: trimmed, name: trimmed, iconName: 'Activity' };
       setSymptomsList([...symptomsList, newSym]);
       setSelectedSymptoms([...selectedSymptoms, trimmed]);
+      setSeverities({ ...severities, [trimmed]: 5 });
     } else {
       if (!selectedSymptoms.includes(trimmed)) {
         setSelectedSymptoms([...selectedSymptoms, trimmed]);
+        setSeverities({ ...severities, [trimmed]: 5 });
       }
     }
 
@@ -71,14 +86,19 @@ export default function SymptomsPage() {
       logSymptom(today, s);
     });
 
-    setSeverity(today, severity);
+    // Compute max pain level across selected symptoms for primary log severity
+    const maxPain = selectedSymptoms.length > 0
+      ? Math.max(...selectedSymptoms.map((s) => severities[s] ?? 5))
+      : 0;
+
+    setSeverity(today, maxPain);
     if (notes) logNotes(today, notes);
     
     try {
       await apiSaveCycleLog({
         date: today,
         symptoms: selectedSymptoms,
-        severity,
+        severity: maxPain,
         notes: notes || null,
       });
     } catch (err) {
@@ -107,16 +127,19 @@ export default function SymptomsPage() {
     }
   };
 
-  // Compile last 7 days of symptom logs for Recharts trend graph
-  const chartData = cycleLogs
-    .filter((log) => (log.symptoms && log.symptoms.length > 0) || log.severity !== undefined)
-    .slice(-7)
-    .map((log) => ({
-      date: new Date(log.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      severity: log.severity !== undefined ? log.severity : 5,
-      symptomCount: log.symptoms ? log.symptoms.length : 0,
-      symptomsText: log.symptoms && log.symptoms.length > 0 ? log.symptoms.join(', ') : 'None',
-    }));
+  const getPainLabel = (val: number) => {
+    if (val === 0) return 'None';
+    if (val <= 3) return 'Mild Pain';
+    if (val <= 6) return 'Moderate Pain';
+    if (val <= 8) return 'Severe Pain';
+    return 'Extreme Pain';
+  };
+
+  const getPainBadgeColor = (val: number) => {
+    if (val <= 3) return 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800';
+    if (val <= 6) return 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800';
+    return 'text-rose-600 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800';
+  };
 
   return (
     <div className="max-w-[700px] mx-auto px-container-padding-mobile pt-stack-md pb-12 flex flex-col gap-stack-lg">
@@ -124,7 +147,7 @@ export default function SymptomsPage() {
       {/* Page Header */}
       <section className="flex flex-col gap-unit animate-entrance">
         <h1 className="font-serif font-bold text-3xl md:text-5xl text-primary dark:text-[#eee6ff]">Log Symptoms</h1>
-        <p className="text-sm text-on-surface-variant dark:text-[#c8bedd]">How are you feeling today?</p>
+        <p className="text-sm text-on-surface-variant dark:text-[#c8bedd]">Select what you&apos;re experiencing and set pain levels individually.</p>
       </section>
 
       {/* Symptoms Grid */}
@@ -163,37 +186,66 @@ export default function SymptomsPage() {
         </div>
       </section>
 
-      {/* Severity Pain Level Slider */}
-      <section className="glass-card rounded-2xl p-6 flex flex-col gap-4 relative overflow-hidden shadow-sm border border-white/50 dark:border-[#3a2d58]/50">
-        <div className="absolute -top-10 -left-10 w-32 h-32 bg-tertiary-fixed/30 opacity-60 blur-3xl rounded-full pointer-events-none"></div>
-        
-        <div className="flex justify-between items-center relative z-10">
-          <div>
-            <h2 className="font-bold text-sm text-on-surface dark:text-[#eee6ff]">Pain / Severity Level</h2>
-            <p className="text-[11px] text-on-surface-variant dark:text-[#c8bedd]">Rate how intense your symptoms feel right now</p>
+      {/* ── Per-Symptom Pain Level / Severity Controls ── */}
+      {selectedSymptoms.length > 0 && (
+        <section className="flex flex-col gap-4">
+          <div className="flex justify-between items-center">
+            <h2 className="font-bold text-base text-on-surface dark:text-[#eee6ff]">Symptom Pain &amp; Intensity Levels</h2>
+            <span className="text-xs font-semibold text-on-surface-variant dark:text-[#c8bedd]">{selectedSymptoms.length} Selected</span>
           </div>
-          <span className="font-serif font-bold text-3xl text-primary dark:text-[#d4b8ff]">{severity} / 10</span>
-        </div>
-        
-        <div className="relative z-10 w-full pt-2">
-          <input
-            type="range"
-            min="0"
-            max="10"
-            value={severity}
-            onChange={(e) => setSeverityVal(parseInt(e.target.value))}
-            className="w-full h-2 bg-outline-variant/60 dark:bg-white/10 rounded-full appearance-none outline-none focus:ring-0 cursor-pointer"
-            style={{ '--value': `${severity * 10}%` } as React.CSSProperties}
-          />
-          <div className="flex justify-between text-[11px] font-bold text-outline dark:text-[#c8bedd] mt-2">
-            <span>0 - Mild / None</span>
-            <span>5 - Moderate</span>
-            <span>10 - Severe</span>
-          </div>
-        </div>
-      </section>
 
-      {/* Notes Textarea */}
+          <div className="space-y-3">
+            {selectedSymptoms.map((symId) => {
+              const symObj = symptomsList.find((s) => s.id === symId) || { id: symId, name: symId, iconName: 'Activity' };
+              const IconComp = getIcon(symObj.iconName);
+              const val = severities[symId] ?? 5;
+
+              return (
+                <div 
+                  key={symId}
+                  className="glass-card rounded-2xl p-5 border border-white/50 dark:border-[#3a2d58]/50 shadow-sm flex flex-col gap-3"
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-[#d4b8ff]">
+                        <IconComp className="w-5 h-5" />
+                      </div>
+                      <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{symObj.name}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border ${getPainBadgeColor(val)}`}>
+                        {getPainLabel(val)}
+                      </span>
+                      <span className="font-serif font-bold text-lg text-primary dark:text-[#d4b8ff]">{val} / 10</span>
+                    </div>
+                  </div>
+
+                  {/* Individual Range Slider */}
+                  <div className="w-full pt-1">
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      value={val}
+                      onChange={(e) => handleSeverityChange(symId, parseInt(e.target.value))}
+                      className="w-full h-2 bg-outline-variant/60 dark:bg-white/10 rounded-full appearance-none outline-none focus:ring-0 cursor-pointer"
+                      style={{ '--value': `${val * 10}%` } as React.CSSProperties}
+                    />
+                    <div className="flex justify-between text-[10px] font-bold text-outline dark:text-[#c8bedd] mt-1.5">
+                      <span>0 (None)</span>
+                      <span>5 (Moderate)</span>
+                      <span>10 (Severe)</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Additional Notes */}
       <section className="flex flex-col gap-stack-sm">
         <h2 className="font-bold text-sm text-on-surface dark:text-[#eee6ff]">Additional Notes</h2>
         <textarea
@@ -220,53 +272,6 @@ export default function SymptomsPage() {
           )}
         </button>
       </div>
-
-      {/* ── Symptom Severity & History Trend Graph ── */}
-      <section className="glass-card rounded-2xl p-6 shadow-sm border border-white/40 dark:border-[#3a2d58]/50">
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-2 text-primary dark:text-[#d4b8ff] font-bold text-sm">
-            <Calendar className="w-4 h-4" />
-            <span>Symptom Severity Trends</span>
-          </div>
-          <span className="text-[10px] font-bold text-outline dark:text-[#c8bedd] uppercase tracking-wider">Logged History</span>
-        </div>
-
-        {chartData.length > 0 ? (
-          <div className="w-full h-64 text-xs font-semibold">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2D3FF" opacity={0.3} />
-                <XAxis dataKey="date" stroke="#7a7583" tickLine={false} />
-                <YAxis 
-                  domain={[0, 10]} 
-                  ticks={[0, 2, 4, 6, 8, 10]}
-                  stroke="#7a7583" 
-                  tickLine={false} 
-                />
-                <Tooltip 
-                  formatter={(value: any, name: any, props: any) => [
-                    `${value}/10 Pain (${props.payload.symptomsText})`,
-                    'Severity',
-                  ]}
-                  contentStyle={{ background: 'rgba(255, 255, 255, 0.95)', borderRadius: '1rem', border: '1px solid #eaddff', color: '#18003d' }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="severity" 
-                  stroke="#7c5cbf" 
-                  strokeWidth={3} 
-                  dot={{ r: 5, fill: '#7c5cbf', strokeWidth: 2, stroke: '#ffffff' }}
-                  activeDot={{ r: 8 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="h-44 flex items-center justify-center text-xs text-on-surface-variant dark:text-[#c8bedd] italic text-center p-4">
-            Log your symptoms and pain severity above to display your symptom trend graph.
-          </div>
-        )}
-      </section>
 
       {/* ── Add Custom Symptom Modal ── */}
       {showAddCustomModal && (
