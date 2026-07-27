@@ -188,12 +188,16 @@ export default function PartnerPage() {
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Dynamic user & partner details
-  const isPartner = user?.role === 'partner';
-  const myName = user?.name || (isPartner ? 'Royal' : 'Melroy');
-  const connectedPartnerName = user?.connectedPartner?.name || (isPartner ? 'Melroy' : 'Royal');
+  const cachedUserObj = typeof window !== 'undefined' ? (() => {
+    try { return JSON.parse(localStorage.getItem('nyra_cached_user') || 'null'); } catch (e) { return null; }
+  })() : null;
+  const currentUserObj = user || cachedUserObj;
+  const isPartner = currentUserObj?.role === 'partner';
+  const myName = currentUserObj?.name || (isPartner ? 'Royal' : 'Melroy');
+  const connectedPartnerName = currentUserObj?.connectedPartner?.name || (isPartner ? 'Melroy' : 'Royal');
   const trackedUserName = isPartner ? connectedPartnerName : myName;
-  const displayPairingCode = user?.partnerCode || '';
-  const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
+  const displayPairingCode = currentUserObj?.partnerCode || '';
+  const isConnected = Boolean(currentUserObj?.connectedPartnerId || currentUserObj?.connectedPartner);
 
   const [dashboardData, setDashboardData] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -216,18 +220,39 @@ export default function PartnerPage() {
     }
   }, [activeTab]);
 
-  // System Notification Sender
-  const triggerNotification = (msg: any, partnerName: string, avatarUrl?: string) => {
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      const bodyText = msg.text || (msg.sticker ? `Sent a sticker: ${msg.sticker}` : 'Sent an attachment 📎');
-      try {
-        new Notification(`${partnerName} ❤️`, {
-          body: bodyText,
-          icon: avatarUrl || '/logo.png',
-          tag: `chat-${msg.id}`,
-        });
-      } catch (err) {}
+  // System Notification Sender — uses SW for mobile PWA compatibility
+  const triggerNotification = async (msg: any, partnerName: string, avatarUrl?: string) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+
+    // Request permission if not yet set
+    if (Notification.permission === 'default') {
+      await Notification.requestPermission().catch(() => {});
     }
+    if (Notification.permission !== 'granted') return;
+
+    const bodyText = msg.text || (msg.sticker ? `Sent a sticker: ${msg.sticker}` : 'Sent an attachment 📎');
+    const notifOptions: NotificationOptions = {
+      body: bodyText,
+      icon: avatarUrl || '/logo.png',
+      badge: '/logo.png',
+      tag: `chat-${msg.id}`,
+    };
+
+    // Use Service Worker (required on mobile PWA / Android)
+    if ('serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        if (reg?.showNotification) {
+          await reg.showNotification(`${partnerName} ❤️`, notifOptions);
+          return;
+        }
+      } catch (e) {}
+    }
+
+    // Fallback to browser notification (desktop only)
+    try {
+      new Notification(`${partnerName} ❤️`, notifOptions);
+    } catch (e) {}
   };
 
   // Polling for live chat messages when on 'chat' tab
@@ -242,7 +267,8 @@ export default function PartnerPage() {
             setChatPartnerInfo((prev: any) =>
               prev?.id === partnerInfo.id &&
               prev?.name === partnerInfo.name &&
-              prev?.avatar_url === partnerInfo.avatar_url
+              prev?.avatar_url === partnerInfo.avatar_url &&
+              prev?.updated_at === partnerInfo.updated_at
                 ? prev
                 : partnerInfo
             );
@@ -258,11 +284,18 @@ export default function PartnerPage() {
                 mediaUrl: m.media_url,
                 mediaType: m.media_type,
                 timestamp: m.created_at,
+                is_read: m.is_read,
               }));
 
+              // Preserve any pending optimistic messages (msg-xxx) that haven't been saved/returned yet
+              const pendingOptimistic = prev.filter(
+                (p) => p.id.startsWith('msg-') && !formatted.some((f) => f.text === p.text && f.senderId === p.senderId)
+              );
+              const merged = [...formatted, ...pendingOptimistic];
+
               // Send browser system notification for newly arrived partner messages
-              if (prev.length > 0 && formatted.length > prev.length) {
-                const newIncoming = formatted.filter(
+              if (prev.length > 0 && merged.length > prev.length) {
+                const newIncoming = merged.filter(
                   (m) => !isMsgSentByMe(m) && !prev.some((p) => p.id === m.id)
                 );
                 newIncoming.forEach((m) => {
@@ -272,14 +305,15 @@ export default function PartnerPage() {
 
               // Smart diff check to avoid unnecessary re-renders while typing or scrolling
               const isDifferent =
-                formatted.length !== prev.length ||
-                formatted.some(
+                merged.length !== prev.length ||
+                merged.some(
                   (m, idx) =>
                     prev[idx]?.id !== m.id ||
                     prev[idx]?.reaction !== m.reaction ||
-                    prev[idx]?.text !== m.text
+                    prev[idx]?.text !== m.text ||
+                    prev[idx]?.is_read !== m.is_read
                 );
-              return isDifferent ? formatted : prev;
+              return isDifferent ? merged : prev;
             });
           }
         })
@@ -594,13 +628,20 @@ export default function PartnerPage() {
   const userPrompts = partnerAiMessages.filter((m) => m.senderId === user?.id || m.senderId === 'user' || m.senderId === 'partner-john');
 
   // True if this message was sent by the currently logged-in user
-  const isMsgSentByMe = (msg: any) => {
+  const isMsgSentByMe = useCallback((msg: any) => {
     if (user?.id && msg.senderId === user.id) return true;
     if (!user?.id) {
       return isPartner ? msg.senderId === 'partner-john' : msg.senderId === 'user-sarah';
     }
     return false;
-  };
+  }, [user?.id, isPartner]);
+
+  // Compute partner last active time at component scope (used in ticks + header)
+  const partnerIncomingMsgsList = messages.filter((m: any) => !isMsgSentByMe(m));
+  const lastPartnerMsgGlobal = partnerIncomingMsgsList[partnerIncomingMsgsList.length - 1];
+  const lastPartnerActiveMs: number = lastPartnerMsgGlobal?.timestamp
+    ? new Date(lastPartnerMsgGlobal.timestamp).getTime()
+    : 0;
 
   return (
     <div className={`max-w-[1000px] mx-auto px-container-padding-mobile ${activeTab === 'ai' ? 'pt-2 pb-6' : activeTab === 'chat' ? '' : 'pt-stack-md pb-12'} transition-colors duration-300`}>
@@ -889,14 +930,14 @@ export default function PartnerPage() {
           >
             {/* Chat Header */}
             {(() => {
-              const partnerIncomingMsgs = messages.filter((m) => !isMsgSentByMe(m));
-              const lastPartnerMsg = partnerIncomingMsgs[partnerIncomingMsgs.length - 1];
-              const lastPartnerActiveMs = lastPartnerMsg?.timestamp ? new Date(lastPartnerMsg.timestamp).getTime() : 0;
-              const minsAgo = lastPartnerActiveMs ? Math.floor((Date.now() - lastPartnerActiveMs) / 60000) : 9999;
+              const partnerActiveTimestamp = chatPartnerInfo?.updated_at
+                ? new Date(chatPartnerInfo.updated_at).getTime()
+                : lastPartnerActiveMs;
+              const minsAgo = partnerActiveTimestamp ? Math.floor((Date.now() - partnerActiveTimestamp) / 60000) : 9999;
 
               let isPartnerOnline = false;
               let partnerStatusText = 'Offline';
-              if (minsAgo < 5) {
+              if (minsAgo < 3) {
                 isPartnerOnline = true;
                 partnerStatusText = 'Online • Active now';
               } else if (minsAgo < 60) {
@@ -1070,12 +1111,12 @@ export default function PartnerPage() {
                                 : 'Just now'}
                             </span>
                             {isSentByMe && (
-                              msg.isRead ? (
-                                <CheckCheck className="w-3.5 h-3.5 text-sky-300 inline" />
-                              ) : msg.id.startsWith('msg-') ? (
+                              msg.id.startsWith('msg-') ? (
                                 <Check className="w-3.5 h-3.5 text-white/60 inline" />
+                              ) : (msg.isRead || msg.is_read || ((chatPartnerInfo?.updated_at ? new Date(chatPartnerInfo.updated_at).getTime() : lastPartnerActiveMs) >= new Date(msg.timestamp).getTime())) ? (
+                                <CheckCheck className="w-3.5 h-3.5 text-sky-300 inline" />
                               ) : (
-                                <CheckCheck className="w-3.5 h-3.5 text-white/80 inline" />
+                                <CheckCheck className="w-3.5 h-3.5 text-white/70 inline" />
                               )
                             )}
                           </div>
@@ -1280,20 +1321,18 @@ export default function PartnerPage() {
 
             {/* Chat Footer Input Box */}
             <div className="bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex items-center gap-2">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                className="hidden"
-                accept="image/*,video/*,application/pdf,application/msword,.doc,.docx,.txt"
-              />
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2 rounded-2xl text-[#3d3050] dark:text-[#c8bedd] hover:bg-primary/10 transition-colors"
+              <label
+                className="p-2 rounded-2xl text-[#3d3050] dark:text-[#c8bedd] hover:bg-primary/10 transition-colors cursor-pointer active:scale-95 flex items-center justify-center"
                 title="Attach Image, Video, or Document"
               >
                 <Paperclip className="w-5 h-5" />
-              </button>
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  accept="image/*,video/*,application/pdf,application/msword,.doc,.docx,.txt"
+                />
+              </label>
               <button 
                 onClick={() => setShowStickerDrawer(!showStickerDrawer)}
                 className={`p-2 rounded-2xl transition-colors ${

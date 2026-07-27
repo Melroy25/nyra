@@ -381,23 +381,19 @@ export default function ProfilePage() {
                       <User className="w-6 h-6 text-primary/60" />
                     )}
                   </div>
-                  {/* Upload button */}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex-1 py-3 rounded-xl border-2 border-dashed border-primary/30 dark:border-primary/40 bg-primary/5 dark:bg-primary/10 hover:bg-primary/10 transition-colors text-xs font-bold text-primary dark:text-[#d4b8ff] flex items-center justify-center gap-2"
+                  {/* Upload button using native label for instant gallery trigger on mobile */}
+                  <label
+                    className="flex-1 py-3 rounded-xl border-2 border-dashed border-primary/30 dark:border-primary/40 bg-primary/5 dark:bg-primary/10 hover:bg-primary/10 transition-colors text-xs font-bold text-primary dark:text-[#d4b8ff] flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
                     <Camera className="w-4 h-4" />
                     Upload from Camera / Gallery
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleAvatarFileChange}
-                    className="hidden"
-                  />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarFileChange}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
               </div>
 

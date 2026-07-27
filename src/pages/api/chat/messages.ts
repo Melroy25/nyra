@@ -72,6 +72,14 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
   if (req.method === 'GET') {
     let { threadId } = req.query;
 
+    // Update active user's presence/activity timestamp
+    try {
+      await supabase
+        .from('users')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', authUser.userId);
+    } catch (e) {}
+
     if (!threadId || threadId === 'auto') {
       const { data: profile } = await supabase
         .from('users')
@@ -84,6 +92,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       threadId = tid;
     }
 
+    // Mark unread messages sent to this user as read
+    try {
+      await supabase
+        .from('chat_messages')
+        .update({ is_read: true })
+        .eq('thread_id', threadId)
+        .neq('sender_id', authUser.userId);
+    } catch (e) {}
+
     const { data: messages, error } = await supabase
       .from('chat_messages')
       .select('*, sender:sender_id(id, name, avatar_url)')
@@ -95,7 +112,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       return res.status(500).json({ error: error.message });
     }
 
-    // Fetch partner info for the header avatar
+    // Fetch partner info with updated_at timestamp for real-time online status & read receipts
     const { data: profile } = await supabase
       .from('users')
       .select('id, name, avatar_url, connected_partner_id')
@@ -106,9 +123,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     if (profile?.connected_partner_id) {
       const { data: partner } = await supabase
         .from('users')
-        .select('id, name, avatar_url')
+        .select('id, name, avatar_url, updated_at')
         .eq('id', profile.connected_partner_id)
-        .single();
+        .maybeSingle();
       partnerInfo = partner ?? null;
     }
 

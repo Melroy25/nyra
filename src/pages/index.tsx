@@ -7,7 +7,26 @@ import { motion } from 'framer-motion';
 
 export default function LandingPage() {
   const router = useRouter();
-  const { darkMode, toggleDarkMode } = useStore();
+  const { user, darkMode, toggleDarkMode } = useStore();
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('nyra_token');
+      const cachedStr = localStorage.getItem('nyra_cached_user');
+      let cachedUser = null;
+      if (cachedStr) {
+        try { cachedUser = JSON.parse(cachedStr); } catch (e) {}
+      }
+      const currentUser = user || cachedUser;
+      if (token && currentUser) {
+        if (currentUser.role === 'partner') {
+          router.replace('/partner');
+        } else {
+          router.replace('/dashboard');
+        }
+      }
+    }
+  }, [user, router]);
 
   const features = [
     {

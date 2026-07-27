@@ -2,6 +2,14 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { withAuth, AuthUser } from '../../../lib/withAuth';
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
+
 // GET  /api/users/profile       → fetch current user's full profile
 // PATCH /api/users/profile      → update profile fields
 // PUT  /api/users/onboarding    → complete onboarding, update cycle info

@@ -30,18 +30,20 @@ export async function sendNativeNotification(title: string, options?: Notificati
     ...options,
   };
 
-  // Try via active ServiceWorker registration (mobile push style)
-  if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+  // 1. Try active ServiceWorker registration (works on mobile Android, iOS PWA & desktop)
+  if ('serviceWorker' in navigator) {
     try {
       const reg = await navigator.serviceWorker.ready;
-      await reg.showNotification(title, defaultOptions);
-      return;
+      if (reg && reg.showNotification) {
+        await reg.showNotification(title, defaultOptions);
+        return;
+      }
     } catch (e) {
       console.log('SW notification fallback to window Notification:', e);
     }
   }
 
-  // Fallback to standard Window Notification
+  // 2. Fallback to standard Window Notification
   try {
     new Notification(title, defaultOptions);
   } catch (e) {

@@ -115,7 +115,15 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   // Auth state
-  user: null,
+  user: typeof window !== 'undefined' && localStorage.getItem('nyra_cached_user')
+    ? (() => {
+        try {
+          return JSON.parse(localStorage.getItem('nyra_cached_user') || 'null');
+        } catch (e) {
+          return null;
+        }
+      })()
+    : null,
   onboardingStep: 1,
   onboardingData: {
     name: '',
@@ -194,7 +202,16 @@ export const useStore = create<AppState>((set, get) => ({
   waterGoal: 2000,
 
   // Auth actions
-  setUser: (user) => set({ user }),
+  setUser: (user) => {
+    set({ user });
+    if (typeof window !== 'undefined') {
+      if (user) {
+        localStorage.setItem('nyra_cached_user', JSON.stringify(user));
+      } else {
+        localStorage.removeItem('nyra_cached_user');
+      }
+    }
+  },
   seedCycleLogs: (lastPeriodDate, periodDuration, cycleLength) => {
     // Only seed if localStorage & state have zero real period logs
     const existing = get().cycleLogs.filter((l) => l.isPeriod && !l.isPredicted);

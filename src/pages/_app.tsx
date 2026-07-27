@@ -2,14 +2,15 @@ import "@/styles/globals.css";
 import type { AppProps } from "next/app";
 import Layout from "../components/Layout";
 import PwaInstallPrompt from "../components/PwaInstallPrompt";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useStore } from "../store/useStore";
-import { apiGetProfile, apiGetNotificationSettings, apiGetCycleMetrics } from "../lib/api";
+import { apiGetProfile, apiGetNotificationSettings, apiGetCycleMetrics, apiGetMessages } from "../lib/api";
 import { sendNativeNotification } from "../lib/pushNotifications";
 
 export default function App({ Component, pageProps }: AppProps) {
   const recalculateCycleMetrics = useStore((state) => state.recalculateCycleMetrics);
   const darkMode = useStore((state) => state.darkMode);
+  const user = useStore((state) => state.user);
   const setUser = useStore((state) => state.setUser);
   const seedCycleLogs = useStore((state) => state.seedCycleLogs);
   const updateOnboardingData = useStore((state) => state.updateOnboardingData);
@@ -51,14 +52,22 @@ export default function App({ Component, pageProps }: AppProps) {
                 user.cycleLength || 28
               );
             }
+            // ── Request notification permission if not yet granted ──
+            if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+              Notification.requestPermission().catch(() => {});
+            }
             // ── Schedule native push notifications based on user settings ──
             scheduleNativeNotifications();
           }
         })
-        .catch(() => {
-          // Token expired or invalid
-          localStorage.removeItem('nyra_token');
-          setUser(null);
+        .catch((err: any) => {
+          // Only clear session on definitive auth failure (401), not on network errors
+          const status = err?.status || err?.response?.status;
+          if (status === 401 || status === 403) {
+            localStorage.removeItem('nyra_token');
+            localStorage.removeItem('nyra_cached_user');
+            setUser(null);
+          }
         });
     }
 
@@ -70,6 +79,45 @@ export default function App({ Component, pageProps }: AppProps) {
         .catch((err) => console.log('Service Worker Registration Failed:', err));
     }
   }, [recalculateCycleMetrics, setUser, seedCycleLogs, updateOnboardingData]);
+
+  // ── Global Chat System Notification Poller (WhatsApp / Telegram style) ──
+  const knownMsgIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const checkIncomingPartnerMessages = async () => {
+      const token = localStorage.getItem('nyra_token');
+      if (!token) return;
+
+      try {
+        const { messages, partnerInfo } = await apiGetMessages('auto');
+        if (!messages || messages.length === 0) return;
+
+        const currentUserId = user?.id || (() => {
+          try { return JSON.parse(localStorage.getItem('nyra_cached_user') || '{}')?.id; } catch (e) { return null; }
+        })();
+
+        const partnerName = partnerInfo?.name || 'Partner';
+
+        messages.forEach((msg: any) => {
+          // If message is from partner and we haven't seen it yet in this session
+          if (msg.sender_id !== currentUserId && knownMsgIdsRef.current.size > 0 && !knownMsgIdsRef.current.has(msg.id)) {
+            const bodyText = msg.text || (msg.sticker ? `Sent a sticker: ${msg.sticker}` : 'Sent an attachment 📎');
+            sendNativeNotification(`${partnerName} ❤️`, {
+              body: bodyText,
+              icon: partnerInfo?.avatar_url || '/logo.png',
+              tag: `chat-${msg.id}`,
+            });
+          }
+          knownMsgIdsRef.current.add(msg.id);
+        });
+      } catch (err) {}
+    };
+
+    checkIncomingPartnerMessages();
+    const interval = setInterval(checkIncomingPartnerMessages, 4000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   return (
     <Layout>

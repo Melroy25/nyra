@@ -7,10 +7,28 @@ import { apiLogin, apiRegister, apiPartnerCodeLogin } from '../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setUser, seedCycleLogs, darkMode, toggleDarkMode } = useStore();
+  const { user, setUser, seedCycleLogs, darkMode, toggleDarkMode } = useStore();
   const [isMounted, setIsMounted] = useState(false);
 
-  useEffect(() => { setIsMounted(true); }, []);
+  useEffect(() => {
+    setIsMounted(true);
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('nyra_token');
+      const cachedStr = localStorage.getItem('nyra_cached_user');
+      let cachedUser = null;
+      if (cachedStr) {
+        try { cachedUser = JSON.parse(cachedStr); } catch (e) {}
+      }
+      const currentUser = user || cachedUser;
+      if (token && currentUser) {
+        if (currentUser.role === 'partner') {
+          router.replace('/partner');
+        } else {
+          router.replace('/dashboard');
+        }
+      }
+    }
+  }, [user, router]);
 
 
   // Mode: 'choose' | 'login' | 'register' | 'partner'

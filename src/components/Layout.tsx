@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Home, Calendar, Sparkles, Heart, User, Bell, Settings, LogOut, Moon, Sun, Leaf, MessageCircle } from 'lucide-react';
@@ -12,14 +12,23 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const router = useRouter();
   const { user, setUser, darkMode, toggleDarkMode } = useStore();
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
 
   const noNavPaths = ['/', '/login', '/onboarding'];
   const showNav = !noNavPaths.includes(router.pathname);
 
-  const isPartnerMode = user?.role === 'partner';
+  const cachedUserObj = typeof window !== 'undefined' ? (() => {
+    try { return JSON.parse(localStorage.getItem('nyra_cached_user') || 'null'); } catch (e) { return null; }
+  })() : null;
+  const activeUser = user || cachedUserObj;
+  const isPartnerMode = activeUser?.role === 'partner';
 
   // Strict route protection: Partners cannot access private user pages
   useEffect(() => {
+    // Wait for client-side hydration before checking auth
+    if (!isMounted) return;
+
     if (isPartnerMode) {
       const allowedPaths = ['/partner', '/settings', '/profile'];
       if (!allowedPaths.includes(router.pathname) && !noNavPaths.includes(router.pathname)) {
@@ -31,13 +40,13 @@ export default function Layout({ children }: LayoutProps) {
       router.replace('/dashboard');
     }
     // If no token and user is null, and accessing protected page, redirect to login
-    if (!user && typeof window !== 'undefined' && !localStorage.getItem('nyra_token')) {
+    if (!user && !localStorage.getItem('nyra_token') && !localStorage.getItem('nyra_cached_user')) {
       const protectedPaths = ['/dashboard', '/cycle', '/ai', '/selfcare', '/partner', '/profile', '/settings', '/mood', '/nutrition', '/symptoms', '/onboarding'];
       if (protectedPaths.includes(router.pathname)) {
         router.replace('/login');
       }
     }
-  }, [isPartnerMode, user, router.pathname, router]);
+  }, [isMounted, isPartnerMode, user, router.pathname, router]);
 
   // Navigation Items adapt if logged in as Partner vs User
   const navItems = isPartnerMode
@@ -71,6 +80,7 @@ export default function Layout({ children }: LayoutProps) {
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('nyra_token');
+      localStorage.removeItem('nyra_cached_user');
     }
     setUser(null);
     router.push('/login');
