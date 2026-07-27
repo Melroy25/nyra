@@ -774,9 +774,11 @@ export default function PartnerPage() {
 
   // True if this message was sent by the currently logged-in user
   const isMsgSentByMe = useCallback((msg: any) => {
-    if (user?.id && msg.senderId === user.id) return true;
+    if (!msg) return false;
+    const sid = msg.senderId || msg.sender_id;
+    if (user?.id && sid === user.id) return true;
     if (!user?.id) {
-      return isPartner ? msg.senderId === 'partner-john' : msg.senderId === 'user-sarah';
+      return isPartner ? (sid === 'partner-john' || sid === 'partner') : (sid === 'user-sarah' || sid === 'user');
     }
     return false;
   }, [user?.id, isPartner]);
@@ -813,16 +815,27 @@ export default function PartnerPage() {
                 </p>
               </div>
 
-              {isPartner && (
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
+                <button 
+                  onClick={() => router.push('/partner?tab=chat')}
+                  className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2 hover:opacity-95 transition-all"
+                >
+                  <MessageCircle className="w-4 h-4" /> Open Chat
+                  {unreadCount > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-sm animate-bounce">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+                {isPartner && (
                   <button 
                     onClick={() => router.push('/partner?tab=ai')}
                     className="px-4 py-2.5 rounded-2xl border border-tertiary/40 bg-tertiary/10 text-tertiary font-bold text-xs flex items-center gap-2 hover:bg-tertiary/20 transition-all"
                   >
                     <Sparkles className="w-4 h-4" /> Ask Partner AI
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </section>
 
             {/* PARTNER CONNECTION CODE CARD (If not connected yet or partner mode) */}
@@ -1228,7 +1241,7 @@ export default function PartnerPage() {
                       {(msg.text || msg.sticker) && (
                         <div
                           onDoubleClick={() => setActiveMessageIdForReactions(msg.id)}
-                          className={`rounded-2xl px-3.5 py-2.5 text-[13px] font-medium leading-relaxed relative select-text ${
+                          className={`rounded-2xl px-3.5 py-2.5 text-[13px] font-medium leading-relaxed relative select-none ${
                             isSentByMe
                               ? 'bg-gradient-to-br from-[#7c3aed] to-[#a855f7] text-white rounded-br-sm shadow-md'
                               : 'bg-white dark:bg-[#1e1535] text-[#18003d] dark:text-[#eee6ff] rounded-bl-sm shadow-sm border border-black/6 dark:border-[#3a2d58]/60'

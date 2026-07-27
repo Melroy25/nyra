@@ -103,10 +103,16 @@ async function bgCheckMessages() {
 
     if (messages.length === 0) return;
 
-    // On first run: seed known IDs without notifying (don't blast old messages)
-    if (bgKnownIds.size === 0) {
-      messages.forEach((msg) => bgKnownIds.add(msg.id));
-      return;
+    // On initial poll: seed existing messages, but keep fresh unread messages (< 5 min old) to notify
+    const isFirstRun = bgKnownIds.size === 0;
+    if (isFirstRun) {
+      for (const msg of messages) {
+        const ageMs = Date.now() - new Date(msg.created_at || Date.now()).getTime();
+        const isFreshUnread = msg.sender_id !== bgUserId && !msg.is_read && ageMs < 300000;
+        if (!isFreshUnread) {
+          bgKnownIds.add(msg.id);
+        }
+      }
     }
 
     // Check if user has the CHAT tab open AND it's visible (foreground)
