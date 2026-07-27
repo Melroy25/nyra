@@ -447,32 +447,35 @@ export default function AIPage() {
                     )}
                   </div>
 
-                  {/* Time + status */}
-                  <div className={`flex items-center gap-1 mt-0.5 px-1 ${isUser ? 'justify-end' : 'justify-start'}`}>
+                  {/* Time + status row */}
+                  <div className={`flex items-center gap-2 mt-1 px-1 ${isUser ? 'justify-end' : 'justify-start'}`}>
+                    {/* Copy */}
+                    <button
+                      onClick={() => handleCopy(msg.text, msg.id)}
+                      className="text-[#9d8fc0] hover:text-[#7c3aed] transition-colors"
+                      title="Copy"
+                    >
+                      {copiedId === msg.id
+                        ? <Check className="w-3.5 h-3.5 text-green-500" />
+                        : <Copy className="w-3.5 h-3.5" />
+                      }
+                    </button>
+                    {/* Speak */}
+                    <button
+                      onClick={() => handleSpeak(msg.text, msg.id)}
+                      className={`transition-colors ${speakingId === msg.id ? 'text-[#7c3aed] animate-pulse' : 'text-[#9d8fc0] hover:text-[#7c3aed]'}`}
+                      title={speakingId === msg.id ? 'Stop' : 'Read aloud'}
+                    >
+                      <Volume2 className="w-3.5 h-3.5" />
+                    </button>
+                    {/* Time */}
                     <span className="text-[10px] text-[#9d8fc0] dark:text-[#6b5b95]">{getTime(msg.timestamp)}</span>
+                    {/* Read ticks (user only) */}
                     {isUser && (
                       msg.isRead
                         ? <CheckCheck className="w-3 h-3 text-[#7c3aed]" />
                         : <Check className="w-3 h-3 text-[#9d8fc0]" />
                     )}
-                  </div>
-
-                  {/* Hover toolbar (copy/speak) */}
-                  <div className={`absolute top-1 ${isUser ? '-left-16' : '-right-16'} hidden group-hover:flex items-center gap-1 bg-white dark:bg-[#1e1538] border border-black/8 dark:border-[#3a2d58]/50 rounded-full px-1.5 py-1 shadow-lg z-10`}>
-                    <button
-                      onClick={() => handleCopy(msg.text, msg.id)}
-                      className="p-1 hover:text-primary transition-colors text-[#9d8fc0]"
-                      title="Copy"
-                    >
-                      {copiedId === msg.id ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                    <button
-                      onClick={() => handleSpeak(msg.text, msg.id)}
-                      className={`p-1 transition-colors ${speakingId === msg.id ? 'text-primary' : 'text-[#9d8fc0] hover:text-primary'}`}
-                      title="Read aloud"
-                    >
-                      <Volume2 className="w-3 h-3" />
-                    </button>
                   </div>
                 </div>
 
