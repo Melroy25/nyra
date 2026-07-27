@@ -133,7 +133,7 @@ export default function CyclePage() {
     const log = cycleLogs.find((l) => l.date === dateStr);
     const isSelected = dateStr === selectedDate;
 
-    let cls = 'aspect-square flex flex-col items-center justify-center rounded-xl font-semibold text-sm transition-all cursor-pointer relative select-none ';
+    let cls = 'aspect-square flex flex-col items-center justify-center rounded-2xl font-semibold text-sm transition-all cursor-pointer relative select-none ';
     if (!isCurrentMonth) { cls += 'opacity-25 '; }
 
     const isActualPeriod = log?.isPeriod && !log?.isPredicted;
@@ -141,17 +141,17 @@ export default function CyclePage() {
     const isOvulation = log?.isOvulation || isPredictedOvulationDay(dateStr);
 
     if (isActualPeriod) {
-      cls += 'bg-rose-500/20 dark:bg-rose-500/30 text-rose-600 dark:text-rose-400 border-2 border-rose-500 font-bold shadow-sm ';
+      cls += 'bg-rose-500/12 dark:bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-300/50 dark:border-rose-400/30 font-bold shadow-xs ';
     } else if (isPredicted) {
-      cls += 'border-2 border-dashed border-rose-400/90 dark:border-rose-400/70 text-rose-500 dark:text-rose-400 font-bold bg-rose-500/5 ';
+      cls += 'border border-dashed border-rose-300/60 dark:border-rose-400/40 text-rose-500/80 dark:text-rose-300/80 font-medium bg-rose-500/5 ';
     } else if (isOvulation) {
-      cls += 'bg-violet-500/20 dark:bg-violet-500/30 text-violet-600 dark:text-violet-400 border border-violet-400/50 font-bold ';
+      cls += 'bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-200/50 dark:border-purple-400/30 font-medium ';
     } else {
       cls += 'text-on-surface dark:text-[#eee6ff] hover:bg-white/50 dark:hover:bg-white/8 ';
     }
 
     if (isSelected) {
-      cls += 'ring-2 ring-primary dark:ring-[#d4b8ff] ring-offset-1 dark:ring-offset-[#16102a] shadow-md ';
+      cls += 'ring-2 ring-primary dark:ring-[#d4b8ff] ring-offset-1 dark:ring-offset-[#16102a] shadow-sm ';
     }
     return cls;
   };
@@ -260,8 +260,8 @@ export default function CyclePage() {
 
           <div className="grid grid-cols-3 gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-rose-500/20 border-2 border-rose-500 flex items-center justify-center shrink-0">
-                <Droplet className="w-3 h-3 text-rose-500 fill-rose-500" />
+              <span className="w-7 h-7 rounded-xl bg-rose-500/12 border border-rose-300/60 flex items-center justify-center shrink-0">
+                <Droplet className="w-3 h-3 text-rose-500 fill-rose-500/80" />
               </span>
               <div>
                 <p className="text-xs font-bold text-on-surface dark:text-[#eee6ff] leading-none">Period Day</p>
@@ -269,8 +269,8 @@ export default function CyclePage() {
               </div>
             </div>
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl border-2 border-dashed border-rose-400/90 flex items-center justify-center shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-400/90" />
+              <span className="w-7 h-7 rounded-xl bg-rose-500/5 border border-dashed border-rose-300/60 flex items-center justify-center shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400/80" />
               </span>
               <div>
                 <p className="text-xs font-bold text-on-surface dark:text-[#eee6ff] leading-none">Predicted</p>
@@ -278,8 +278,8 @@ export default function CyclePage() {
               </div>
             </div>
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl bg-violet-500/20 border border-violet-400/50 flex items-center justify-center shrink-0">
-                <span className="w-2 h-2 rounded-full bg-violet-500" />
+              <span className="w-7 h-7 rounded-xl bg-purple-500/10 border border-purple-200/50 flex items-center justify-center shrink-0">
+                <span className="w-2 h-2 rounded-full bg-purple-500/80" />
               </span>
               <div>
                 <p className="text-xs font-bold text-on-surface dark:text-[#eee6ff] leading-none">Ovulation</p>
