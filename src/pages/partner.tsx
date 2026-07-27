@@ -29,8 +29,7 @@ export default function PartnerPage() {
     addPartnerAiMessage
   } = useStore();
 
-  const activeThread = chatThreads.find((t) => t.id === activeThreadId) || chatThreads[0];
-  const [messages, setMessages] = useState<any[]>(activeThread?.messages || []);
+  const [messages, setMessages] = useState<any[]>([]);
 
   // Active Partner AI Thread
   const activePartnerAiThread = partnerAiThreads.find((t) => t.id === activePartnerAiThreadId) || partnerAiThreads[0];
