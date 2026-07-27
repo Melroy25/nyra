@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { User, CycleLog, FlowLevel, ChatMessage, ChatThread, RoutineItem } from '../types';
 import { mockUser, mockPartner } from '../data/users';
-import { mockCycleLogs } from '../data/cycles';
+import { mockCycleLogs, generateInitialCycleLogs } from '../data/cycles';
 import { mockMessages } from '../data/chat';
 import { chatService } from '../services/chatService';
 
@@ -125,10 +125,10 @@ export const useStore = create<AppState>((set, get) => ({
   isPartnerConnected: false,
 
   // Cycle state
-  cycleLogs: mockCycleLogs,
-  currentCycleDay: 18,
-  currentCyclePhase: 'Ovulation',
-  nextPeriodDaysLeft: 10,
+  cycleLogs: [],
+  currentCycleDay: 1,
+  currentCyclePhase: 'Follicular',
+  nextPeriodDaysLeft: 28,
 
   // Chat state with initial threads
   chatThreads: [
@@ -208,7 +208,13 @@ export const useStore = create<AppState>((set, get) => ({
       connectedPartnerCode: 'partner-john',
       role: 'user',
     };
-    set({ user: newUser, onboardingStep: 1 });
+    // Auto-generate period, predicted, and ovulation logs from onboarding answers
+    const initialLogs = generateInitialCycleLogs(
+      data.lastPeriodDate,
+      data.periodDuration || 5,
+      data.averageCycleLength || 28
+    );
+    set({ user: newUser, onboardingStep: 1, cycleLogs: initialLogs });
     get().recalculateCycleMetrics();
   },
   setPartnerConnectionCode: (partnerConnectionCode) => set({ partnerConnectionCode }),

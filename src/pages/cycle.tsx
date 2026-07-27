@@ -79,7 +79,6 @@ export default function CyclePage() {
   const getDayStyle = (dateStr: string, isCurrentMonth: boolean) => {
     const log = cycleLogs.find((l) => l.date === dateStr);
     const isSelected = dateStr === selectedDate;
-    const isToday = dateStr === new Date().toISOString().split('T')[0];
 
     let cls = 'aspect-square flex flex-col items-center justify-center rounded-xl font-semibold text-sm transition-all cursor-pointer relative select-none ';
     if (!isCurrentMonth) { cls += 'opacity-25 '; }
@@ -87,16 +86,13 @@ export default function CyclePage() {
     if (log?.isPeriod) {
       cls += 'bg-rose-500/15 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-400/50 font-bold ';
     } else if (log?.isPredicted) {
-      cls += 'border border-dashed border-rose-400/40 text-rose-400 ';
+      cls += 'border-2 border-dashed border-rose-400/70 dark:border-rose-400/50 text-rose-400 dark:text-rose-400/80 ';
     } else if (log?.isOvulation) {
       cls += 'bg-violet-500/15 dark:bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-400/40 ';
     } else {
       cls += 'text-on-surface dark:text-[#eee6ff] hover:bg-white/50 dark:hover:bg-white/8 ';
     }
 
-    if (isToday && !log?.isPeriod && !log?.isOvulation) {
-      cls += 'ring-2 ring-primary dark:ring-[#d4b8ff] ';
-    }
     if (isSelected) {
       cls += 'ring-2 ring-primary dark:ring-[#d4b8ff] ring-offset-1 dark:ring-offset-[#16102a] shadow-md ';
     }
@@ -258,7 +254,7 @@ export default function CyclePage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="flex items-center gap-2.5">
               <span className="w-7 h-7 rounded-xl bg-rose-500/15 border border-rose-400/50 flex items-center justify-center shrink-0">
                 <Droplet className="w-3 h-3 text-rose-500 fill-rose-500" />
@@ -269,12 +265,12 @@ export default function CyclePage() {
               </div>
             </div>
             <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl border-2 border-dashed border-rose-400/60 flex items-center justify-center shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-400/60" />
+              <span className="w-7 h-7 rounded-xl border-2 border-dashed border-rose-400/70 flex items-center justify-center shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400/70" />
               </span>
               <div>
                 <p className="text-xs font-bold text-on-surface dark:text-[#eee6ff] leading-none">Predicted</p>
-                <p className="text-[10px] text-on-surface-variant dark:text-[#c8bedd] mt-0.5">Estimated next period</p>
+                <p className="text-[10px] text-on-surface-variant dark:text-[#c8bedd] mt-0.5">Next period estimate</p>
               </div>
             </div>
             <div className="flex items-center gap-2.5">
@@ -283,16 +279,7 @@ export default function CyclePage() {
               </span>
               <div>
                 <p className="text-xs font-bold text-on-surface dark:text-[#eee6ff] leading-none">Ovulation</p>
-                <p className="text-[10px] text-on-surface-variant dark:text-[#c8bedd] mt-0.5">Fertile window days</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="w-7 h-7 rounded-xl ring-2 ring-primary dark:ring-[#d4b8ff] flex items-center justify-center shrink-0">
-                <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff]">21</span>
-              </span>
-              <div>
-                <p className="text-xs font-bold text-on-surface dark:text-[#eee6ff] leading-none">Today / Selected</p>
-                <p className="text-[10px] text-on-surface-variant dark:text-[#c8bedd] mt-0.5">Current / tapped date</p>
+                <p className="text-[10px] text-on-surface-variant dark:text-[#c8bedd] mt-0.5">Fertile window</p>
               </div>
             </div>
           </div>
@@ -300,9 +287,8 @@ export default function CyclePage() {
           {showLegendInfo && (
             <div className="mt-4 p-4 rounded-2xl bg-primary/5 dark:bg-[#1c1230] border border-primary/15 dark:border-[#3a2d58] space-y-2.5 text-xs text-on-surface-variant dark:text-[#c8bedd] font-medium leading-relaxed">
               <p><span className="font-bold text-rose-500">🩸 Pink/Rose filled cells</span> — Days you manually marked as period days. Tap any day first, then press the &quot;Mark as Period&quot; button.</p>
-              <p><span className="font-bold text-rose-400">Dashed circles</span> — Nyra&apos;s prediction of your next period based on your average cycle length. Gets more accurate with more logged cycles.</p>
-              <p><span className="font-bold text-violet-500">Purple cells</span> — Your estimated ovulation window (typically 12–16 days before your next period). These are your most fertile days.</p>
-              <p><span className="font-bold text-primary dark:text-[#d4b8ff]">Purple ring outline</span> — Highlights today&apos;s date and whichever date you have selected to log info for.</p>
+              <p><span className="font-bold text-rose-400">Dashed circles</span> — Nyra&apos;s prediction of your next period, based on your average cycle length entered during signup. Gets more accurate as you log more periods.</p>
+              <p><span className="font-bold text-violet-500">Purple cells</span> — Your estimated ovulation window (typically ~14 days before your next period). These are your most fertile days.</p>
             </div>
           )}
         </div>
