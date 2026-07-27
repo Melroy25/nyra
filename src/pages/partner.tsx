@@ -1282,12 +1282,12 @@ export default function PartnerPage() {
                                 : 'Just now'}
                             </span>
                             {isSentByMe && (
-                              msg.id.startsWith('msg-') ? (
-                                <Check className="w-3.5 h-3.5 text-white/60 inline" />
-                              ) : (msg.isRead || msg.is_read || ((chatPartnerInfo?.updated_at ? new Date(chatPartnerInfo.updated_at).getTime() : lastPartnerActiveMs) >= new Date(msg.timestamp).getTime())) ? (
-                                <CheckCheck className="w-3.5 h-3.5 text-sky-300 inline" />
+                              (msg.isRead || msg.is_read) ? (
+                                <span title="Read"><CheckCheck className="w-3.5 h-3.5 text-cyan-300 stroke-[2.5] inline" /></span>
+                              ) : (msg.is_delivered || (chatPartnerInfo?.updated_at && (Date.now() - new Date(chatPartnerInfo.updated_at).getTime() < 300000))) ? (
+                                <span title="Delivered"><CheckCheck className="w-3.5 h-3.5 text-white/70 stroke-[2] inline" /></span>
                               ) : (
-                                <CheckCheck className="w-3.5 h-3.5 text-white/70 inline" />
+                                <span title="Sent"><Check className="w-3.5 h-3.5 text-white/70 stroke-[2] inline" /></span>
                               )
                             )}
                           </div>

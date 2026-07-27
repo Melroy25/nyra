@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { useStore } from "../store/useStore";
 import { apiGetProfile, apiGetNotificationSettings, apiGetCycleMetrics, apiGetMessages } from "../lib/api";
-import { sendNativeNotification } from "../lib/pushNotifications";
+import { sendNativeNotification, registerWebPushSubscription } from "../lib/pushNotifications";
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -116,6 +116,7 @@ export default function App({ Component, pageProps }: AppProps) {
               userId: uid,
               knownIds: knownIdsArr,
             });
+            registerWebPushSubscription().catch(() => {});
           }
         })
         .catch((err) => console.warn('SW registration failed:', err));
@@ -175,8 +176,11 @@ export default function App({ Component, pageProps }: AppProps) {
         let newIdsAdded = false;
 
         messages.forEach((msg: any) => {
-          const isNew = msg.sender_id !== currentUserId && !knownMsgIdsRef.current.has(msg.id);
-          if (isNew) {
+          const msgSig = `${msg.sender_id}_${msg.text || msg.sticker}_${msg.created_at?.slice(0, 16)}`;
+          const isAlreadyNotified = knownMsgIdsRef.current.has(msg.id) || knownMsgIdsRef.current.has(msgSig);
+          const isIncoming = msg.sender_id !== currentUserId;
+
+          if (isIncoming && !isAlreadyNotified) {
             const bodyText = msg.text || (msg.sticker ? `Sent a sticker 😊` : 'Sent an attachment 📎');
             sendNativeNotification(`${partnerName} ❤️`, {
               body: bodyText,
@@ -184,13 +188,14 @@ export default function App({ Component, pageProps }: AppProps) {
               tag: `chat-${msg.id}`,
             });
           }
-          if (!knownMsgIdsRef.current.has(msg.id)) {
+          if (!isAlreadyNotified) {
             knownMsgIdsRef.current.add(msg.id);
+            knownMsgIdsRef.current.add(msgSig);
             newIdsAdded = true;
           }
         });
 
-        // Persist known IDs to localStorage (keep last 200) to survive page reloads
+        // Persist known IDs to localStorage (keep last 300) to survive page reloads
         if (newIdsAdded) {
           try {
             const arr = Array.from(knownMsgIdsRef.current).slice(-200);

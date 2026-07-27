@@ -126,8 +126,12 @@ async function bgCheckMessages() {
     const partnerIcon = partnerInfo.avatar_url || '/logo.png';
 
     for (const msg of messages) {
-      if (msg.sender_id !== bgUserId && !bgKnownIds.has(msg.id)) {
+      const msgSig = `${msg.sender_id}_${msg.text || msg.sticker}_${msg.created_at?.slice(0, 16)}`;
+      const isAlreadyKnown = bgKnownIds.has(msg.id) || bgKnownIds.has(msgSig);
+
+      if (msg.sender_id !== bgUserId && !isAlreadyKnown) {
         bgKnownIds.add(msg.id);
+        bgKnownIds.add(msgSig);
         // Show push notification unless the user is actively IN the chat tab
         if (!chatTabFocused) {
           const bodyText =
@@ -139,12 +143,12 @@ async function bgCheckMessages() {
             icon: partnerIcon,
             badge: '/logo.png',
             tag: `chat-${msg.id}`,
-            renotify: true,
             data: { url: '/partner?tab=chat' },
           });
         }
       } else {
         bgKnownIds.add(msg.id);
+        bgKnownIds.add(msgSig);
       }
     }
   } catch (e) {
