@@ -97,6 +97,7 @@ export default function PartnerPage() {
   const [editText, setEditText] = useState('');
   const [showClearModal, setShowClearModal] = useState(false);
   const [chatThreadId, setChatThreadId] = useState<string | null>(null);
+  const [chatPartnerInfo, setChatPartnerInfo] = useState<any>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -200,7 +201,9 @@ export default function PartnerPage() {
 
     const fetchLiveMessages = () => {
       apiGetMessages('auto')
-        .then(({ messages: liveMsgs }) => {
+        .then(({ messages: liveMsgs, threadId, partnerInfo }) => {
+          if (threadId) setChatThreadId(threadId);
+          if (partnerInfo) setChatPartnerInfo(partnerInfo);
           if (liveMsgs && liveMsgs.length > 0) {
             setMessages(liveMsgs.map(m => ({
               id: m.id,
@@ -220,15 +223,6 @@ export default function PartnerPage() {
     fetchLiveMessages();
     const interval = setInterval(fetchLiveMessages, 3000);
     return () => clearInterval(interval);
-  }, [activeTab]);
-
-  // Capture threadId from polling for clear-chat
-  useEffect(() => {
-    if (activeTab === 'chat') {
-      apiGetMessages('auto')
-        .then(({ threadId }) => { if (threadId) setChatThreadId(threadId); })
-        .catch(() => {});
-    }
   }, [activeTab]);
 
   // Auto-scroll chat to bottom
@@ -490,7 +484,13 @@ export default function PartnerPage() {
   const userPrompts = partnerAiMessages.filter((m) => m.senderId === user?.id || m.senderId === 'user' || m.senderId === 'partner-john');
 
   // True if this message was sent by the currently logged-in user
-  const isMsgSentByMe = (msg: any) => msg.senderId === user?.id;
+  const isMsgSentByMe = (msg: any) => {
+    if (user?.id && msg.senderId === user.id) return true;
+    if (!user?.id) {
+      return isPartner ? msg.senderId === 'partner-john' : msg.senderId === 'user-sarah';
+    }
+    return false;
+  };
 
   return (
     <div className={`max-w-[1000px] mx-auto px-container-padding-mobile ${activeTab === 'ai' ? 'pt-2 pb-6' : activeTab === 'chat' ? '' : 'pt-stack-md pb-12'} transition-colors duration-300`}>
@@ -788,7 +788,7 @@ export default function PartnerPage() {
                 </button>
                 <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0">
                   <img 
-                    src={user?.connectedPartner?.avatarUrl || (isPartner 
+                    src={chatPartnerInfo?.avatar_url || user?.connectedPartner?.avatarUrl || (isPartner 
                       ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
                       : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80")}
                     alt="Chat Avatar" 
@@ -796,7 +796,7 @@ export default function PartnerPage() {
                   />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{connectedPartnerName} ❤️</h3>
+                  <h3 className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{chatPartnerInfo?.name || connectedPartnerName} ❤️</h3>
                   <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff] block mt-0.5">Active Sync • Encrypted Chat</span>
                 </div>
               </div>

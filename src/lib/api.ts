@@ -116,7 +116,7 @@ export const apiGetCycleMetrics = () =>
 // ── CHAT ─────────────────────────────────────
 
 export const apiGetMessages = (threadId: string = 'auto') =>
-  request<{ messages: any[]; threadId: string }>(`/api/chat/messages?threadId=${threadId}`);
+  request<{ messages: any[]; threadId: string; partnerInfo: any | null }>(`/api/chat/messages?threadId=${threadId}`);
 
 export const apiSendMessage = (threadId: string = 'auto', text?: string, sticker?: string, mediaUrl?: string, mediaType?: string) =>
   request<{ message: any; threadId: string }>('/api/chat/messages', {

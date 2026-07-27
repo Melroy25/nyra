@@ -2,52 +2,65 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { withAuth, AuthUser } from '../../../lib/withAuth';
 
-// GET    /api/chat/messages?threadId=xxx → fetch messages
-// POST   /api/chat/messages              → send message
-// PATCH  /api/chat/messages              → add reaction / edit message text
-// DELETE /api/chat/messages              → delete message(s) / clear chat
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-async function resolveThread(supabase: any, userId: string, connectedPartnerId?: string | null) {
+async function getOrCreateThread(supabase: any, userId: string, connectedPartnerId?: string | null): Promise<string | null> {
   if (connectedPartnerId) {
-    const { data: shared } = await supabase
+    // Try to find existing shared thread
+    const { data: t1 } = await supabase
       .from('chat_threads')
       .select('id')
-      .or(
-        `and(user_id.eq.${userId},partner_id.eq.${connectedPartnerId}),and(user_id.eq.${connectedPartnerId},partner_id.eq.${userId})`
-      )
+      .eq('user_id', userId)
+      .eq('partner_id', connectedPartnerId)
       .maybeSingle();
+    if (t1?.id) return t1.id;
 
-    if (shared) return shared.id;
-
-    const { data: created } = await supabase
+    const { data: t2 } = await supabase
       .from('chat_threads')
-      .insert({ user_id: userId, partner_id: connectedPartnerId, title: 'Private Partner Chat' })
+      .select('id')
+      .eq('user_id', connectedPartnerId)
+      .eq('partner_id', userId)
+      .maybeSingle();
+    if (t2?.id) return t2.id;
+
+    // Create new shared thread
+    const { data: created, error: createErr } = await supabase
+      .from('chat_threads')
+      .insert({ user_id: userId, partner_id: connectedPartnerId, title: 'Partner Chat' })
       .select('id')
       .single();
+    if (createErr) console.error('[chat] thread create error:', createErr);
     return created?.id ?? null;
   }
 
-  // Fallback: find any thread for this user
-  const { data: fallback } = await supabase
+  // No connected partner — find or create solo thread
+  const { data: solo } = await supabase
     .from('chat_threads')
     .select('id')
-    .or(`user_id.eq.${userId},partner_id.eq.${userId}`)
+    .eq('user_id', userId)
+    .is('partner_id', null)
     .maybeSingle();
+  if (solo?.id) return solo.id;
 
-  if (fallback) return fallback.id;
-
-  const { data: created } = await supabase
+  const { data: created2, error: createErr2 } = await supabase
     .from('chat_threads')
-    .insert({ user_id: userId, title: 'Private Partner Chat' })
+    .insert({ user_id: userId, title: 'Partner Chat' })
     .select('id')
     .single();
-  return created?.id ?? null;
+  if (createErr2) console.error('[chat] solo thread create error:', createErr2);
+  return created2?.id ?? null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Handler
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function handler(req: NextApiRequest, res: NextApiResponse, authUser: AuthUser) {
   const supabase = supabaseAdmin();
 
-  // ── GET ──────────────────────────────────────────────────────────────────
+  // ── GET: fetch messages + partner info ────────────────────────────────────
   if (req.method === 'GET') {
     let { threadId } = req.query;
 
@@ -58,24 +71,49 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
         .eq('id', authUser.userId)
         .single();
 
-      const tid = await resolveThread(supabase, authUser.userId, profile?.connected_partner_id);
-      if (!tid) return res.status(200).json({ messages: [], threadId: null });
+      const tid = await getOrCreateThread(supabase, authUser.userId, profile?.connected_partner_id);
+      if (!tid) return res.status(200).json({ messages: [], threadId: null, partnerInfo: null });
       threadId = tid;
     }
 
     const { data: messages, error } = await supabase
       .from('chat_messages')
-      .select('*, sender:sender_id(id, name, avatar_url)')
+      .select('id, thread_id, sender_id, text, sticker, reaction, media_url, media_type, is_edited, created_at, sender:sender_id(id, name, avatar_url)')
       .eq('thread_id', threadId)
       .order('created_at', { ascending: true });
 
-    if (error) return res.status(500).json({ error: 'Failed to fetch messages' });
-    return res.status(200).json({ messages: messages || [], threadId });
+    if (error) {
+      console.error('[chat GET] fetch error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    // Fetch partner info for the header avatar
+    const { data: profile } = await supabase
+      .from('users')
+      .select('id, name, avatar_url, connected_partner_id')
+      .eq('id', authUser.userId)
+      .single();
+
+    let partnerInfo = null;
+    if (profile?.connected_partner_id) {
+      const { data: partner } = await supabase
+        .from('users')
+        .select('id, name, avatar_url')
+        .eq('id', profile.connected_partner_id)
+        .single();
+      partnerInfo = partner ?? null;
+    }
+
+    return res.status(200).json({ messages: messages || [], threadId, partnerInfo });
   }
 
-  // ── POST ─────────────────────────────────────────────────────────────────
+  // ── POST: send message ────────────────────────────────────────────────────
   if (req.method === 'POST') {
     let { threadId, text, sticker, mediaUrl, mediaType } = req.body;
+
+    if (!text && !sticker && !mediaUrl) {
+      return res.status(400).json({ error: 'No content provided.' });
+    }
 
     if (!threadId || threadId === 'auto') {
       const { data: profile } = await supabase
@@ -84,86 +122,100 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
         .eq('id', authUser.userId)
         .single();
 
-      const tid = await resolveThread(supabase, authUser.userId, profile?.connected_partner_id);
-      if (!tid) return res.status(400).json({ error: 'Could not resolve chat thread.' });
+      const tid = await getOrCreateThread(supabase, authUser.userId, profile?.connected_partner_id);
+      if (!tid) return res.status(500).json({ error: 'Could not create or find a chat thread.' });
       threadId = tid;
     }
 
-    if (!text && !sticker && !mediaUrl) {
-      return res.status(400).json({ error: 'Message content, sticker, or media attachment is required.' });
-    }
+    const insertPayload: Record<string, any> = {
+      thread_id: threadId,
+      sender_id: authUser.userId,
+    };
+    if (text) insertPayload.text = text;
+    if (sticker) insertPayload.sticker = sticker;
+    if (mediaUrl) insertPayload.media_url = mediaUrl;
+    if (mediaType) insertPayload.media_type = mediaType;
 
     const { data: message, error } = await supabase
       .from('chat_messages')
-      .insert({
-        thread_id: threadId,
-        sender_id: authUser.userId,
-        text: text || null,
-        sticker: sticker || null,
-        media_url: mediaUrl || null,
-        media_type: mediaType || null,
-      })
-      .select('*, sender:sender_id(id, name, avatar_url)')
+      .insert(insertPayload)
+      .select('id, thread_id, sender_id, text, sticker, reaction, media_url, media_type, is_edited, created_at, sender:sender_id(id, name, avatar_url)')
       .single();
 
-    if (error) return res.status(500).json({ error: 'Failed to send message' });
+    if (error) {
+      console.error('[chat POST] insert error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
     return res.status(201).json({ message, threadId });
   }
 
-  // ── PATCH (reaction / edit) ───────────────────────────────────────────────
+  // ── PATCH: react or edit ──────────────────────────────────────────────────
   if (req.method === 'PATCH') {
     const { messageId, reaction, text: editedText } = req.body;
-    if (!messageId) return res.status(400).json({ error: 'messageId is required' });
+    if (!messageId) return res.status(400).json({ error: 'messageId required' });
 
     const updatePayload: Record<string, any> = {};
     if (reaction !== undefined) updatePayload.reaction = reaction;
-    if (editedText !== undefined) { updatePayload.text = editedText; updatePayload.is_edited = true; }
+    if (editedText !== undefined) {
+      updatePayload.text = editedText;
+      // Only set is_edited if the column exists — safe to try
+      updatePayload.is_edited = true;
+    }
 
     const { data, error } = await supabase
       .from('chat_messages')
       .update(updatePayload)
       .eq('id', messageId)
-      .select()
+      .select('id, thread_id, sender_id, text, sticker, reaction, media_url, media_type, is_edited, created_at')
       .single();
 
-    if (error) return res.status(500).json({ error: 'Failed to update message' });
+    if (error) {
+      // If is_edited column doesn't exist, retry without it
+      if (error.message?.includes('is_edited') && editedText !== undefined) {
+        const fallback: Record<string, any> = { text: editedText };
+        if (reaction !== undefined) fallback.reaction = reaction;
+        const { data: d2, error: e2 } = await supabase
+          .from('chat_messages')
+          .update(fallback)
+          .eq('id', messageId)
+          .select()
+          .single();
+        if (e2) return res.status(500).json({ error: e2.message });
+        return res.status(200).json({ message: d2 });
+      }
+      console.error('[chat PATCH] error:', error);
+      return res.status(500).json({ error: error.message });
+    }
     return res.status(200).json({ message: data });
   }
 
-  // ── DELETE (single message OR clear thread) ──────────────────────────────
+  // ── DELETE: single message or clear thread ────────────────────────────────
   if (req.method === 'DELETE') {
     const { messageId, threadId, clearForMe } = req.body;
 
     if (messageId) {
-      // Delete a single message (only if sender)
       const { error } = await supabase
         .from('chat_messages')
         .delete()
         .eq('id', messageId)
         .eq('sender_id', authUser.userId);
-      if (error) return res.status(500).json({ error: 'Failed to delete message' });
+      if (error) {
+        console.error('[chat DELETE msg] error:', error);
+        return res.status(500).json({ error: error.message });
+      }
       return res.status(200).json({ success: true });
     }
 
     if (threadId) {
-      if (clearForMe) {
-        // Soft-delete: only remove sender's own messages
-        const { error } = await supabase
-          .from('chat_messages')
-          .delete()
-          .eq('thread_id', threadId)
-          .eq('sender_id', authUser.userId);
-        if (error) return res.status(500).json({ error: 'Failed to clear your messages' });
-        return res.status(200).json({ success: true, cleared: 'mine' });
-      } else {
-        // Clear all messages in thread (both sides)
-        const { error } = await supabase
-          .from('chat_messages')
-          .delete()
-          .eq('thread_id', threadId);
-        if (error) return res.status(500).json({ error: 'Failed to clear all messages' });
-        return res.status(200).json({ success: true, cleared: 'all' });
+      const q = supabase.from('chat_messages').delete().eq('thread_id', threadId);
+      if (clearForMe) q.eq('sender_id', authUser.userId);
+      const { error } = await q;
+      if (error) {
+        console.error('[chat DELETE thread] error:', error);
+        return res.status(500).json({ error: error.message });
       }
+      return res.status(200).json({ success: true });
     }
 
     return res.status(400).json({ error: 'messageId or threadId required' });
