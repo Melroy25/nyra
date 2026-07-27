@@ -1,16 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useStore } from '../store/useStore';
-import { Calendar, Heart, Pencil, X, Check, Loader2, Camera, User } from 'lucide-react';
+import { Calendar, Heart, Pencil, X, Check, Loader2, Camera, User, Sparkles, MessageCircle, Settings, Shield } from 'lucide-react';
 import { apiUpdateProfile } from '../lib/api';
-
-const avatarPresets = [
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-];
 
 const availableGoals = [
   'Track cycle',
@@ -65,13 +57,16 @@ export default function ProfilePage() {
   const router = useRouter();
   const { onboardingData, user, setUser, updateOnboardingData } = useStore();
 
-  const name = user?.name || onboardingData.name || 'User';
+  const isPartner = user?.role === 'partner';
+  const name = user?.name || onboardingData.name || (isPartner ? 'Partner' : 'User');
+  const email = user?.email || '';
   const age = user?.age || onboardingData.age || 0;
   const dob = user?.dateOfBirth || onboardingData.dob || '';
   const avatarUrl = user?.avatarUrl || undefined;
   const cycleLength = user?.cycleLength || onboardingData.averageCycleLength || 28;
   const periodDuration = user?.periodDuration || onboardingData.periodDuration || 5;
   const goals = user?.goals && user.goals.length > 0 ? user.goals : onboardingData.goals || ['Track cycle'];
+  const connectedPartnerName = user?.connectedPartner?.name || 'Partner';
 
   // Modal State
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -169,9 +164,16 @@ export default function ProfilePage() {
           )}
         </div>
         <div className="text-center sm:text-left flex-1 space-y-1">
-          <h1 className={`font-serif font-bold text-2xl md:text-3xl ${headingCls}`}>{name}</h1>
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+            <h1 className={`font-serif font-bold text-2xl md:text-3xl ${headingCls}`}>{name}</h1>
+            {isPartner && (
+              <span className="px-2.5 py-0.5 rounded-full bg-tertiary/15 text-tertiary font-bold text-[10px] uppercase tracking-wider border border-tertiary/20">
+                Partner Account 💜
+              </span>
+            )}
+          </div>
           <p className={`text-xs font-semibold ${labelCls}`}>
-            {age ? `Age ${age}` : 'Age not set'} {dob ? `• Born ${dob}` : ''}
+            {email ? email : ''} {age ? `• Age ${age}` : ''} {dob ? `• Born ${dob}` : ''}
           </p>
         </div>
 
@@ -193,90 +195,164 @@ export default function ProfilePage() {
         </button>
       </section>
 
-      {/* ── Main Grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* Cycle Configuration Card */}
-        <div className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4 flex items-center gap-2`}>
-              <Calendar className="w-4 h-4 text-primary" />
-              <span>Cycle Configuration</span>
-            </h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
-                <span className={labelCls}>Average Cycle Length</span>
-                <span className="font-bold text-primary dark:text-[#d4b8ff]">{cycleLength} Days</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
-                <span className={labelCls}>Average Period Duration</span>
-                <span className="font-bold text-primary dark:text-[#d4b8ff]">{periodDuration} Days</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-semibold">
-                <span className={labelCls}>Next Period Peak</span>
-                <span className={`font-bold ${headingCls}`}>Normal</span>
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => router.push('/onboarding')}
-            className="w-full mt-6 py-2.5 rounded-2xl border border-primary/30 dark:border-primary/40 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
-          >
-            Update Cycle Parameters
-          </button>
-        </div>
-
-        {/* Partner Connection Card */}
-        <div className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col justify-between">
-          <div>
-            <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4 flex items-center gap-2`}>
-              <Heart className="w-4 h-4 text-tertiary" />
-              <span>Connected Partner</span>
-            </h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
-                <span className={labelCls}>Link Status</span>
-                <span className={`font-bold ${user?.connectedPartnerId || user?.connectedPartner ? 'text-tertiary' : 'text-slate-400'}`}>
-                  {user?.connectedPartnerId || user?.connectedPartner ? 'Connected' : 'Not Connected'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
-                <span className={labelCls}>Partner Connection Code</span>
-                <span className={`font-bold ${headingCls}`}>{user?.partnerCode || 'Not Generated'}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-semibold">
-                <span className={labelCls}>Partner View Permissions</span>
-                <span
-                  className="font-bold text-primary dark:text-[#d4b8ff] hover:underline cursor-pointer"
-                  onClick={() => router.push('/settings')}
-                >Custom</span>
+      {/* ── Partner Profile View ── */}
+      {isPartner ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* Partner Connection Status Card */}
+          <div className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col justify-between">
+            <div>
+              <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4 flex items-center gap-2`}>
+                <Heart className="w-4 h-4 text-tertiary" />
+                <span>Partner Connection</span>
+              </h3>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
+                  <span className={labelCls}>Status</span>
+                  <span className={`font-bold ${user?.connectedPartnerId || user?.connectedPartner ? 'text-tertiary' : 'text-slate-400'}`}>
+                    {user?.connectedPartnerId || user?.connectedPartner ? 'Linked ❤️' : 'Not Linked'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
+                  <span className={labelCls}>Connected Partner</span>
+                  <span className={`font-bold ${headingCls}`}>{connectedPartnerName}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs font-semibold">
+                  <span className={labelCls}>Connection Code</span>
+                  <span className="font-bold text-primary dark:text-[#d4b8ff]">{user?.partnerCode || 'Active'}</span>
+                </div>
               </div>
             </div>
-          </div>
-          <button
-            onClick={() => router.push('/partner')}
-            className="w-full mt-6 py-2.5 rounded-2xl border border-tertiary/30 dark:border-tertiary/40 hover:border-tertiary bg-tertiary/5 dark:bg-tertiary/10 hover:bg-tertiary/15 text-xs font-bold text-tertiary transition-all"
-          >
-            View Partner Updates
-          </button>
-        </div>
-
-      </div>
-
-      {/* ── Goals Section ── */}
-      <section className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm">
-        <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4`}>Your Active Focus &amp; Goals</h3>
-        <div className="flex flex-wrap gap-2.5">
-          {goals.map((goal, idx) => (
-            <span
-              key={idx}
-              className="px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 rounded-xl text-xs font-bold text-primary dark:text-[#d4b8ff]"
+            <button
+              onClick={() => router.push('/partner')}
+              className="w-full mt-6 py-2.5 rounded-2xl border border-tertiary/30 dark:border-tertiary/40 hover:border-tertiary bg-tertiary/5 dark:bg-tertiary/10 hover:bg-tertiary/15 text-xs font-bold text-tertiary transition-all"
             >
-              {goal}
-            </span>
-          ))}
+              Go to Partner Mode Dashboard
+            </button>
+          </div>
+
+          {/* Quick Shortcuts Card */}
+          <div className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col justify-between">
+            <div>
+              <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4 flex items-center gap-2`}>
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span>Quick Shortcuts</span>
+              </h3>
+              <div className="space-y-2.5">
+                <button
+                  onClick={() => router.push('/partner?tab=chat')}
+                  className="w-full p-3 rounded-xl bg-white/40 dark:bg-[#1c1230]/60 border border-outline-variant/30 hover:border-primary/40 flex items-center gap-3 transition-all text-xs font-bold text-[#18003d] dark:text-[#eee6ff]"
+                >
+                  <MessageCircle className="w-4 h-4 text-primary" />
+                  <span>Open Private Partner Chat</span>
+                </button>
+                <button
+                  onClick={() => router.push('/partner?tab=ai')}
+                  className="w-full p-3 rounded-xl bg-white/40 dark:bg-[#1c1230]/60 border border-outline-variant/30 hover:border-tertiary/40 flex items-center gap-3 transition-all text-xs font-bold text-[#18003d] dark:text-[#eee6ff]"
+                >
+                  <Sparkles className="w-4 h-4 text-tertiary" />
+                  <span>Ask Partner AI Support</span>
+                </button>
+                <button
+                  onClick={() => router.push('/settings')}
+                  className="w-full p-3 rounded-xl bg-white/40 dark:bg-[#1c1230]/60 border border-outline-variant/30 hover:border-slate-400 flex items-center gap-3 transition-all text-xs font-bold text-[#18003d] dark:text-[#eee6ff]"
+                >
+                  <Settings className="w-4 h-4 text-slate-500" />
+                  <span>Account &amp; Privacy Settings</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
         </div>
-      </section>
+      ) : (
+        /* ── Female User Profile View ── */
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            {/* Cycle Configuration Card */}
+            <div className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col justify-between">
+              <div>
+                <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4 flex items-center gap-2`}>
+                  <Calendar className="w-4 h-4 text-primary" />
+                  <span>Cycle Configuration</span>
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
+                    <span className={labelCls}>Average Cycle Length</span>
+                    <span className="font-bold text-primary dark:text-[#d4b8ff]">{cycleLength} Days</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
+                    <span className={labelCls}>Average Period Duration</span>
+                    <span className="font-bold text-primary dark:text-[#d4b8ff]">{periodDuration} Days</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-semibold">
+                    <span className={labelCls}>Next Period Peak</span>
+                    <span className={`font-bold ${headingCls}`}>Normal</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => router.push('/onboarding')}
+                className="w-full mt-6 py-2.5 rounded-2xl border border-primary/30 dark:border-primary/40 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
+              >
+                Update Cycle Parameters
+              </button>
+            </div>
+
+            {/* Partner Connection Card */}
+            <div className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col justify-between">
+              <div>
+                <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4 flex items-center gap-2`}>
+                  <Heart className="w-4 h-4 text-tertiary" />
+                  <span>Connected Partner</span>
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
+                    <span className={labelCls}>Link Status</span>
+                    <span className={`font-bold ${user?.connectedPartnerId || user?.connectedPartner ? 'text-tertiary' : 'text-slate-400'}`}>
+                      {user?.connectedPartnerId || user?.connectedPartner ? 'Connected' : 'Not Connected'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
+                    <span className={labelCls}>Partner Connection Code</span>
+                    <span className={`font-bold ${headingCls}`}>{user?.partnerCode || 'Not Generated'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-semibold">
+                    <span className={labelCls}>Partner View Permissions</span>
+                    <span
+                      className="font-bold text-primary dark:text-[#d4b8ff] hover:underline cursor-pointer"
+                      onClick={() => router.push('/settings')}
+                    >Custom</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => router.push('/partner')}
+                className="w-full mt-6 py-2.5 rounded-2xl border border-tertiary/30 dark:border-tertiary/40 hover:border-tertiary bg-tertiary/5 dark:bg-tertiary/10 hover:bg-tertiary/15 text-xs font-bold text-tertiary transition-all"
+              >
+                View Partner Updates
+              </button>
+            </div>
+
+          </div>
+
+          {/* ── Goals Section ── */}
+          <section className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm">
+            <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4`}>Your Active Focus &amp; Goals</h3>
+            <div className="flex flex-wrap gap-2.5">
+              {goals.map((goal, idx) => (
+                <span
+                  key={idx}
+                  className="px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 rounded-xl text-xs font-bold text-primary dark:text-[#d4b8ff]"
+                >
+                  {goal}
+                </span>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
 
       {/* ── Edit Profile Modal ── */}
       {isEditOpen && (
@@ -361,29 +437,31 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Goals Toggle */}
-              <div>
-                <label className="block text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider mb-2">Focus & Goals</label>
-                <div className="flex flex-wrap gap-2">
-                  {availableGoals.map((g) => {
-                    const selected = editGoals.includes(g);
-                    return (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => handleGoalToggle(g)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                          selected
-                            ? 'bg-primary text-white border-primary shadow-sm'
-                            : 'bg-white/40 dark:bg-[#1c1230] text-on-surface dark:text-[#c8bedd] border-outline-variant/30 dark:border-[#3a2d58]'
-                        }`}
-                      >
-                        {selected ? '✓ ' : ''}{g}
-                      </button>
-                    );
-                  })}
+              {/* Goals Toggle (only for regular user) */}
+              {!isPartner && (
+                <div>
+                  <label className="block text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider mb-2">Focus & Goals</label>
+                  <div className="flex flex-wrap gap-2">
+                    {availableGoals.map((g) => {
+                      const selected = editGoals.includes(g);
+                      return (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => handleGoalToggle(g)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                            selected
+                              ? 'bg-primary text-white border-primary shadow-sm'
+                              : 'bg-white/40 dark:bg-[#1c1230] text-on-surface dark:text-[#c8bedd] border-outline-variant/30 dark:border-[#3a2d58]'
+                          }`}
+                        >
+                          {selected ? '✓ ' : ''}{g}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Error display */}
               {saveError && (

@@ -21,7 +21,7 @@ export default function Layout({ children }: LayoutProps) {
   // Strict route protection: Partners cannot access private user pages
   useEffect(() => {
     if (isPartnerMode) {
-      const allowedPaths = ['/partner', '/settings'];
+      const allowedPaths = ['/partner', '/settings', '/profile'];
       if (!allowedPaths.includes(router.pathname) && !noNavPaths.includes(router.pathname)) {
         router.replace('/partner');
       }
@@ -45,6 +45,7 @@ export default function Layout({ children }: LayoutProps) {
         { label: 'Partner View', path: '/partner',          icon: Heart },
         { label: 'Partner Chat', path: '/partner?tab=chat', icon: MessageCircle },
         { label: 'Partner AI',   path: '/partner?tab=ai',   icon: Sparkles },
+        { label: 'Profile',      path: '/profile',          icon: User },
         { label: 'Settings',     path: '/settings',         icon: Settings },
       ]
     : [

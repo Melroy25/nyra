@@ -527,8 +527,8 @@ export default function PartnerPage() {
                   
                   {/* Tracked User's Cycle Stage */}
                   <div className="md:col-span-8 glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between min-h-[200px] border border-white/50 dark:border-[#3a2d58]/60 shadow-sm">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none text-primary">
-                      <Heart className="w-32 h-32 fill-current" />
+                    <div className="absolute top-4 right-4 opacity-15 pointer-events-none text-primary">
+                      <Heart className="w-14 h-14 fill-current" />
                     </div>
                     <div>
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-2xl bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 mb-4">
