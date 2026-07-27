@@ -319,29 +319,45 @@ export const useStore = create<AppState>((set, get) => ({
     }),
 
   recalculateCycleMetrics: () => {
-    const lastPeriod = new Date(get().onboardingData.lastPeriodDate);
-    const today = new Date();
-    const diffTime = Math.abs(today.getTime() - lastPeriod.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const cycleLength = get().onboardingData.averageCycleLength;
-    const periodDur = get().onboardingData.periodDuration;
-    const currentDay = (diffDays % cycleLength) + 1;
+    const rawDate = get().onboardingData.lastPeriodDate;
+    const actualLogs = get().cycleLogs.filter((l) => l.isPeriod && !l.isPredicted);
+    const lastLogDate = actualLogs.length > 0 ? actualLogs[actualLogs.length - 1].date : rawDate;
+
+    let currentDay = 1;
     let phase = 'Follicular';
-    
+    const cycleLength = get().user?.cycleLength || get().onboardingData.averageCycleLength || 28;
+    const periodDur = get().user?.periodDuration || get().onboardingData.periodDuration || 5;
+
+    if (lastLogDate) {
+      const lastPeriod = new Date(lastLogDate);
+      if (!isNaN(lastPeriod.getTime())) {
+        const today = new Date();
+        const diffMs = today.getTime() - lastPeriod.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0) {
+          currentDay = (diffDays % cycleLength) + 1;
+        }
+      }
+    }
+
+    if (isNaN(currentDay) || currentDay < 1) currentDay = 1;
+
     if (currentDay <= periodDur) {
       phase = 'Menstrual';
-    } else if (currentDay >= 12 && currentDay <= 16) {
+    } else if (currentDay <= Math.floor(cycleLength * 0.46)) {
+      phase = 'Follicular';
+    } else if (currentDay <= Math.floor(cycleLength * 0.58)) {
       phase = 'Ovulation';
-    } else if (currentDay > 16) {
+    } else {
       phase = 'Luteal';
     }
-    
+
     const nextPeriod = cycleLength - currentDay;
-    
+
     set({
       currentCycleDay: currentDay,
       currentCyclePhase: phase,
-      nextPeriodDaysLeft: nextPeriod > 0 ? nextPeriod : cycleLength + nextPeriod,
+      nextPeriodDaysLeft: nextPeriod > 0 ? nextPeriod : cycleLength,
     });
   },
 
