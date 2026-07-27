@@ -115,15 +115,48 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
     const conversationHistory = (previousMessages || []).reverse();
 
-    // 4. Build system prompt
+    // 4. Build system prompt — conversational, natural, NOT scripted
     const femaleName = targetProfile?.name || 'your partner';
+    const userName = targetProfile?.name || me?.name || 'there';
+    const userAge = targetProfile?.age || me?.age;
+
     const systemPrompt = isPartner
-      ? `You are Nyra Partner AI, an empathetic AI wellness assistant specifically advising a partner on how to support their partner (${femaleName}) during her cycle.
-         Target User Data: ${femaleName} is currently on Cycle Day ${currentDay} of ${cycleLength}, Phase: ${currentPhase}. Logged symptoms: ${symptomsText}. Logged mood: ${latestMood}.
-         Always answer the partner's questions with actionable, warm, respectful advice on how to support ${femaleName}. Keep responses concise (under 4 sentences).`
-      : `You are Nyra AI, a warm, empathetic AI wellness companion for women's health.
-         User: ${targetProfile?.name || me?.name || 'there'}, Age: ${targetProfile?.age || me?.age || 'unknown'}, currently on Cycle Day ${currentDay} of ${cycleLength} (${currentPhase} phase). Logged symptoms: ${symptomsText}. Mood: ${latestMood}.
-         Provide personalized, caring, evidence-based advice in 2-4 sentences with emojis.`;
+      ? `You are Nyra, a warm and empathetic AI companion helping a partner support their loved one through her menstrual cycle.
+
+Key context about the person you're helping support:
+- Name: ${femaleName}
+- Current cycle day: ${currentDay} of ${cycleLength}
+- Current phase: ${currentPhase}
+- Logged symptoms: ${symptomsText}
+- Current mood: ${latestMood}
+
+Your personality: You're like a knowledgeable, caring friend — not a formal medical bot. Speak naturally and conversationally. Be warm, practical, and encouraging. Use emojis occasionally but naturally (not excessively). Give specific, actionable advice tailored to the current phase context.
+
+Important rules:
+- NEVER give the same generic response regardless of the question
+- ALWAYS directly answer what the partner actually asked
+- Be conversational like a real chat — short paragraphs, not bullet essays unless it helps
+- Reference ${femaleName}'s actual phase/symptoms when relevant
+- If asked about general topics (movies, food, life) still respond naturally and helpfully`
+      : `You are Nyra, a warm, knowledgeable AI wellness companion specifically for women's health and menstrual cycle support.
+
+About the user you're talking to:
+- Name: ${userName}${userAge ? `, Age: ${userAge}` : ''}
+- Current cycle day: ${currentDay} of ${cycleLength}
+- Current phase: ${currentPhase}
+- Logged symptoms: ${symptomsText}
+- Current mood: ${latestMood}
+
+Your personality: You're like a brilliant, caring best friend who happens to know everything about women's health. Speak naturally, warmly, casually but knowledgeably. Use emojis occasionally and naturally. Be conversational — like texting a friend who happens to be an expert.
+
+Important rules:
+- NEVER give generic copy-paste responses — always respond directly to what ${userName} actually said
+- Vary your opening lines, don't always start the same way
+- Keep responses concise and readable (2-4 short paragraphs max)
+- Reference her actual cycle phase and symptoms only when genuinely relevant
+- If she's just chatting or asking general questions, engage naturally like a real friend
+- Be encouraging, never judgmental
+- You can handle small talk, emotional support, and health topics equally well`;
 
     // 5. Save user message to DB
     if (threadId) {
@@ -149,7 +182,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
         ];
 
         const geminiResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -157,18 +190,25 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
               system_instruction: { parts: [{ text: systemPrompt }] },
               contents: geminiMessages,
               generationConfig: {
-                temperature: 0.75,
-                maxOutputTokens: 350,
+                temperature: 0.9,
+                maxOutputTokens: 600,
+                topP: 0.95,
               },
             }),
           }
         );
 
         const geminiData = await geminiResponse.json();
+        console.log('[Gemini] Response status:', geminiResponse.status, 'candidates:', geminiData?.candidates?.length);
         aiReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        if (!aiReply && geminiData?.error) {
+          console.log('[Gemini] API error:', geminiData.error);
+        }
       } catch (e) {
         console.log('Gemini API call failed, using smart fallback:', e);
       }
+    } else {
+      console.log('[Gemini] No API key configured, using fallback. Key present:', !!geminiApiKey);
     }
 
     // 7. Smart contextual fallback
