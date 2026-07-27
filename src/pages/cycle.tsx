@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import {
   ChevronLeft, ChevronRight, Sparkles, Droplet, TrendingUp, Info,
@@ -8,6 +8,11 @@ import { FlowLevel } from '../types';
 
 export default function CyclePage() {
   const router = useRouter();
+
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const {
     cycleLogs,
@@ -21,10 +26,19 @@ export default function CyclePage() {
     onboardingData,
   } = useStore();
 
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [currentMonth, setCurrentMonth] = useState<number>(new Date().getMonth());
-  const [currentYear, setCurrentYear] = useState<number>(new Date().getFullYear());
+  const [selectedDate, setSelectedDate] = useState<string>('2026-07-27');
+  const [currentMonth, setCurrentMonth] = useState<number>(6);
+  const [currentYear, setCurrentYear] = useState<number>(2026);
   const [showLegendInfo, setShowLegendInfo] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const today = new Date();
+      setSelectedDate(today.toISOString().split('T')[0]);
+      setCurrentMonth(today.getMonth());
+      setCurrentYear(today.getFullYear());
+    }
+  }, []);
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',

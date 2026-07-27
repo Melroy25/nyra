@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { 
   Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, PlusCircle, Check, CheckCheck, HelpCircle, Bot,
   Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2,
-  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown
+  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown, Bell, BellOff
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -98,8 +98,30 @@ export default function PartnerPage() {
   const [showClearModal, setShowClearModal] = useState(false);
   const [chatThreadId, setChatThreadId] = useState<string | null>(null);
   const [chatPartnerInfo, setChatPartnerInfo] = useState<any>(null);
+  const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotifPermission(Notification.permission);
+    }
+  }, []);
+
+  const requestNotifPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      const perm = await Notification.requestPermission();
+      setNotifPermission(perm);
+      if (perm === 'granted') {
+        try {
+          new Notification('Nyra Notifications Enabled 🔔', {
+            body: 'You will now receive instant alerts when your partner messages you!',
+            icon: '/logo.png',
+          });
+        } catch (e) {}
+      }
+    }
+  };
 
   const quickEmojis = ['😊', '❤️', '🌸', '💖', '🧁', '🍫', '🎉', '🔥', '🙏', '😴', '✨', '🧸', '☕', '🌷', '🥰'];
 
@@ -195,6 +217,20 @@ export default function PartnerPage() {
     }
   }, [activeTab]);
 
+  // System Notification Sender
+  const triggerNotification = (msg: any, partnerName: string, avatarUrl?: string) => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      const bodyText = msg.text || (msg.sticker ? `Sent a sticker: ${msg.sticker}` : 'Sent an attachment 📎');
+      try {
+        new Notification(`${partnerName} ❤️`, {
+          body: bodyText,
+          icon: avatarUrl || '/logo.png',
+          tag: `chat-${msg.id}`,
+        });
+      } catch (err) {}
+    }
+  };
+
   // Polling for live chat messages when on 'chat' tab
   useEffect(() => {
     if (activeTab !== 'chat') return;
@@ -203,7 +239,15 @@ export default function PartnerPage() {
       apiGetMessages('auto')
         .then(({ messages: liveMsgs, threadId, partnerInfo }) => {
           if (threadId) setChatThreadId(threadId);
-          if (partnerInfo) setChatPartnerInfo(partnerInfo);
+          if (partnerInfo) {
+            setChatPartnerInfo((prev: any) =>
+              prev?.id === partnerInfo.id &&
+              prev?.name === partnerInfo.name &&
+              prev?.avatar_url === partnerInfo.avatar_url
+                ? prev
+                : partnerInfo
+            );
+          }
           if (liveMsgs) {
             setMessages((prev) => {
               const formatted = liveMsgs.map((m: any) => ({
@@ -216,7 +260,18 @@ export default function PartnerPage() {
                 mediaType: m.media_type,
                 timestamp: m.created_at,
               }));
-              // Smart diff check to avoid unnecessary re-renders while typing
+
+              // Send browser system notification for newly arrived partner messages
+              if (prev.length > 0 && formatted.length > prev.length) {
+                const newIncoming = formatted.filter(
+                  (m) => !isMsgSentByMe(m) && !prev.some((p) => p.id === m.id)
+                );
+                newIncoming.forEach((m) => {
+                  triggerNotification(m, partnerInfo?.name || connectedPartnerName, partnerInfo?.avatar_url);
+                });
+              }
+
+              // Smart diff check to avoid unnecessary re-renders while typing or scrolling
               const isDifferent =
                 formatted.length !== prev.length ||
                 formatted.some(
@@ -237,14 +292,18 @@ export default function PartnerPage() {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  // Auto-scroll chat to bottom
+  // Auto-scroll chat to bottom ONLY when message count changes or switching tab
+  const prevMsgLengthRef = useRef(messages.length);
   useEffect(() => {
     if (activeTab === 'chat') {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      if (messages.length > prevMsgLengthRef.current || prevMsgLengthRef.current === 0) {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+      prevMsgLengthRef.current = messages.length;
     } else if (activeTab === 'ai') {
       aiChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, partnerAiMessages, activeTab]);
+  }, [messages.length, partnerAiMessages.length, activeTab]);
 
   // Handle Connecting to Partner via Code
   const handleConnectPartner = async (e: React.FormEvent) => {
@@ -830,41 +889,81 @@ export default function PartnerPage() {
             className="fixed top-16 left-0 right-0 bottom-0 bg-white dark:bg-[#120b24] z-40 flex flex-col overflow-hidden"
           >
             {/* Chat Header */}
-            <div className="flex justify-between items-center bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-b border-black/8 dark:border-[#3a2d58]/60">
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => router.push('/partner')}
-                  className="p-2 hover:bg-primary/10 dark:hover:bg-primary/20 rounded-xl transition-colors text-[#3d3050] dark:text-[#c8bedd]"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-                <div className="relative">
-                  <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0">
-                    <img 
-                      src={chatPartnerInfo?.avatar_url || user?.connectedPartner?.avatarUrl || (isPartner 
-                        ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
-                        : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80")}
-                      alt="Chat Avatar" 
-                      className="w-full h-full object-cover" 
-                    />
+            {(() => {
+              const partnerIncomingMsgs = messages.filter((m) => !isMsgSentByMe(m));
+              const lastPartnerMsg = partnerIncomingMsgs[partnerIncomingMsgs.length - 1];
+              const lastPartnerActiveMs = lastPartnerMsg?.timestamp ? new Date(lastPartnerMsg.timestamp).getTime() : 0;
+              const minsAgo = lastPartnerActiveMs ? Math.floor((Date.now() - lastPartnerActiveMs) / 60000) : 9999;
+
+              let isPartnerOnline = false;
+              let partnerStatusText = 'Offline';
+              if (minsAgo < 5) {
+                isPartnerOnline = true;
+                partnerStatusText = 'Online • Active now';
+              } else if (minsAgo < 60) {
+                partnerStatusText = `Last seen ${minsAgo}m ago`;
+              } else if (minsAgo < 1440) {
+                partnerStatusText = `Last seen ${Math.floor(minsAgo / 60)}h ago`;
+              } else {
+                partnerStatusText = 'Offline';
+              }
+
+              return (
+                <div className="flex justify-between items-center bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-b border-black/8 dark:border-[#3a2d58]/60">
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => router.push('/partner')}
+                      className="p-2 hover:bg-primary/10 dark:hover:bg-primary/20 rounded-xl transition-colors text-[#3d3050] dark:text-[#c8bedd]"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div className="relative">
+                      <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0">
+                        <img 
+                          src={chatPartnerInfo?.avatar_url || user?.connectedPartner?.avatarUrl || (isPartner 
+                            ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
+                            : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80")}
+                          alt="Chat Avatar" 
+                          className="w-full h-full object-cover" 
+                        />
+                      </div>
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-[#1c1230] ${
+                        isPartnerOnline ? 'bg-emerald-500' : 'bg-gray-400'
+                      }`} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{chatPartnerInfo?.name || connectedPartnerName} ❤️</h3>
+                      <span className={`text-[10px] font-bold flex items-center gap-1 block mt-0.5 ${
+                        isPartnerOnline ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-400'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isPartnerOnline ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
+                        {partnerStatusText}
+                      </span>
+                    </div>
                   </div>
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-[#1c1230]" />
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={requestNotifPermission}
+                      className={`p-2 rounded-xl transition-colors ${
+                        notifPermission === 'granted'
+                          ? 'text-primary bg-primary/10 hover:bg-primary/20'
+                          : 'text-gray-400 hover:bg-black/5 dark:hover:bg-white/10'
+                      }`}
+                      title={notifPermission === 'granted' ? 'Notifications Enabled 🔔' : 'Enable Mobile/Desktop Notifications'}
+                    >
+                      {notifPermission === 'granted' ? <Bell className="w-4 h-4 text-primary" /> : <BellOff className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={() => setShowClearModal(true)}
+                      className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors text-red-400 dark:text-red-400"
+                      title="Clear Chat"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{chatPartnerInfo?.name || connectedPartnerName} ❤️</h3>
-                  <span className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 flex items-center gap-1 block mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Online • Active Now
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowClearModal(true)}
-                className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors text-red-400 dark:text-red-400"
-                title="Clear Chat"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
+              );
+            })()}
 
             {/* Chat Body Logs */}
             <div
