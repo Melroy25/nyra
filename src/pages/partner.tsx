@@ -1047,14 +1047,18 @@ export default function PartnerPage() {
                       <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div className="relative">
-                      <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0">
-                        <img 
-                          src={chatPartnerInfo?.avatar_url || user?.connectedPartner?.avatarUrl || (isPartner 
-                            ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
-                            : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80")}
-                          alt="Chat Avatar" 
-                          className="w-full h-full object-cover" 
-                        />
+                      <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0 flex items-center justify-center bg-gradient-to-br from-primary/20 to-secondary/20">
+                        {chatPartnerInfo?.avatar_url || user?.connectedPartner?.avatarUrl ? (
+                          <img 
+                            src={chatPartnerInfo?.avatar_url || user?.connectedPartner?.avatarUrl}
+                            alt="Chat Avatar" 
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : (
+                          <span className="font-bold text-xs text-primary dark:text-[#d4b8ff]">
+                            {(chatPartnerInfo?.name || connectedPartnerName || 'P').charAt(0).toUpperCase()}
+                          </span>
+                        )}
                       </div>
                       <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-[#1c1230] ${
                         isPartnerOnline ? 'bg-emerald-500' : 'bg-gray-400'
