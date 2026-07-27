@@ -3,11 +3,13 @@ import type { AppProps } from "next/app";
 import Layout from "../components/Layout";
 import PwaInstallPrompt from "../components/PwaInstallPrompt";
 import { useEffect, useRef } from "react";
+import { useRouter } from "next/router";
 import { useStore } from "../store/useStore";
 import { apiGetProfile, apiGetNotificationSettings, apiGetCycleMetrics, apiGetMessages } from "../lib/api";
 import { sendNativeNotification } from "../lib/pushNotifications";
 
 export default function App({ Component, pageProps }: AppProps) {
+  const router = useRouter();
   const recalculateCycleMetrics = useStore((state) => state.recalculateCycleMetrics);
   const darkMode = useStore((state) => state.darkMode);
   const user = useStore((state) => state.user);
@@ -28,40 +30,48 @@ export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     recalculateCycleMetrics();
 
-    // Auto-restore session from token
-    const token = typeof window !== 'undefined' ? localStorage.getItem('nyra_token') : null;
+    const token = localStorage.getItem('nyra_token');
+
+    // IMMEDIATELY restore user from cache so UI renders correctly without waiting for API
+    if (token) {
+      const cachedStr = localStorage.getItem('nyra_cached_user');
+      if (cachedStr) {
+        try {
+          const cachedUser = JSON.parse(cachedStr);
+          if (cachedUser) setUser(cachedUser);
+        } catch (e) {}
+      }
+    }
+
+    // Then verify + refresh from server in background
     if (token) {
       apiGetProfile()
-        .then(({ user }) => {
-          if (user) {
-            setUser(user);
+        .then(({ user: freshUser }) => {
+          if (freshUser) {
+            setUser(freshUser);
             updateOnboardingData({
-              name: user.name || '',
-              age: user.age || 0,
-              dob: user.dateOfBirth || '',
-              lastPeriodDate: user.lastPeriodDate || '',
-              averageCycleLength: user.cycleLength || 28,
-              periodDuration: user.periodDuration || 5,
-              goals: user.goals || [],
+              name: freshUser.name || '',
+              age: freshUser.age || 0,
+              dob: freshUser.dateOfBirth || '',
+              lastPeriodDate: freshUser.lastPeriodDate || '',
+              averageCycleLength: freshUser.cycleLength || 28,
+              periodDuration: freshUser.periodDuration || 5,
+              goals: freshUser.goals || [],
             });
-            // Seed calendar with period/predicted/ovulation days from signup data
-            if (user.lastPeriodDate) {
+            if (freshUser.lastPeriodDate) {
               seedCycleLogs(
-                user.lastPeriodDate,
-                user.periodDuration || 5,
-                user.cycleLength || 28
+                freshUser.lastPeriodDate,
+                freshUser.periodDuration || 5,
+                freshUser.cycleLength || 28
               );
             }
-            // ── Request notification permission if not yet granted ──
             if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
               Notification.requestPermission().catch(() => {});
             }
-            // ── Schedule native push notifications based on user settings ──
             scheduleNativeNotifications();
           }
         })
         .catch((err: any) => {
-          // Only clear session on definitive auth failure (401), not on network errors
           const status = err?.status || err?.response?.status;
           if (status === 401 || status === 403) {
             localStorage.removeItem('nyra_token');
@@ -71,16 +81,28 @@ export default function App({ Component, pageProps }: AppProps) {
         });
     }
 
-    // Register Service Worker for PWA
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((reg) => console.log('Nyra PWA Service Worker Registered:', reg.scope))
-        .catch((err) => console.log('Service Worker Registration Failed:', err));
+    // Register Service Worker for PWA + hand token for background polling
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => {
+          console.log('Nyra SW registered');
+          // Use .ready so we always get the truly-active SW (not null on first visit)
+          return navigator.serviceWorker.ready;
+        })
+        .then((reg) => {
+          const t = localStorage.getItem('nyra_token');
+          const uid = (() => {
+            try { return JSON.parse(localStorage.getItem('nyra_cached_user') || '{}')?.id; } catch (e) { return null; }
+          })();
+          if (t && reg.active) {
+            reg.active.postMessage({ type: 'START_BG_POLL', token: t, userId: uid });
+          }
+        })
+        .catch((err) => console.warn('SW registration failed:', err));
     }
   }, [recalculateCycleMetrics, setUser, seedCycleLogs, updateOnboardingData]);
 
-  // ── Global Chat System Notification Poller (WhatsApp / Telegram style) ──
+  // ── Global Chat Notification Poller (foreground — when app IS open) ──
   const knownMsgIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -88,6 +110,12 @@ export default function App({ Component, pageProps }: AppProps) {
     const checkIncomingPartnerMessages = async () => {
       const token = localStorage.getItem('nyra_token');
       if (!token) return;
+
+      // Skip notifications when user is actively on the chat tab and page is visible
+      const isOnChatPage = router.pathname === '/partner' &&
+        (router.query.tab === 'chat' || !router.query.tab) === false ||
+        (router.pathname === '/partner' && router.query.tab === 'chat');
+      if (isOnChatPage && document.visibilityState === 'visible') return;
 
       try {
         const { messages, partnerInfo } = await apiGetMessages('auto');
@@ -100,7 +128,6 @@ export default function App({ Component, pageProps }: AppProps) {
         const partnerName = partnerInfo?.name || 'Partner';
 
         messages.forEach((msg: any) => {
-          // If message is from partner and we haven't seen it yet in this session
           if (msg.sender_id !== currentUserId && knownMsgIdsRef.current.size > 0 && !knownMsgIdsRef.current.has(msg.id)) {
             const bodyText = msg.text || (msg.sticker ? `Sent a sticker: ${msg.sticker}` : 'Sent an attachment 📎');
             sendNativeNotification(`${partnerName} ❤️`, {
@@ -115,9 +142,9 @@ export default function App({ Component, pageProps }: AppProps) {
     };
 
     checkIncomingPartnerMessages();
-    const interval = setInterval(checkIncomingPartnerMessages, 4000);
+    const interval = setInterval(checkIncomingPartnerMessages, 5000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, router.pathname, router.query.tab]);
 
   return (
     <Layout>

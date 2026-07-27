@@ -18,11 +18,10 @@ export default function Layout({ children }: LayoutProps) {
   const noNavPaths = ['/', '/login', '/onboarding'];
   const showNav = !noNavPaths.includes(router.pathname);
 
-  const cachedUserObj = typeof window !== 'undefined' ? (() => {
-    try { return JSON.parse(localStorage.getItem('nyra_cached_user') || 'null'); } catch (e) { return null; }
-  })() : null;
-  const activeUser = user || cachedUserObj;
-  const isPartnerMode = activeUser?.role === 'partner';
+  // Gate on isMounted so server HTML (user=null, isPartnerMode=false) matches
+  // client first render → no React hydration error #418
+  // After mount, user is restored from cache and correct nav renders
+  const isPartnerMode = isMounted && user?.role === 'partner';
 
   // Strict route protection: Partners cannot access private user pages
   useEffect(() => {

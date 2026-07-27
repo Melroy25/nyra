@@ -161,11 +161,33 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     if (mediaUrl) insertPayload.media_url = mediaUrl;
     if (mediaType) insertPayload.media_type = mediaType;
 
-    const { data: message, error } = await supabase
+    let { data: message, error } = await supabase
       .from('chat_messages')
       .insert(insertPayload)
       .select('*, sender:sender_id(id, name, avatar_url)')
       .single();
+
+    // If media columns are missing from schema, retry without them
+    if (error && (error.message?.includes('media_type') || error.message?.includes('media_url'))) {
+      console.warn('[chat POST] media columns missing, retrying without media fields');
+      const fallbackPayload: Record<string, any> = {
+        thread_id: threadId,
+        sender_id: authUser.userId,
+      };
+      if (text) fallbackPayload.text = text;
+      if (sticker) fallbackPayload.sticker = sticker;
+      const { data: msg2, error: err2 } = await supabase
+        .from('chat_messages')
+        .insert(fallbackPayload)
+        .select('*, sender:sender_id(id, name, avatar_url)')
+        .single();
+      if (err2) {
+        console.error('[chat POST] fallback insert error:', err2);
+        return res.status(500).json({ error: err2.message });
+      }
+      message = msg2;
+      error = null;
+    }
 
     if (error) {
       console.error('[chat POST] insert error:', error);

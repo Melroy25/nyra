@@ -114,16 +114,8 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  // Auth state
-  user: typeof window !== 'undefined' && localStorage.getItem('nyra_cached_user')
-    ? (() => {
-        try {
-          return JSON.parse(localStorage.getItem('nyra_cached_user') || 'null');
-        } catch (e) {
-          return null;
-        }
-      })()
-    : null,
+  // Auth state — start as null to match SSR (cache restored in _app.tsx useEffect)
+  user: null,
   onboardingStep: 1,
   onboardingData: {
     name: '',

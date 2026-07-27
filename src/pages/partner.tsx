@@ -187,17 +187,13 @@ export default function PartnerPage() {
   const aiChatEndRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Dynamic user & partner details
-  const cachedUserObj = typeof window !== 'undefined' ? (() => {
-    try { return JSON.parse(localStorage.getItem('nyra_cached_user') || 'null'); } catch (e) { return null; }
-  })() : null;
-  const currentUserObj = user || cachedUserObj;
-  const isPartner = currentUserObj?.role === 'partner';
-  const myName = currentUserObj?.name || (isPartner ? 'Royal' : 'Melroy');
-  const connectedPartnerName = currentUserObj?.connectedPartner?.name || (isPartner ? 'Melroy' : 'Royal');
+  // Dynamic user & partner details — user is restored from cache by _app.tsx on mount
+  const isPartner = user?.role === 'partner';
+  const myName = user?.name || (isPartner ? 'Royal' : 'Melroy');
+  const connectedPartnerName = user?.connectedPartner?.name || (isPartner ? 'Melroy' : 'Royal');
   const trackedUserName = isPartner ? connectedPartnerName : myName;
-  const displayPairingCode = currentUserObj?.partnerCode || '';
-  const isConnected = Boolean(currentUserObj?.connectedPartnerId || currentUserObj?.connectedPartner);
+  const displayPairingCode = user?.partnerCode || '';
+  const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
 
   const [dashboardData, setDashboardData] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
