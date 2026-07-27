@@ -20,6 +20,47 @@ const availableGoals = [
   'Fertility tracking',
 ];
 
+// Helper function to compress high-res camera photos before sending to API
+const compressImage = (file: File, maxWidth = 300, maxHeight = 300, quality = 0.85): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject('Could not get canvas context');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => reject('Failed to load image');
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject('Failed to read file');
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function ProfilePage() {
   const router = useRouter();
   const { onboardingData, user, setUser, updateOnboardingData } = useStore();
@@ -27,7 +68,7 @@ export default function ProfilePage() {
   const name = user?.name || onboardingData.name || 'User';
   const age = user?.age || onboardingData.age || 0;
   const dob = user?.dateOfBirth || onboardingData.dob || '';
-  const avatarUrl = user?.avatarUrl || null;
+  const avatarUrl = user?.avatarUrl || undefined;
   const cycleLength = user?.cycleLength || onboardingData.averageCycleLength || 28;
   const periodDuration = user?.periodDuration || onboardingData.periodDuration || 5;
   const goals = user?.goals && user.goals.length > 0 ? user.goals : onboardingData.goals || ['Track cycle'];
@@ -37,19 +78,21 @@ export default function ProfilePage() {
   const [editName, setEditName] = useState(name);
   const [editAge, setEditAge] = useState(age);
   const [editDob, setEditDob] = useState(dob);
-  const [editAvatar, setEditAvatar] = useState(avatarUrl);
+  const [editAvatar, setEditAvatar] = useState<string | undefined>(avatarUrl);
   const [editGoals, setEditGoals] = useState<string[]>(goals);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setEditAvatar(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file);
+      setEditAvatar(compressed);
+    } catch {
+      alert('Failed to process image file.');
+    }
   };
 
   const headingCls = 'text-[#18003d] dark:text-[#eee6ff]';
@@ -65,6 +108,7 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError('');
     setIsSaving(true);
 
     try {
@@ -77,11 +121,17 @@ export default function ProfilePage() {
         avatarUrl: editAvatar,
       });
 
-      if (res?.user) {
-        setUser({
+      if (user) {
+        const updatedUser = {
           ...user,
-          ...res.user,
-        });
+          ...(res?.user || {}),
+          name: res?.user?.name || editName,
+          age: res?.user?.age || editAge,
+          dateOfBirth: res?.user?.dateOfBirth || editDob,
+          avatarUrl: res?.user?.avatarUrl || editAvatar || undefined,
+          goals: res?.user?.goals || editGoals,
+        };
+        setUser(updatedUser);
       }
 
       // Sync local Zustand state
@@ -93,8 +143,8 @@ export default function ProfilePage() {
       });
 
       setIsEditOpen(false);
-    } catch (err) {
-      console.log('Failed to save profile:', err);
+    } catch (err: any) {
+      setSaveError(err.message || 'Failed to save profile. Please check your network connection.');
     } finally {
       setIsSaving(false);
     }
@@ -133,6 +183,7 @@ export default function ProfilePage() {
             setEditDob(dob);
             setEditAvatar(avatarUrl);
             setEditGoals(goals);
+            setSaveError('');
             setIsEditOpen(true);
           }}
           className="px-4 py-2.5 bg-primary text-white rounded-xl font-bold text-xs shadow-md hover:bg-primary/90 flex items-center gap-2 transition-all active:scale-95 shrink-0"
@@ -333,6 +384,13 @@ export default function ProfilePage() {
                   })}
                 </div>
               </div>
+
+              {/* Error display */}
+              {saveError && (
+                <p className="text-xs font-bold text-red-500 text-center bg-red-50 dark:bg-red-950/40 p-2.5 rounded-xl border border-red-200 dark:border-red-800">
+                  {saveError}
+                </p>
+              )}
 
               {/* Submit Buttons */}
               <div className="flex gap-3 pt-2">

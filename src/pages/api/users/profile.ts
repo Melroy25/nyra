@@ -67,8 +67,25 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: 'Failed to update profile' });
-    return res.status(200).json({ user: data });
+    if (error || !data) return res.status(500).json({ error: error?.message || 'Failed to update profile' });
+
+    const formattedUser = {
+      id: data.id,
+      email: data.email,
+      name: data.name,
+      role: data.role,
+      age: data.age,
+      dateOfBirth: data.date_of_birth,
+      cycleLength: data.cycle_length || 28,
+      periodDuration: data.period_duration || 5,
+      goals: data.goals || [],
+      partnerCode: data.partner_code,
+      connectedPartnerId: data.connected_partner_id,
+      onboardingCompleted: data.onboarding_completed || false,
+      avatarUrl: data.avatar_url,
+    };
+
+    return res.status(200).json({ user: formattedUser });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
