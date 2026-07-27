@@ -109,35 +109,47 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       } catch (e) {}
     }
 
-    const { data: messages, error } = await supabase
-      .from('chat_messages')
-      .select('*, sender:sender_id(id, name, avatar_url)')
-      .eq('thread_id', threadId)
-      .order('created_at', { ascending: true });
+    let messages: any[] = [];
+    let fetchError: any = null;
 
-    if (error) {
-      console.error('[chat GET] fetch error:', error);
-      return res.status(500).json({ error: error.message });
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('thread_id', threadId)
+        .order('created_at', { ascending: true });
+
+      messages = data || [];
+      fetchError = error;
+    } catch (e: any) {
+      fetchError = e;
+    }
+
+    if (fetchError) {
+      console.warn('[chat GET] fetch error, returning empty list:', fetchError.message || fetchError);
+      return res.status(200).json({ messages: [], threadId, partnerInfo: null });
     }
 
     // Fetch partner info with updated_at timestamp for real-time online status & read receipts
-    const { data: profile } = await supabase
-      .from('users')
-      .select('id, name, avatar_url, connected_partner_id')
-      .eq('id', authUser.userId)
-      .single();
-
     let partnerInfo = null;
-    if (profile?.connected_partner_id) {
-      const { data: partner } = await supabase
+    try {
+      const { data: profile } = await supabase
         .from('users')
-        .select('id, name, avatar_url, updated_at')
-        .eq('id', profile.connected_partner_id)
-        .maybeSingle();
-      partnerInfo = partner ?? null;
-    }
+        .select('id, name, avatar_url, connected_partner_id')
+        .eq('id', authUser.userId)
+        .single();
 
-    return res.status(200).json({ messages: messages || [], threadId, partnerInfo });
+      if (profile?.connected_partner_id) {
+        const { data: partner } = await supabase
+          .from('users')
+          .select('id, name, avatar_url, updated_at')
+          .eq('id', profile.connected_partner_id)
+          .maybeSingle();
+        partnerInfo = partner ?? null;
+      }
+    } catch (e) {}
+
+    return res.status(200).json({ messages, threadId, partnerInfo });
   }
 
   // ── POST: send message ────────────────────────────────────────────────────
@@ -173,7 +185,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     let { data: message, error } = await supabase
       .from('chat_messages')
       .insert(insertPayload)
-      .select('*, sender:sender_id(id, name, avatar_url)')
+      .select('*')
       .single();
 
     // If media/reply columns are missing from schema, retry without optional columns
@@ -188,7 +200,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       const { data: msg2, error: err2 } = await supabase
         .from('chat_messages')
         .insert(fallbackPayload)
-        .select('*, sender:sender_id(id, name, avatar_url)')
+        .select('*')
         .single();
       if (err2) {
         console.error('[chat POST] fallback insert error:', err2);
@@ -260,7 +272,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .from('chat_messages')
       .update(updatePayload)
       .eq('id', messageId)
-      .select('*, sender:sender_id(id, name, avatar_url)')
+      .select('*')
       .single();
 
     if (error) {
