@@ -342,7 +342,7 @@ export default function PartnerPage() {
   const userPrompts = partnerAiMessages.filter((m) => m.senderId === user?.id || m.senderId === 'user' || m.senderId === 'partner-john');
 
   return (
-    <div className="max-w-[1000px] mx-auto px-container-padding-mobile pt-stack-md pb-12 transition-colors duration-300">
+    <div className={`max-w-[1000px] mx-auto px-container-padding-mobile ${activeTab === 'ai' ? 'pt-2 pb-6' : 'pt-stack-md pb-12'} transition-colors duration-300`}>
       
       <AnimatePresence mode="wait">
 
@@ -836,11 +836,11 @@ export default function PartnerPage() {
         {/* ── 3. DEDICATED PARTNER AI CHAT VIEW (WITH MULTI-THREAD & PROMPT-TO-PROMPT SCROLL) ── */}
         {activeTab === 'ai' && (
           <motion.div 
-            key="ai"
+            key="ai-support"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
-            className="glass-card bg-white/80 dark:bg-[#16102a]/95 rounded-2xl border border-white/60 dark:border-[#3a2d58]/60 shadow-xl overflow-hidden flex flex-col h-[78vh] relative"
+            className="glass-card bg-white/80 dark:bg-[#16102a]/95 rounded-3xl border border-white/60 dark:border-[#3a2d58]/60 shadow-xl overflow-hidden flex flex-col h-[calc(100vh-170px)] min-h-[480px] relative"
           >
             {/* AI Header with Thread Menu & Prompt Index Buttons */}
             <div className="flex justify-between items-center bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-b border-black/8 dark:border-[#3a2d58]/60">

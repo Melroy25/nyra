@@ -5,7 +5,6 @@ import { withAuth, AuthUser } from '../../../lib/withAuth';
 // POST /api/ai/chat
 // Body: { threadId, message, aiType }
 // aiType: 'nyra' (for User) | 'partner' (for Partner)
-// Calls Google Gemini API with cycle-context system prompt or provides smart fallback
 
 async function handler(req: NextApiRequest, res: NextApiResponse, authUser: AuthUser) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -48,29 +47,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .eq('id', authUser.userId)
       .maybeSingle();
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const { data: recentLogs } = await supabase
+    // Fetch actual last period log (not predicted)
+    const { data: lastActualLog } = await supabase
       .from('cycle_logs')
-      .select('date, is_period, is_ovulation, flow, symptoms, mood')
+      .select('date')
       .eq('user_id', authUser.userId)
-      .gte('date', thirtyDaysAgo.toISOString().split('T')[0])
+      .eq('is_period', true)
       .order('date', { ascending: false })
-      .limit(15);
+      .limit(1)
+      .maybeSingle();
 
-    const periodDays = recentLogs?.filter((l: any) => l.is_period) || [];
-    const lastPeriodDate = periodDays.length > 0 ? periodDays[0].date : null;
+    const lastPeriodDate = lastActualLog?.date || null;
+    const cycleLength = Math.max(21, userProfile?.cycle_length || 28);
+    const periodDuration = Math.max(3, userProfile?.period_duration || 5);
+
     let currentDay = 1;
     let currentPhase = 'Follicular';
 
     if (lastPeriodDate) {
-      const daysSince = Math.floor((Date.now() - new Date(lastPeriodDate).getTime()) / (1000 * 60 * 60 * 24));
-      currentDay = daysSince + 1;
-      if (currentDay <= (userProfile?.period_duration || 5)) currentPhase = 'Menstrual';
-      else if (currentDay <= 13) currentPhase = 'Follicular';
-      else if (currentDay <= 16) currentPhase = 'Ovulation';
-      else currentPhase = 'Luteal';
+      const diffMs = Date.now() - new Date(lastPeriodDate).getTime();
+      const daysSince = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      if (daysSince >= 0) {
+        currentDay = (daysSince % cycleLength) + 1;
+      } else {
+        currentDay = 1;
+      }
+    } else {
+      currentDay = 7; // Safe mid-follicular default when no logs exist
     }
+
+    // Phase bounds
+    if (currentDay <= periodDuration) currentPhase = 'Menstrual';
+    else if (currentDay <= Math.floor(cycleLength * 0.46)) currentPhase = 'Follicular';
+    else if (currentDay <= Math.floor(cycleLength * 0.58)) currentPhase = 'Ovulation';
+    else currentPhase = 'Luteal';
 
     // 3. Fetch last 10 AI messages for conversation context
     const { data: previousMessages } = await supabase
@@ -85,12 +95,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     // 4. Build system prompt
     const userName = userProfile?.name || 'there';
     const systemPrompt = aiType === 'partner'
-      ? `You are Nyra, an empathetic AI wellness companion helping a partner understand and support their partner's menstrual health.
-         The tracked user is currently on Cycle Day ${currentDay}, in the ${currentPhase} phase (cycle length: ${userProfile?.cycle_length || 28} days).
-         Answer the partner's question with empathy, practical tips, and sensitivity. Keep responses warm and under 4 sentences. Use appropriate emojis.`
-      : `You are Nyra, a warm, empathetic, knowledgeable AI wellness companion for women's health and menstrual cycle support.
-         User: ${userName}, Age: ${userProfile?.age || 'unknown'}, Currently Cycle Day ${currentDay} (${currentPhase} phase, cycle length: ${userProfile?.cycle_length || 28} days).
-         Answer the user's specific question with personalised, caring, evidence-based advice. Be conversational and direct. Use 2-4 sentences with emojis. Never give the same response twice.`;
+      ? `You are Nyra, an empathetic AI wellness assistant specifically advising a partner on how to support their partner (${userName}) during her menstrual cycle.
+         Target User Data: ${userName} is currently on Cycle Day ${currentDay} of ${cycleLength}, Phase: ${currentPhase}.
+         Always answer the partner's questions with actionable, warm advice about supporting ${userName}. Keep responses under 4 sentences.`
+      : `You are Nyra, a warm, empathetic AI wellness companion for women's health.
+         User: ${userName}, Age: ${userProfile?.age || 'unknown'}, currently on Cycle Day ${currentDay} of ${cycleLength} (${currentPhase} phase).
+         Provide personalized, caring, evidence-based advice in 2-4 sentences with emojis.`;
 
     // 5. Save user message to DB
     if (threadId) {
@@ -101,7 +111,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       });
     }
 
-    // 6. Call Google Gemini API
+    // 6. Call Google Gemini API (if key configured)
     const geminiApiKey = process.env.GEMINI_API_KEY;
     let aiReply = '';
 
@@ -133,15 +143,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
         const geminiData = await geminiResponse.json();
         aiReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        if (!aiReply && geminiData?.error) {
-          console.log('Gemini error:', geminiData.error);
-        }
       } catch (e) {
         console.log('Gemini API call failed, using smart fallback:', e);
       }
     }
 
-    // 7. Smart contextual fallback (if Gemini key not set or call fails)
+    // 7. Smart contextual fallback
     if (!aiReply) {
       aiReply = buildSmartFallback(message, currentPhase, currentDay, userName, aiType);
     }
@@ -165,91 +172,103 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 // Smart keyword-aware fallback when Gemini is not configured
 function buildSmartFallback(message: string, phase: string, day: number, name: string, aiType: string): string {
   const msg = message.toLowerCase();
+  const trackedName = name === 'Partner' || !name ? 'your partner' : name;
 
-  // Greetings
+  // ── PARTNER AI BRANCH ──
+  if (aiType === 'partner') {
+    if (/^(hi|hello|hey|hii|helo|good morning|good evening|sup|yo)\b/.test(msg)) {
+      return `Hello! 🌸 I'm Nyra, your partner support assistant. ${trackedName} is currently in her ${phase} phase (Day ${day}). How can I help you support her today?`;
+    }
+
+    if (/how are you|who are you|what are you|what can you do/.test(msg)) {
+      return `I'm Nyra Partner AI! 💜 I help you understand ${trackedName}'s cycle phases, emotional changes, energy levels, and cravings so you can offer the best support possible. Ask me anything!`;
+    }
+
+    if (/cramp|pain|hurt|ache/.test(msg)) {
+      return `During the ${phase} phase, ${trackedName} may experience abdominal cramps. A hot water bottle, warm tea, gentle massage, and bringing her a comforting meal or dark chocolate are wonderful ways to help!`;
+    }
+
+    if (/mood|emotional|sad|anxi|stress|cry|irritab|angry|pms/.test(msg)) {
+      return `During her ${phase} phase, hormonal shifts can heighten emotional sensitivity. The best support is active listening, avoiding arguing over minor things, offering a warm hug, and helping with small daily tasks!`;
+    }
+
+    if (/food|eat|diet|crav|hungry|snack/.test(msg)) {
+      return `In her ${phase} phase, ${trackedName} may crave comforting foods or sweets. Dark chocolate, warm chamomile tea, iron-rich meals, and plenty of water are super thoughtful gestures right now!`;
+    }
+
+    if (/support|help|what can i do|how to help/.test(msg)) {
+      return `Right now in her ${phase} phase (Day ${day}), key ways to support ${trackedName} are: 1) Be extra patient & reassuring, 2) Offer warmth and tea, 3) Help with chores without being asked, and 4) Give her space or quiet companionship if she's tired. 💕`;
+    }
+
+    return `${trackedName} is currently in her ${phase} phase (Day ${day}) 💜 Being patient, attentive, and offering quiet companionship or a warm drink is a great way to support her today! How else can I help?`;
+  }
+
+  // ── USER AI BRANCH (FEMALE USER) ──
   if (/^(hi|hello|hey|hii|helo|good morning|good evening|sup|yo)\b/.test(msg)) {
     return `Hello ${name}! 🌸 I'm Nyra, your cycle wellness companion. You're on Day ${day} of your cycle (${phase} phase). How can I help you today?`;
   }
 
-  // How are you / what are you
   if (/how are you|who are you|what are you|what can you do/.test(msg)) {
     return `I'm Nyra, your AI wellness companion! 💜 I can help you understand your cycle phases, manage symptoms, give nutrition tips, track moods, and support your overall wellbeing. What's on your mind today?`;
   }
 
-  // Cramps / pain
   if (/cramp|pain|hurt|ache|dysmenorrhea/.test(msg)) {
-    return `Cramps can be really tough 💝 During the ${phase} phase, try a heating pad on your lower abdomen, gentle yoga stretches, and magnesium-rich foods like dark chocolate or bananas. Ibuprofen or naproxen taken at the first sign of cramps works best. Stay warm and rest when needed!`;
+    return `Cramps can be really tough 💝 During the ${phase} phase, try a heating pad on your lower abdomen, gentle yoga stretches, and magnesium-rich foods like dark chocolate or bananas. Stay warm and rest when needed!`;
   }
 
-  // Bloating
   if (/bloat|bloating|puffy|water retention/.test(msg)) {
-    return `Bloating is super common around your cycle, especially in the Luteal phase 🌿 Try reducing sodium and processed foods, drink more water (it actually helps flush excess fluid), and gentle walks or yoga can relieve pressure. Peppermint tea is also great for bloating!`;
+    return `Bloating is super common around your cycle, especially in the Luteal phase 🌿 Try reducing sodium and processed foods, drink more water (it flushes excess fluid), and gentle walks or peppermint tea can relieve pressure!`;
   }
 
-  // Mood / emotional / sad / anxiety
   if (/mood|emotional|sad|anxi|stress|cry|irritab|angry|pms|pmdd/.test(msg)) {
-    return `Your emotions are valid and closely tied to your hormones 💜 In the ${phase} phase (Day ${day}), hormonal shifts can significantly affect mood. Try journaling, light exercise, magnesium supplements, and reducing caffeine. If mood swings feel severe, it's worth discussing with a doctor — you're not alone!`;
+    return `Your emotions are valid and closely tied to your hormones 💜 In the ${phase} phase (Day ${day}), hormonal shifts can affect mood. Try journaling, light exercise, magnesium supplements, and reducing caffeine!`;
   }
 
-  // Fatigue / tired / energy
   if (/tired|fatigue|exhausted|energy|sleep|sleepy|weak/.test(msg)) {
-    return `Feeling tired is so normal during the ${phase} phase! 🌙 Your body uses a lot of energy managing hormonal changes. Prioritize 7-9 hours of sleep, eat iron-rich foods (spinach, lentils), and try a short 20-minute power nap. Light movement like a walk can actually boost energy levels too!`;
+    return `Feeling tired is so normal during the ${phase} phase! 🌙 Your body uses energy managing hormonal changes. Prioritize 7-9 hours of sleep, eat iron-rich foods, and try a short 20-minute power nap!`;
   }
 
-  // Food / nutrition / cravings / diet
   if (/food|eat|diet|nutrition|crav|hungry|appetite|meal|recipe/.test(msg)) {
     const phaseFood: Record<string, string> = {
-      Menstrual: 'iron-rich foods like spinach, lentils, and red meat. Add vitamin C (oranges, bell peppers) to boost iron absorption 🍊',
-      Follicular: 'light, energising foods like salads, eggs, fermented foods, and lean protein to support rising oestrogen 🥗',
-      Ovulation: 'anti-inflammatory foods like berries, fatty fish, and leafy greens to manage the ovulation surge ✨',
-      Luteal: 'complex carbs, dark chocolate, and magnesium-rich foods like pumpkin seeds and avocado to ease PMS 🍫',
+      Menstrual: 'iron-rich foods like spinach, lentils, and warm soups 🍊',
+      Follicular: 'light, energising foods like salads, eggs, and lean protein 🥗',
+      Ovulation: 'anti-inflammatory foods like berries, avocado, and leafy greens ✨',
+      Luteal: 'complex carbs, dark chocolate, and magnesium-rich foods 🍫',
     };
-    return `During your ${phase} phase, focus on ${phaseFood[phase] || 'balanced whole foods'}. Staying hydrated is always key too — aim for 8 glasses of water a day!`;
+    return `During your ${phase} phase, focus on ${phaseFood[phase] || 'balanced whole foods'}. Staying hydrated is key too!`;
   }
 
-  // Ovulation / fertility
   if (/ovulat|fertile|fertility|conceive|pregnant|ttc/.test(msg)) {
-    return `Ovulation typically occurs around Day 14 of a 28-day cycle, but varies for everyone 🌟 Signs include clear, stretchy discharge (like egg white), a slight rise in basal body temperature, and mild pelvic discomfort. Currently you're on Day ${day} (${phase} phase). Tracking BBT and LH strips can give you the most accurate fertility window!`;
+    return `Ovulation typically occurs around Day 14 of a 28-day cycle 🌟 Currently you're on Day ${day} (${phase} phase). Tracking BBT and LH strips can give you the most accurate fertility window!`;
   }
 
-  // Exercise / workout
   if (/exercise|workout|gym|yoga|run|fitness|sport|walk/.test(msg)) {
     const phaseExercise: Record<string, string> = {
-      Menstrual: 'gentle yoga, stretching, or light walks — your body is in recovery mode 🧘',
-      Follicular: 'increasing intensity is great now — try HIIT, strength training, or cycling as energy rises 💪',
-      Ovulation: 'peak performance time! Great for challenging workouts, heavy lifting, or group fitness ✨',
-      Luteal: 'moderate intensity — pilates, swimming, or moderate strength training work well as energy dips 🌿',
+      Menstrual: 'gentle yoga, stretching, or light walks 🧘',
+      Follicular: 'HIIT, strength training, or cycling as energy rises 💪',
+      Ovulation: 'challenging workouts or group fitness ✨',
+      Luteal: 'pilates, swimming, or moderate strength training 🌿',
     };
-    return `In your ${phase} phase, the best exercise is: ${phaseExercise[phase] || 'whatever feels good for your body'}. Always listen to your body and rest when you need it!`;
+    return `In your ${phase} phase, recommended exercise: ${phaseExercise[phase] || 'whatever feels good'}. Always listen to your body!`;
   }
 
-  // Period late / missed
-  if (/late|missed period|no period|irregular|period not coming/.test(msg)) {
-    return `A late or missed period can be caused by stress, significant weight changes, over-exercise, illness, or hormonal imbalances — not just pregnancy 🌸 If it's more than a week late and a pregnancy test is negative, it's worth tracking for a few months. If irregularity persists, a gynaecologist visit is recommended to rule out conditions like PCOS or thyroid issues.`;
+  if (/late|missed period|no period|irregular/.test(msg)) {
+    return `A late or missed period can be caused by stress, weight shifts, illness, or hormonal changes 🌸 If it's more than a week late and a test is negative, track your cycle for a few months. If irregularity continues, consult a gynaecologist.`;
   }
 
-  // PCOS / hormones / endometriosis
   if (/pcos|polycystic|endometriosis|hormone|hormonal|thyroid/.test(msg)) {
-    return `These are important health topics that deserve proper medical evaluation 💜 PCOS and endometriosis are common but often under-diagnosed. Symptoms can include irregular cycles, excess hair growth, pelvic pain, and heavy periods. I'd recommend tracking your symptoms in the Cycle tab and discussing them with a gynaecologist — you deserve clear answers and proper care!`;
-  }
-
-  // Partner-specific
-  if (aiType === 'partner') {
-    if (/support|help|what can i do|how to help/.test(msg)) {
-      return `Supporting your partner during their ${phase} phase means a lot 💕 Right now, the most helpful things are: showing patience, asking how they feel rather than assuming, offering warmth (a hot water bottle or their favourite snack), and just being present. Small gestures matter more than grand ones!`;
-    }
-    return `Your partner is currently on Day ${day} of their cycle (${phase} phase) 💜 Every person's experience is unique, but during this phase, emotional support, patience, and checking in gently go a long way. What specific way would you like to help them today?`;
+    return `These health topics deserve proper medical care 💜 Symptoms like irregular cycles, pain, or heavy flow should be tracked and discussed with a gynaecologist — you deserve clear answers!`;
   }
 
   // Default contextual response
   const phaseContext: Record<string, string> = {
-    Menstrual: `Day ${day}: Rest, warmth, and iron-rich foods are your allies right now. Be gentle with yourself 💝`,
-    Follicular: `Day ${day}: Your energy is building — great time for new plans, social activities, and lighter meals 🌱`,
-    Ovulation: `Day ${day}: Peak energy and confidence! Your body is thriving — make the most of it ✨`,
-    Luteal: `Day ${day}: Hormones are shifting — prioritize sleep, nourishing meals, and managing stress 🌙`,
+    Menstrual: `Day ${day}: Rest, warmth, and iron-rich foods are your best allies right now 💝`,
+    Follicular: `Day ${day}: Your energy is building — great time for new plans and social activities 🌱`,
+    Ovulation: `Day ${day}: Peak energy and confidence! Your body is thriving ✨`,
+    Luteal: `Day ${day}: Prioritize sleep, nourishing meals, and managing stress 🌙`,
   };
 
-  return `${phaseContext[phase] || `You're on Day ${day} of your cycle.`} I'm here for any specific questions about symptoms, nutrition, mood, or your cycle! 🌸`;
+  return `${phaseContext[phase] || `You're on Day ${day} of your cycle.`} How can I help you today? 🌸`;
 }
 
 export default withAuth(handler);
