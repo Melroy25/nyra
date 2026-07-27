@@ -78,7 +78,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
     const { data: messages, error } = await supabase
       .from('chat_messages')
-      .select('id, thread_id, sender_id, text, sticker, reaction, media_url, media_type, is_edited, created_at, sender:sender_id(id, name, avatar_url)')
+      .select('*, sender:sender_id(id, name, avatar_url)')
       .eq('thread_id', threadId)
       .order('created_at', { ascending: true });
 
@@ -139,7 +139,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     const { data: message, error } = await supabase
       .from('chat_messages')
       .insert(insertPayload)
-      .select('id, thread_id, sender_id, text, sticker, reaction, media_url, media_type, is_edited, created_at, sender:sender_id(id, name, avatar_url)')
+      .select('*, sender:sender_id(id, name, avatar_url)')
       .single();
 
     if (error) {
@@ -167,7 +167,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .from('chat_messages')
       .update(updatePayload)
       .eq('id', messageId)
-      .select('id, thread_id, sender_id, text, sticker, reaction, media_url, media_type, is_edited, created_at')
+      .select('*, sender:sender_id(id, name, avatar_url)')
       .single();
 
     if (error) {
