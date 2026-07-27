@@ -373,12 +373,14 @@ export default function PartnerPage() {
                 >
                   <MessageCircle className="w-4 h-4" /> Open Chat
                 </button>
-                <button 
-                  onClick={() => router.push('/partner?tab=ai')}
-                  className="px-4 py-2.5 rounded-2xl border border-tertiary/40 bg-tertiary/10 text-tertiary font-bold text-xs flex items-center gap-2 hover:bg-tertiary/20 transition-all"
-                >
-                  <Sparkles className="w-4 h-4" /> Ask Partner AI
-                </button>
+                {isPartner && (
+                  <button 
+                    onClick={() => router.push('/partner?tab=ai')}
+                    className="px-4 py-2.5 rounded-2xl border border-tertiary/40 bg-tertiary/10 text-tertiary font-bold text-xs flex items-center gap-2 hover:bg-tertiary/20 transition-all"
+                  >
+                    <Sparkles className="w-4 h-4" /> Ask Partner AI
+                  </button>
+                )}
               </div>
             </section>
 
