@@ -71,7 +71,7 @@ export async function registerWebPushSubscription() {
 
   try {
     const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
+    let sub = await reg.pushManager.getSubscription().catch(() => null);
 
     const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BL34zJyImY_UP4WVQfQ2uRbSBthKCEW9_JxzfHH5b1OG_SBLN7suf7w9DNnUpbePB4nA4OApotINSAN7pQenGGo';
 
@@ -79,8 +79,13 @@ export async function registerWebPushSubscription() {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      }).catch((err) => {
+        console.log('[WebPush] Subscription skipped or unsupported in browser environment:', err?.message || err);
+        return null;
       });
     }
+
+    if (!sub) return;
 
     // Send subscription payload to backend
     await fetch('/api/push/subscribe', {
@@ -90,8 +95,8 @@ export async function registerWebPushSubscription() {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ subscription: sub }),
-    });
-  } catch (err) {
-    console.warn('registerWebPushSubscription failed:', err);
+    }).catch(() => {});
+  } catch (err: any) {
+    console.log('[WebPush] Safe subscription handler:', err?.message || err);
   }
 }

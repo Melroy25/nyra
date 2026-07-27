@@ -126,6 +126,7 @@ export default function App({ Component, pageProps }: AppProps) {
   // ── Global Chat Notification Poller (foreground — when app IS open) ──
   const knownMsgIdsRef = useRef<Set<string>>(new Set());
   const knownMsgIdsSeededRef = useRef(false);
+  const isInitialPollRef = useRef(true);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -164,23 +165,36 @@ export default function App({ Component, pageProps }: AppProps) {
         ).length;
         useStore.getState().setUnreadCount(unreadCount);
 
+        const partnerName = partnerInfo?.name || 'Partner';
+        let newIdsAdded = false;
+
+        // On very first poll after load, seed all existing messages silently into known set
+        if (isInitialPollRef.current) {
+          isInitialPollRef.current = false;
+          messages.forEach((msg: any) => {
+            const msgSig = `${msg.sender_id}_${msg.text || msg.sticker}_${msg.created_at?.slice(0, 16)}`;
+            knownMsgIdsRef.current.add(msg.id);
+            knownMsgIdsRef.current.add(msgSig);
+          });
+          try {
+            const arr = Array.from(knownMsgIdsRef.current).slice(-200);
+            localStorage.setItem('nyra_known_msg_ids', JSON.stringify(arr));
+          } catch (e) {}
+          return;
+        }
+
         // ONLY skip push notification if user is actively viewing the CHAT tab while window is visible
         const isActivelyChatting =
           router.pathname === '/partner' &&
           router.query.tab === 'chat' &&
           document.visibilityState === 'visible';
 
-        if (isActivelyChatting) return;
-
-        const partnerName = partnerInfo?.name || 'Partner';
-        let newIdsAdded = false;
-
         messages.forEach((msg: any) => {
           const msgSig = `${msg.sender_id}_${msg.text || msg.sticker}_${msg.created_at?.slice(0, 16)}`;
           const isAlreadyNotified = knownMsgIdsRef.current.has(msg.id) || knownMsgIdsRef.current.has(msgSig);
           const isIncoming = msg.sender_id !== currentUserId;
 
-          if (isIncoming && !isAlreadyNotified) {
+          if (isIncoming && !isAlreadyNotified && !isActivelyChatting) {
             const bodyText = msg.text || (msg.sticker ? `Sent a sticker 😊` : 'Sent an attachment 📎');
             sendNativeNotification(`${partnerName} ❤️`, {
               body: bodyText,
@@ -195,7 +209,7 @@ export default function App({ Component, pageProps }: AppProps) {
           }
         });
 
-        // Persist known IDs to localStorage (keep last 300) to survive page reloads
+        // Persist known IDs to localStorage (keep last 200) to survive page reloads
         if (newIdsAdded) {
           try {
             const arr = Array.from(knownMsgIdsRef.current).slice(-200);
@@ -206,7 +220,7 @@ export default function App({ Component, pageProps }: AppProps) {
     };
 
     checkIncomingPartnerMessages();
-    const interval = setInterval(checkIncomingPartnerMessages, 5000);
+    const interval = setInterval(checkIncomingPartnerMessages, 3000);
     return () => clearInterval(interval);
   }, [user?.id, router.pathname, router.query.tab]);
 
