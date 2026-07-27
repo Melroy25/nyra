@@ -26,8 +26,19 @@ export default function App({ Component, pageProps }: AppProps) {
     }
   }, [darkMode]);
 
-  // ── Restore Logged-in Session from JWT Token on App Mount ──
+  // ── Restore Logged-in Session & Cache on App Mount ──
   useEffect(() => {
+    // Restore cycle logs from localStorage after client hydration
+    try {
+      const storedLogs = localStorage.getItem('nyra_cycle_logs');
+      if (storedLogs) {
+        const parsed = JSON.parse(storedLogs);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          useStore.getState().setCycleLogs(parsed);
+        }
+      }
+    } catch (e) {}
+
     recalculateCycleMetrics();
 
     const token = localStorage.getItem('nyra_token');

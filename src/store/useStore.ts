@@ -129,10 +129,8 @@ export const useStore = create<AppState>((set, get) => ({
   partnerConnectionCode: '',
   isPartnerConnected: false,
 
-  // Cycle state
-  cycleLogs: typeof window !== 'undefined' && localStorage.getItem('nyra_cycle_logs')
-    ? JSON.parse(localStorage.getItem('nyra_cycle_logs') || '[]')
-    : [],
+  // Cycle state — start as [] to match SSR (restored in _app.tsx useEffect)
+  cycleLogs: [],
   currentCycleDay: 1,
   currentCyclePhase: 'Follicular',
   nextPeriodDaysLeft: 28,
@@ -152,7 +150,7 @@ export const useStore = create<AppState>((set, get) => ({
           id: 'msg-init-t2',
           senderId: 'partner-john',
           text: 'Hey! Ready for yoga recovery session? 🧘',
-          timestamp: new Date().toISOString(),
+          timestamp: '2026-01-01T00:00:00.000Z',
         }
       ],
     }
@@ -169,7 +167,7 @@ export const useStore = create<AppState>((set, get) => ({
           id: 'p-ai-1',
           senderId: 'nyra-ai',
           text: "Hello John! 👋 I'm Nyra AI, your partner support assistant. Sarah is currently in her Luteal Phase (Day 24). How can I help you support her today?",
-          timestamp: new Date().toISOString(),
+          timestamp: '2026-01-01T00:00:00.000Z',
         }
       ],
     },
@@ -181,7 +179,7 @@ export const useStore = create<AppState>((set, get) => ({
           id: 'p-ai-2-init',
           senderId: 'nyra-ai',
           text: "Welcome to Nutrition Advice thread. Ask me what recipes or foods can comfort Sarah when she experiences cravings or cramps!",
-          timestamp: new Date().toISOString(),
+          timestamp: '2026-01-01T00:00:00.000Z',
         }
       ],
     }

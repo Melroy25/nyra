@@ -8,10 +8,13 @@ import { apiGetCycleMetrics } from '../lib/api';
 export default function DashboardPage() {
   const router = useRouter();
   
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+
   // Fetch values from Zustand store
   const { user, cycleLogs, waterIntake, waterGoal, addWater, resetWater, deleteMoodLog, deleteSymptomLog, deletePeriodLog } = useStore();
 
-  const name = user?.name || 'User';
+  const name = isMounted && user?.name ? user.name : 'User';
 
   // Live backend cycle metrics
   const [cycleMetrics, setCycleMetrics] = useState<{
