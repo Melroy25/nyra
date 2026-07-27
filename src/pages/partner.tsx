@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useStore } from '../store/useStore';
 import { 
-  Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, PlusCircle, Check, HelpCircle, Bot,
+  Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, PlusCircle, Check, CheckCheck, HelpCircle, Bot,
   Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2,
   Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown
 } from 'lucide-react';
@@ -204,17 +204,29 @@ export default function PartnerPage() {
         .then(({ messages: liveMsgs, threadId, partnerInfo }) => {
           if (threadId) setChatThreadId(threadId);
           if (partnerInfo) setChatPartnerInfo(partnerInfo);
-          if (liveMsgs && liveMsgs.length > 0) {
-            setMessages(liveMsgs.map(m => ({
-              id: m.id,
-              senderId: m.sender_id,
-              text: m.text,
-              sticker: m.sticker,
-              reaction: m.reaction,
-              mediaUrl: m.media_url,
-              mediaType: m.media_type,
-              timestamp: m.created_at,
-            })));
+          if (liveMsgs) {
+            setMessages((prev) => {
+              const formatted = liveMsgs.map((m: any) => ({
+                id: m.id,
+                senderId: m.sender_id,
+                text: m.text,
+                sticker: m.sticker,
+                reaction: m.reaction,
+                mediaUrl: m.media_url,
+                mediaType: m.media_type,
+                timestamp: m.created_at,
+              }));
+              // Smart diff check to avoid unnecessary re-renders while typing
+              const isDifferent =
+                formatted.length !== prev.length ||
+                formatted.some(
+                  (m, idx) =>
+                    prev[idx]?.id !== m.id ||
+                    prev[idx]?.reaction !== m.reaction ||
+                    prev[idx]?.text !== m.text
+                );
+              return isDifferent ? formatted : prev;
+            });
           }
         })
         .catch(() => {/* fallback */});
@@ -309,63 +321,103 @@ export default function PartnerPage() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageFile = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      let mediaType = 'document';
-      if (file.type.startsWith('image/')) mediaType = 'image';
-      else if (file.type.startsWith('video/')) mediaType = 'video';
+    let dataUrl = '';
+    let mediaType = 'document';
+    if (file.type.startsWith('image/')) {
+      mediaType = 'image';
+      dataUrl = await compressImageFile(file);
+    } else {
+      mediaType = file.type.startsWith('video/') ? 'video' : 'document';
+      dataUrl = await new Promise<string>((res) => {
+        const r = new FileReader();
+        r.onload = (ev) => res(ev.target?.result as string);
+        r.readAsDataURL(file);
+      });
+    }
 
-      const tempId = `msg-${Date.now()}`;
-      const myId = user?.id || (isPartner ? 'partner-john' : 'user-sarah');
+    if (!dataUrl) return;
 
-      const newMsg = {
-        id: tempId,
-        senderId: myId,
-        text: chatInput.trim() || '',
-        mediaUrl: dataUrl,
-        mediaType,
-        timestamp: new Date().toISOString(),
-      };
+    const tempId = `msg-${Date.now()}`;
+    const myId = user?.id || (isPartner ? 'partner-john' : 'user-sarah');
 
-      // Add to local state immediately so pic/attachment shows instantly
-      setMessages((prev) => [...prev, newMsg]);
-      setChatInput('');
-
-      try {
-        const { message: sentMsg } = await apiSendMessage(
-          'auto',
-          chatInput.trim() || undefined,
-          undefined,
-          dataUrl,
-          mediaType
-        );
-        if (sentMsg) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === tempId
-                ? {
-                    id: sentMsg.id,
-                    senderId: sentMsg.sender_id,
-                    text: sentMsg.text,
-                    sticker: sentMsg.sticker,
-                    mediaUrl: sentMsg.media_url,
-                    mediaType: sentMsg.media_type,
-                    timestamp: sentMsg.created_at,
-                  }
-                : m
-            )
-          );
-        }
-      } catch (err) {
-        console.log('Attachment upload fallback:', err);
-      }
+    const newMsg = {
+      id: tempId,
+      senderId: myId,
+      text: chatInput.trim() || '',
+      mediaUrl: dataUrl,
+      mediaType,
+      timestamp: new Date().toISOString(),
     };
-    reader.readAsDataURL(file);
+
+    // Add to local state immediately so pic/attachment shows instantly
+    setMessages((prev) => [...prev, newMsg]);
+    setChatInput('');
+
+    try {
+      const { message: sentMsg } = await apiSendMessage(
+        'auto',
+        chatInput.trim() || undefined,
+        undefined,
+        dataUrl,
+        mediaType
+      );
+      if (sentMsg) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? {
+                  id: sentMsg.id,
+                  senderId: sentMsg.sender_id,
+                  text: sentMsg.text,
+                  sticker: sentMsg.sticker,
+                  mediaUrl: sentMsg.media_url,
+                  mediaType: sentMsg.media_type,
+                  timestamp: sentMsg.created_at,
+                }
+              : m
+          )
+        );
+      }
+    } catch (err) {
+      console.log('Attachment upload fallback:', err);
+    }
   };
 
   const handleSendSticker = async (stickerLabel: string) => {
@@ -786,18 +838,23 @@ export default function PartnerPage() {
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0">
-                  <img 
-                    src={chatPartnerInfo?.avatar_url || user?.connectedPartner?.avatarUrl || (isPartner 
-                      ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
-                      : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80")}
-                    alt="Chat Avatar" 
-                    className="w-full h-full object-cover" 
-                  />
+                <div className="relative">
+                  <div className="w-9 h-9 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0">
+                    <img 
+                      src={chatPartnerInfo?.avatar_url || user?.connectedPartner?.avatarUrl || (isPartner 
+                        ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
+                        : "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80")}
+                      alt="Chat Avatar" 
+                      className="w-full h-full object-cover" 
+                    />
+                  </div>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-[#1c1230]" />
                 </div>
                 <div>
                   <h3 className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{chatPartnerInfo?.name || connectedPartnerName} ❤️</h3>
-                  <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff] block mt-0.5">Active Sync • Encrypted Chat</span>
+                  <span className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 flex items-center gap-1 block mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Online • Active Now
+                  </span>
                 </div>
               </div>
               <button
@@ -901,11 +958,29 @@ export default function PartnerPage() {
                               </span>
                             </div>
                           ) : (
-                            <span>
-                              {msg.text}
+                            <div>
+                              <span>{msg.text}</span>
                               {msg.is_edited && <span className="ml-1.5 text-[9px] opacity-50 italic">edited</span>}
-                            </span>
+                            </div>
                           )}
+
+                          {/* Timestamp & Ticks */}
+                          <div className={`flex items-center gap-1 justify-end mt-1 text-[9px] ${isSentByMe ? 'text-white/80' : 'text-gray-400'}`}>
+                            <span>
+                              {msg.timestamp
+                                ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : 'Just now'}
+                            </span>
+                            {isSentByMe && (
+                              msg.isRead ? (
+                                <CheckCheck className="w-3.5 h-3.5 text-sky-300 inline" />
+                              ) : msg.id.startsWith('msg-') ? (
+                                <Check className="w-3.5 h-3.5 text-white/60 inline" />
+                              ) : (
+                                <CheckCheck className="w-3.5 h-3.5 text-white/80 inline" />
+                              )
+                            )}
+                          </div>
 
                           {/* Reaction badge */}
                           {msg.reaction && (
