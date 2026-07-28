@@ -46,6 +46,16 @@ interface AppState {
   waterIntake: number; // in ml
   waterGoal: number; // in ml
 
+  // Feature Toggles
+  featureToggles: {
+    waterEnabled: boolean;
+    moodEnabled: boolean;
+    symptomsEnabled: boolean;
+    chatNotifsEnabled: boolean;
+    skincareNotifsEnabled: boolean;
+  };
+  setFeatureToggle: (key: 'waterEnabled' | 'moodEnabled' | 'symptomsEnabled' | 'chatNotifsEnabled' | 'skincareNotifsEnabled', value: boolean) => void;
+
   // Actions
   setUser: (user: User | null) => void;
   setOnboardingStep: (step: number) => void;
@@ -116,6 +126,24 @@ export const useStore = create<AppState>((set, get) => ({
       }
     }
   },
+
+  // Feature Toggles
+  featureToggles: {
+    waterEnabled: true,
+    moodEnabled: true,
+    symptomsEnabled: true,
+    chatNotifsEnabled: true,
+    skincareNotifsEnabled: true,
+  },
+
+  setFeatureToggle: (key, value) =>
+    set((state) => {
+      const nextToggles = { ...state.featureToggles, [key]: value };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nyra_feature_toggles', JSON.stringify(nextToggles));
+      }
+      return { featureToggles: nextToggles };
+    }),
 
   // Auth state — start as null to match SSR (cache restored in _app.tsx useEffect)
   user: null,

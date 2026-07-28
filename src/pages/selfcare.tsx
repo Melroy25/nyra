@@ -737,74 +737,126 @@ export default function SelfCarePage() {
 
             </div>
 
-            {/* Right Column Water Intake Tracker */}
-            <div className="md:col-span-4">
-              <div className="glass-card rounded-2xl p-6 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col items-center justify-between text-center relative overflow-hidden h-full min-h-[360px]">
-                <div className="absolute -bottom-16 w-64 h-64 bg-primary/10 rounded-full blur-3xl"></div>
-                
-                <div className="space-y-2 z-10 w-full">
-                  <div className="flex justify-between items-center w-full mb-2">
-                    <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner">
-                      <Droplet className="w-5 h-5 fill-current" />
+            {/* Right Column Water Intake Tracker & Graph */}
+            {useStore.getState().featureToggles.waterEnabled && (
+              <div className="md:col-span-4 flex flex-col gap-4">
+                <div className="glass-card rounded-2xl p-6 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col items-center justify-between text-center relative overflow-hidden h-full min-h-[360px]">
+                  <div className="absolute -bottom-16 w-64 h-64 bg-primary/10 rounded-full blur-3xl"></div>
+                  
+                  <div className="space-y-2 z-10 w-full">
+                    <div className="flex justify-between items-center w-full mb-2">
+                      <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner">
+                        <Droplet className="w-5 h-5 fill-current" />
+                      </div>
+                      {/* Edit Goal Button */}
+                      <button
+                        onClick={() => {
+                          setCustomWaterGoal(waterGoal);
+                          setShowWaterGoalModal(true);
+                        }}
+                        className="px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary dark:text-[#d4b8ff] text-xs font-bold flex items-center gap-1 transition-colors border border-primary/20"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" /> Edit Goal
+                      </button>
                     </div>
-                    {/* Edit Goal Button */}
-                    <button
-                      onClick={() => {
-                        setCustomWaterGoal(waterGoal);
-                        setShowWaterGoalModal(true);
-                      }}
-                      className="px-3 py-1 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary dark:text-[#d4b8ff] text-xs font-bold flex items-center gap-1 transition-colors border border-primary/20"
+
+                    <h3 className="font-serif font-bold text-xl text-on-background dark:text-[#eee6ff]">Hydration Goal</h3>
+                    <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] font-semibold">Keep hydration steady to relieve body cramps.</p>
+                  </div>
+
+                  <div className="relative w-40 h-40 flex items-center justify-center my-6 z-10 shrink-0">
+                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                      <path className="text-surface-dim" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="2.5"></path>
+                      <path 
+                        className="text-primary" 
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeDasharray={`${Math.min(100, Math.round((waterIntake / waterGoal) * 100))}, 100`} 
+                        strokeLinecap="round" 
+                        strokeWidth="2.5"
+                      ></path>
+                    </svg>
+                    <div className="absolute flex flex-col items-center justify-center">
+                      <span className="font-serif font-bold text-2xl text-on-surface dark:text-[#eee6ff]">{waterIntake} ml</span>
+                      <span className="text-[10px] text-on-surface-variant dark:text-[#c8bedd] font-bold uppercase tracking-wider mt-0.5">GOAL {waterGoal}ML</span>
+                    </div>
+                  </div>
+
+                  <div className="w-full flex gap-2 z-10">
+                    <button 
+                      onClick={() => addWater(250)}
+                      className="flex-1 py-2 rounded-2xl border border-primary/20 dark:border-primary/30 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
                     >
-                      <Edit3 className="w-3.5 h-3.5" /> Edit Goal
+                      +250 ml
+                    </button>
+                    <button 
+                      onClick={() => addWater(500)}
+                      className="flex-1 py-2 rounded-2xl border border-primary/20 dark:border-primary/30 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
+                    >
+                      +500 ml
+                    </button>
+                    <button 
+                      onClick={resetWater}
+                      className="p-2 text-on-surface-variant dark:text-[#c8bedd] hover:text-error hover:bg-white/40 dark:hover:bg-white/10 rounded-xl transition-colors"
+                      title="Reset Water Intake"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-
-                  <h3 className="font-serif font-bold text-xl text-on-background dark:text-[#eee6ff]">Hydration Goal</h3>
-                  <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] font-semibold">Keep hydration steady to relieve body cramps.</p>
                 </div>
 
-                <div className="relative w-40 h-40 flex items-center justify-center my-6 z-10 shrink-0">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                    <path className="text-surface-dim" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="2.5"></path>
-                    <path 
-                      className="text-primary" 
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeDasharray={`${Math.min(100, Math.round((waterIntake / waterGoal) * 100))}, 100`} 
-                      strokeLinecap="round" 
-                      strokeWidth="2.5"
-                    ></path>
-                  </svg>
-                  <div className="absolute flex flex-col items-center justify-center">
-                    <span className="font-serif font-bold text-2xl text-on-surface dark:text-[#eee6ff]">{waterIntake} ml</span>
-                    <span className="text-[10px] text-on-surface-variant dark:text-[#c8bedd] font-bold uppercase tracking-wider mt-0.5">GOAL {waterGoal}ML</span>
+                {/* 📊 Weekly Water Intake Graph Widget */}
+                <div className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-serif font-bold text-sm text-on-background dark:text-[#eee6ff] flex items-center gap-1.5">
+                      <Droplet className="w-4 h-4 text-cyan-500" />
+                      <span>Weekly Water Graph</span>
+                    </h4>
+                    <span className="text-[10px] font-bold text-primary dark:text-[#d4b8ff]">
+                      Today: {waterIntake} ml
+                    </span>
+                  </div>
+
+                  {/* Bar Chart Container */}
+                  <div className="flex items-end justify-between h-32 pt-4 pb-1 px-2 gap-1.5 border-b border-black/5 dark:border-white/5">
+                    {[
+                      { day: 'Mon', amount: 1750 },
+                      { day: 'Tue', amount: 2000 },
+                      { day: 'Wed', amount: 1500 },
+                      { day: 'Thu', amount: 2250 },
+                      { day: 'Fri', amount: 1800 },
+                      { day: 'Sat', amount: 2000 },
+                      { day: 'Sun', amount: waterIntake, isToday: true },
+                    ].map((d) => {
+                      const heightPercent = Math.min(100, Math.max(10, Math.round((d.amount / waterGoal) * 100)));
+                      return (
+                        <div key={d.day} className="flex-1 flex flex-col items-center gap-1.5 group h-full justify-end">
+                          <span className="text-[9px] font-bold text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">
+                            {d.amount}
+                          </span>
+                          <div className="w-full max-w-[24px] bg-cyan-500/10 dark:bg-cyan-500/20 rounded-t-lg relative overflow-hidden h-full flex items-end">
+                            <motion.div
+                              initial={{ height: 0 }}
+                              animate={{ height: `${heightPercent}%` }}
+                              transition={{ duration: 0.5 }}
+                              className={`w-full rounded-t-lg ${
+                                d.isToday
+                                  ? 'bg-gradient-to-t from-primary to-cyan-400 shadow-md'
+                                  : 'bg-primary/50 dark:bg-primary/40'
+                              }`}
+                            />
+                          </div>
+                          <span className={`text-[10px] font-bold ${d.isToday ? 'text-primary dark:text-[#d4b8ff]' : 'text-on-surface-variant'}`}>
+                            {d.day}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-
-                <div className="w-full flex gap-2 z-10">
-                  <button 
-                    onClick={() => addWater(250)}
-                    className="flex-1 py-2 rounded-2xl border border-primary/20 dark:border-primary/30 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
-                  >
-                    +250 ml
-                  </button>
-                  <button 
-                    onClick={() => addWater(500)}
-                    className="flex-1 py-2 rounded-2xl border border-primary/20 dark:border-primary/30 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
-                  >
-                    +500 ml
-                  </button>
-                  <button 
-                    onClick={resetWater}
-                    className="p-2 text-on-surface-variant dark:text-[#c8bedd] hover:text-error hover:bg-white/40 dark:hover:bg-white/10 rounded-xl transition-colors"
-                    title="Reset Water Intake"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
               </div>
-            </div>
+            )}
 
           </motion.div>
         )}

@@ -7,7 +7,7 @@ import { requestNativeNotificationPermission, sendNativeNotification } from '../
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, setUser } = useStore();
+  const { user, setUser, featureToggles, setFeatureToggle } = useStore();
   const [isSaved, setIsSaved] = useState(false);
 
   // Notification toggles — loaded from Supabase
@@ -193,7 +193,7 @@ export default function SettingsPage() {
       <section className="glass-card rounded-xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm space-y-4">
         <h3 className="font-serif font-bold text-lg text-on-background dark:text-[#eee6ff] flex items-center gap-2 mb-2">
           <Bell className="w-4 h-4 text-primary" />
-          <span>Notifications &amp; Reminders</span>
+          <span>{user?.role === 'partner' ? 'Partner Notifications & Reminders' : 'Notifications & Reminders'}</span>
         </h3>
 
         <div className="flex items-start gap-3 bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-xl p-3">
@@ -209,13 +209,18 @@ export default function SettingsPage() {
               <Loader2 className="w-5 h-5 text-primary animate-spin" />
             </div>
           ) : (
-            [
+            (user?.role === 'partner' ? [
+              { label: 'Period Reminders', desc: 'Device alerts 3, 2, and 1 day before her predicted period starts.', key: 'period' },
+              { label: 'Fertile Window Alerts', desc: 'Native alerts at the start of her ovulation window.', key: 'ovulation' },
+              { label: 'Chat Message Notifications', desc: 'Get device alerts when she sends chat messages or stickers.', key: 'partnerUpdates' },
+            ] : [
               { label: 'Period Reminders', desc: 'Device alerts 2 days before your predicted period starts.', key: 'period' },
               { label: 'Fertile Window Alerts', desc: 'Native alerts at the start of your ovulation window.', key: 'ovulation' },
-              { label: 'Water Reminders', desc: 'Hourly device alerts to hit your daily hydration goal.', key: 'water' },
-              { label: 'Daily Check-In', desc: 'Morning reminder to log your mood and symptoms.', key: 'dailyCheckins' },
-              { label: 'Partner Updates', desc: 'Get device alerts when your partner sends notes or stickers.', key: 'partnerUpdates' },
-            ].map((item) => {
+              { label: 'Daily Check-In', desc: 'Morning reminder to log your daily mood and symptoms.', key: 'dailyCheckins' },
+              { label: 'Chat Message Notifications', desc: 'Get device alerts when your partner sends chat messages.', key: 'partnerUpdates' },
+              { label: 'Medications & Skincare Reminders', desc: 'Device alerts at your scheduled times for medications and skincare.', key: 'medication' },
+              { label: 'Water Drink Reminders', desc: 'Periodic device alerts to stay hydrated and hit your goal.', key: 'water' },
+            ]).map((item) => {
               const isChecked = reminders[item.key as keyof typeof reminders];
               return (
                 <div key={item.key} className="flex justify-between items-center py-2 border-b border-outline-variant/10">
@@ -235,6 +240,57 @@ export default function SettingsPage() {
           )}
         </div>
       </section>
+
+      {/* App Feature Customization (Show / Hide Features) */}
+      {user?.role !== 'partner' ? (
+        <section className="glass-card rounded-xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm space-y-4">
+          <h3 className="font-serif font-bold text-lg text-on-background dark:text-[#eee6ff] flex items-center gap-2 mb-2">
+            <Smartphone className="w-4 h-4 text-secondary" />
+            <span>Feature Controls (Show / Hide Modules)</span>
+          </h3>
+
+          <div className="flex flex-col gap-3">
+            {[
+              { 
+                label: 'Water Tracker & Weekly Graph', 
+                desc: 'If turned OFF, the entire Water Tracking card & graph will be hidden across Dashboard & Routines.', 
+                key: 'waterEnabled' 
+              },
+              { 
+                label: 'Mood Tracking Module', 
+                desc: 'If turned OFF, Mood logging shortcuts & analytics will be hidden.', 
+                key: 'moodEnabled' 
+              },
+              { 
+                label: 'Symptoms Logging Module', 
+                desc: 'If turned OFF, Symptoms logging shortcuts & analytics will be hidden.', 
+                key: 'symptomsEnabled' 
+              },
+            ].map((feat) => {
+              const isEnabled = featureToggles ? Boolean(featureToggles[feat.key as keyof typeof featureToggles]) : true;
+              return (
+                <div key={feat.key} className="flex justify-between items-center py-2 border-b border-outline-variant/10">
+                  <div className="space-y-0.5 pr-4">
+                    <h4 className="text-sm font-bold text-on-surface dark:text-[#eee6ff]">{feat.label}</h4>
+                    <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] font-semibold leading-normal">{feat.desc}</p>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (setFeatureToggle) {
+                        setFeatureToggle(feat.key as any, !isEnabled);
+                      }
+                    }}
+                    className={`p-1 transition-colors ${isEnabled ? 'text-secondary' : 'text-outline-variant'}`}
+                  >
+                    {isEnabled ? <ToggleRight className="w-9 h-9" /> : <ToggleLeft className="w-9 h-9" />}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {/* Partner Sharing Permissions */}
       <section className="glass-card rounded-xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm space-y-4">

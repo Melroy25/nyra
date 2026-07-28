@@ -122,21 +122,23 @@ export default function DashboardPage() {
   // Progress fraction for the ring
   const progressFraction = Math.max(0.02, currentCycleDay / (cycleMetrics?.cycleLength ?? 28));
 
+  const featureToggles = useStore((state) => state.featureToggles);
+
   // Quick actions layout (Log Mood, Symptoms, Add Water)
   const quickActions = [
-    { label: 'Log Mood', icon: Smile,    path: '/mood',     color: 'text-tertiary',  iconBg: 'bg-tertiary/10 dark:bg-tertiary/20' },
-    { label: 'Symptoms', icon: Activity, path: '/symptoms', color: 'text-secondary', iconBg: 'bg-secondary/10 dark:bg-secondary/20' },
-    { label: 'Add Water', icon: Droplet, onClick: () => addWater(250), color: 'text-cyan-500', iconBg: 'bg-cyan-500/10 dark:bg-cyan-500/20' },
-  ];
+    featureToggles?.moodEnabled && { label: 'Log Mood', icon: Smile, path: '/mood', color: 'text-tertiary', iconBg: 'bg-tertiary/10 dark:bg-tertiary/20' },
+    featureToggles?.symptomsEnabled && { label: 'Symptoms', icon: Activity, path: '/symptoms', color: 'text-secondary', iconBg: 'bg-secondary/10 dark:bg-secondary/20' },
+    featureToggles?.waterEnabled && { label: 'Add Water', icon: Droplet, onClick: () => addWater(250), color: 'text-cyan-500', iconBg: 'bg-cyan-500/10 dark:bg-cyan-500/20' },
+  ].filter(Boolean) as any[];
 
   const waterPercent = Math.min(100, Math.round((waterIntake / waterGoal) * 100));
 
   const stats = [
-    { label: 'Mood',     value: todayMood || 'Not logged',          icon: Smile,       bg: 'bg-tertiary/12 dark:bg-[#a0517a]/25',  color: 'text-tertiary dark:text-[#ffaeda]' },
-    { label: 'Water',    value: `${waterIntake} / ${waterGoal} ml`,  icon: Droplet,     bg: 'bg-cyan-500/12 dark:bg-cyan-500/25',   color: 'text-cyan-500 dark:text-cyan-400' },
-    { label: 'Phase',    value: currentCyclePhase,                   icon: Moon,        bg: 'bg-secondary/12 dark:bg-[#7b5ea7]/25', color: 'text-secondary dark:text-[#ccbeff]' },
-    { label: 'Symptoms', value: todaySymptoms.length ? todaySymptoms.slice(0, 2).join(', ') : 'None logged', icon: HeartPulse, bg: 'bg-on-surface/8 dark:bg-white/8', color: 'text-on-surface dark:text-[#eee6ff]' },
-  ];
+    featureToggles?.moodEnabled && { label: 'Mood', value: todayMood || 'Not logged', icon: Smile, bg: 'bg-tertiary/12 dark:bg-[#a0517a]/25', color: 'text-tertiary dark:text-[#ffaeda]' },
+    featureToggles?.waterEnabled && { label: 'Water', value: `${waterIntake} / ${waterGoal} ml`, icon: Droplet, bg: 'bg-cyan-500/12 dark:bg-cyan-500/25', color: 'text-cyan-500 dark:text-cyan-400' },
+    { label: 'Phase', value: currentCyclePhase, icon: Moon, bg: 'bg-secondary/12 dark:bg-[#7b5ea7]/25', color: 'text-secondary dark:text-[#ccbeff]' },
+    featureToggles?.symptomsEnabled && { label: 'Symptoms', value: todaySymptoms.length ? todaySymptoms.slice(0, 2).join(', ') : 'None logged', icon: HeartPulse, bg: 'bg-on-surface/8 dark:bg-white/8', color: 'text-on-surface dark:text-[#eee6ff]' },
+  ].filter(Boolean) as any[];
 
   // Insight message based on real phase
   const phaseInsight: Record<string, string> = {
