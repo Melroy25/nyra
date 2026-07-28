@@ -2,18 +2,34 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
+import { authRateLimiter, getClientIp } from '../../../lib/rateLimit';
+import { isValidEmail, isValidPassword, sanitizeString } from '../../../lib/validator';
+import { logger } from '../../../lib/logger';
 
 // POST /api/auth/login
 // Body: { email, password }
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' });
+  // Rate Limiting
+  const allowed = await authRateLimiter(req, res, req.body?.email);
+  if (!allowed) return;
+
+  const emailRaw = req.body?.email;
+  const password = req.body?.password;
+
+  if (!emailRaw || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
   }
 
-  // Use ANON key client for signInWithPassword (this is what Supabase auth requires)
+  if (!isValidEmail(emailRaw) || !isValidPassword(password)) {
+    logger.security('INVALID_LOGIN_INPUT_FORMAT', { ip: getClientIp(req), email: emailRaw });
+    return res.status(400).json({ error: 'Invalid email or password format.' });
+  }
+
+  const email = emailRaw.trim().toLowerCase();
+
+  // Use ANON key client for signInWithPassword (Supabase auth)
   const supabaseAnon = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -23,63 +39,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // 1. Sign in via Supabase Auth using anon client
     const { data: authData, error: authError } = await supabaseAnon.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
+      email,
       password,
     });
 
     if (authError || !authData?.user) {
-      console.error('Supabase auth error:', authError?.message);
-      return res.status(401).json({ error: authError?.message || 'Invalid email or password' });
+      logger.security('FAILED_LOGIN_ATTEMPT', { ip: getClientIp(req), email });
+      return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
     const supabase = supabaseAdmin();
 
     // 2. Fetch user profile using admin client
-    const { data: userProfile, error: profileError } = await supabase
+    let { data: userProfile, error: profileError } = await supabase
       .from('users')
       .select('*')
       .eq('auth_id', authData.user.id)
       .maybeSingle();
 
     if (profileError || !userProfile) {
-      console.error('Profile fetch error:', profileError?.message, 'auth_id:', authData.user.id);
       // Profile missing but auth exists — create basic profile
       const partnerCode = `NYRA-${Math.floor(10000 + Math.random() * 90000)}`;
-      const { data: newProfile } = await supabase
+      const { data: newProfile, error: createProfileErr } = await supabase
         .from('users')
         .insert({
           auth_id: authData.user.id,
-          email: email.trim().toLowerCase(),
-          name: authData.user.user_metadata?.name || email.split('@')[0],
+          email,
+          name: sanitizeString(authData.user.user_metadata?.name || email.split('@')[0], 50),
           role: 'user',
           partner_code: partnerCode,
         })
         .select()
         .single();
 
-      if (!newProfile) {
-        return res.status(404).json({ error: 'User profile not found. Please create an account.' });
+      if (createProfileErr || !newProfile) {
+        logger.error('Failed to auto-create user profile', createProfileErr);
+        return res.status(500).json({ error: 'User profile initialization failed.' });
       }
 
-      const token = jwt.sign(
-        { userId: newProfile.id, email: newProfile.email, role: newProfile.role, authId: authData.user.id },
-        process.env.JWT_SECRET!,
-        { expiresIn: '30d' }
-      );
-
-      return res.status(200).json({
-        token,
-        user: {
-          id: newProfile.id,
-          email: newProfile.email,
-          name: newProfile.name,
-          role: newProfile.role,
-          partnerCode: newProfile.partner_code,
-          connectedPartnerId: null,
-          connectedPartner: null,
-          onboardingCompleted: false,
-        },
-      });
+      userProfile = newProfile;
     }
 
     // 3. Fetch connected partner info if any
@@ -93,7 +91,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       connectedPartner = partner;
     }
 
-    // 4. Sign JWT
+    // 4. Sign JWT with strong secret & standard payload
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      logger.error('JWT_SECRET is missing from environment variables');
+      return res.status(500).json({ error: 'Server authentication configuration error.' });
+    }
+
     const token = jwt.sign(
       {
         userId: userProfile.id,
@@ -101,9 +105,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         role: userProfile.role,
         authId: authData.user.id,
       },
-      process.env.JWT_SECRET!,
+      secret,
       { expiresIn: '30d' }
     );
+
+    logger.info('User logged in successfully', { userId: userProfile.id, ip: getClientIp(req) });
 
     return res.status(200).json({
       token,
@@ -126,7 +132,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
   } catch (err: any) {
-    console.error('Login API error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    logger.error('Login handler unexpected error', err);
+    return res.status(500).json({ error: 'An unexpected error occurred. Please try again later.' });
   }
 }

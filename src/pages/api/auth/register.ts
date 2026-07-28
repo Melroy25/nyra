@@ -1,17 +1,36 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { authRateLimiter, getClientIp } from '../../../lib/rateLimit';
+import { isValidEmail, isValidPassword, sanitizeString } from '../../../lib/validator';
+import { logger } from '../../../lib/logger';
 
 // POST /api/auth/register
 // Body: { email, password, name, role }
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { email, password, name, role = 'user' } = req.body;
-  if (!email || !password || !name) {
-    return res.status(400).json({ error: 'Email, password, and name are required' });
+  // Rate Limiting
+  const allowed = await authRateLimiter(req, res, req.body?.email);
+  if (!allowed) return;
+
+  const { email: emailRaw, password, name: nameRaw, role = 'user' } = req.body || {};
+  if (!emailRaw || !password || !nameRaw) {
+    return res.status(400).json({ error: 'Email, password, and name are required.' });
   }
+
+  if (!isValidEmail(emailRaw)) {
+    return res.status(400).json({ error: 'Invalid email address format.' });
+  }
+
+  if (!isValidPassword(password)) {
+    return res.status(400).json({ error: 'Password must be between 6 and 128 characters.' });
+  }
+
+  const email = emailRaw.trim().toLowerCase();
+  const name = sanitizeString(nameRaw, 60);
+  const allowedRoles = ['user', 'partner'];
+  const sanitizedRole = allowedRoles.includes(role) ? role : 'user';
 
   const supabase = supabaseAdmin();
 
@@ -24,10 +43,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     if (authError) {
-      if (authError.message.includes('already registered')) {
-        return res.status(409).json({ error: 'Email already in use' });
+      if (authError.message.includes('already registered') || authError.message.includes('already been registered')) {
+        return res.status(409).json({ error: 'An account with this email already exists.' });
       }
-      return res.status(400).json({ error: authError.message });
+      return res.status(400).json({ error: 'Registration failed. Please check your details.' });
     }
 
     // 2. Generate unique partner code
@@ -40,7 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         auth_id: authData.user.id,
         email,
         name,
-        role,
+        role: sanitizedRole,
         partner_code: partnerCode,
       })
       .select()
@@ -49,18 +68,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (profileError) {
       // Cleanup auth user if profile creation fails
       await supabase.auth.admin.deleteUser(authData.user.id);
-      return res.status(500).json({ error: 'Failed to create user profile' });
+      logger.error('Failed to create user profile in DB', profileError);
+      return res.status(500).json({ error: 'Failed to complete registration profile.' });
     }
 
     // 4. Create default notification settings
     await supabase.from('notification_settings').insert({ user_id: userProfile.id });
 
-    // 5. Sign JWT for the session
+    // 5. Sign JWT for session
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      logger.error('JWT_SECRET missing during registration');
+      return res.status(500).json({ error: 'Server authentication configuration error.' });
+    }
+
     const token = jwt.sign(
-      { userId: userProfile.id, email, role, authId: authData.user.id },
-      process.env.JWT_SECRET!,
+      { userId: userProfile.id, email, role: sanitizedRole, authId: authData.user.id },
+      secret,
       { expiresIn: '30d' }
     );
+
+    logger.info('New user registered successfully', { userId: userProfile.id, ip: getClientIp(req) });
 
     return res.status(201).json({
       token,
@@ -68,13 +96,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         id: userProfile.id,
         email,
         name,
-        role,
+        role: sanitizedRole,
         partnerCode,
         onboardingCompleted: false,
       },
     });
   } catch (err: any) {
-    console.error('Register error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    logger.error('Register handler unexpected error', err);
+    return res.status(500).json({ error: 'An unexpected error occurred during registration.' });
   }
 }

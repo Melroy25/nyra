@@ -2,15 +2,20 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { createClient } from '@supabase/supabase-js';
 import { withAuth, AuthUser } from '../../../lib/withAuth';
+import { strictApiRateLimiter, getClientIp } from '../../../lib/rateLimit';
+import { logger } from '../../../lib/logger';
 
 // POST /api/users/delete-account
 // Body: { password }
 async function handler(req: NextApiRequest, res: NextApiResponse, authUser: AuthUser) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { password } = req.body;
+  const allowed = await strictApiRateLimiter(req, res, authUser.userId);
+  if (!allowed) return;
+
+  const { password } = req.body || {};
   if (!password) {
-    return res.status(400).json({ error: 'Password is required to confirm account deletion' });
+    return res.status(400).json({ error: 'Password is required to confirm account deletion.' });
   }
 
   const supabase = supabaseAdmin();
@@ -24,7 +29,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .single();
 
     if (profileError || !userProfile) {
-      return res.status(404).json({ error: 'User profile not found' });
+      return res.status(404).json({ error: 'User profile not found.' });
     }
 
     // 2. Verify password with Supabase Auth (using anon client)
@@ -40,6 +45,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     });
 
     if (authError) {
+      logger.security('FAILED_ACCOUNT_DELETION_PASSWORD', { userId: authUser.userId, ip: getClientIp(req) });
       return res.status(401).json({ error: 'Incorrect password. Account deletion canceled.' });
     }
 
@@ -51,10 +57,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       await supabase.auth.admin.deleteUser(userProfile.auth_id);
     }
 
-    return res.status(200).json({ success: true, message: 'Account deleted successfully' });
+    logger.security('ACCOUNT_DELETED', { userId: authUser.userId, ip: getClientIp(req) });
+
+    return res.status(200).json({ success: true, message: 'Account deleted successfully.' });
   } catch (err: any) {
-    console.error('Delete account error:', err);
-    return res.status(500).json({ error: 'Internal server error while deleting account' });
+    logger.error('Delete account handler error', err);
+    return res.status(500).json({ error: 'An error occurred while deleting account.' });
   }
 }
 

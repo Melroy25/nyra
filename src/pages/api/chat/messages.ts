@@ -2,6 +2,9 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { withAuth, AuthUser } from '../../../lib/withAuth';
 import { sendPushToUser } from '../push/send';
+import { apiRateLimiter } from '../../../lib/rateLimit';
+import { sanitizeString } from '../../../lib/validator';
+import { logger } from '../../../lib/logger';
 
 export const config = {
   api: {
@@ -67,6 +70,9 @@ async function getOrCreateThread(supabase: any, userId: string, connectedPartner
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handler(req: NextApiRequest, res: NextApiResponse, authUser: AuthUser) {
+  const allowed = await apiRateLimiter(req, res, authUser.userId);
+  if (!allowed) return;
+
   const supabase = supabaseAdmin();
 
   // ── GET: fetch messages + partner info ────────────────────────────────────
@@ -154,10 +160,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
   // ── POST: send message ────────────────────────────────────────────────────
   if (req.method === 'POST') {
-    let { threadId, text, sticker, mediaUrl, mediaType, replyTo } = req.body;
+    let { threadId, text, sticker, mediaUrl, mediaType, replyTo } = req.body || {};
 
     if (!text && !sticker && !mediaUrl) {
       return res.status(400).json({ error: 'No content provided.' });
+    }
+
+    // Input sanitization & size limits
+    if (text && typeof text === 'string' && text.length > 5000) {
+      return res.status(400).json({ error: 'Message text exceeds limit of 5000 characters.' });
+    }
+
+    // Validate mediaUrl if provided (prevent SSRF/XSS javascript: URLs)
+    if (mediaUrl && typeof mediaUrl === 'string') {
+      if (!mediaUrl.startsWith('data:') && !mediaUrl.startsWith('http://') && !mediaUrl.startsWith('https://') && !mediaUrl.startsWith('/')) {
+        return res.status(400).json({ error: 'Invalid media URL scheme.' });
+      }
     }
 
     if (!threadId || threadId === 'auto') {
@@ -176,10 +194,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       thread_id: threadId,
       sender_id: authUser.userId,
     };
-    if (text) insertPayload.text = text;
-    if (sticker) insertPayload.sticker = sticker;
+    if (text) insertPayload.text = sanitizeString(text, 5000);
+    if (sticker) insertPayload.sticker = sanitizeString(sticker, 100);
     if (mediaUrl) insertPayload.media_url = mediaUrl;
-    if (mediaType) insertPayload.media_type = mediaType;
+    if (mediaType) insertPayload.media_type = sanitizeString(mediaType, 50);
     if (replyTo) insertPayload.reply_to = replyTo;
 
     let { data: message, error } = await supabase
