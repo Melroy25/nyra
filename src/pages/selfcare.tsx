@@ -317,6 +317,8 @@ export default function SelfCarePage() {
     e.preventDefault();
     if (!editingSkincareType) return;
 
+    const formattedTime = normalizeTimeString(tempSkincareTime);
+
     const newStepsObj = tempSkincareSteps.map((name, i) => ({
       id: `${editingSkincareType}-${i}-${Date.now()}`,
       name,
@@ -325,13 +327,13 @@ export default function SelfCarePage() {
 
     if (editingSkincareType === 'morning') {
       setMorningSkincare({
-        time: tempSkincareTime,
+        time: formattedTime,
         notify: tempSkincareNotify,
         steps: newStepsObj,
       });
     } else {
       setNightSkincare({
-        time: tempSkincareTime,
+        time: formattedTime,
         notify: tempSkincareNotify,
         steps: newStepsObj,
       });
@@ -339,6 +341,30 @@ export default function SelfCarePage() {
 
     setEditingSkincareType(null);
   };
+
+  // Helper helper to normalize user entered time strings
+  function normalizeTimeString(str: string): string {
+    if (!str) return '08:00 AM';
+    const clean = str.trim().toLowerCase();
+    const match = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+    if (match) {
+      let hrs = parseInt(match[1], 10);
+      const mins = match[2] ? parseInt(match[2], 10) : 0;
+      const period = match[3].toUpperCase();
+      if (hrs === 0) hrs = 12;
+      if (hrs > 12) hrs = hrs % 12 || 12;
+      return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${period}`;
+    }
+    const match24 = clean.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) {
+      let hrs = parseInt(match24[1], 10);
+      const mins = parseInt(match24[2], 10);
+      const period = hrs >= 12 ? 'PM' : 'AM';
+      hrs = hrs % 12 === 0 ? 12 : hrs % 12;
+      return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${period}`;
+    }
+    return str.trim();
+  }
 
   // ── HYDRATION HANDLERS ───────────────────────────────────────────────────
   const handleSaveWaterGoal = () => {

@@ -224,12 +224,128 @@ export default function App({ Component, pageProps }: AppProps) {
     return () => clearInterval(interval);
   }, [user?.id]);
 
+  // ── Real-Time Scheduled Routine Notification Inspector ──
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const checkScheduledRoutines = () => {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentPeriod = currentHours >= 12 ? 'PM' : 'AM';
+      const displayHours12 = currentHours % 12 === 0 ? 12 : currentHours % 12;
+
+      const nowSig = `${String(displayHours12).padStart(2, '0')}:${String(currentMinutes).padStart(2, '0')} ${currentPeriod}`;
+      const todayStr = now.toISOString().slice(0, 10);
+
+      const storageKey = `nyra_notified_routines_${todayStr}`;
+      let notifiedSet = new Set<string>();
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) notifiedSet = new Set(JSON.parse(saved));
+      } catch (e) {}
+
+      // A. Morning Skincare
+      try {
+        const mSaved = localStorage.getItem('nyra_skincare_morning');
+        if (mSaved) {
+          const mSkincare = JSON.parse(mSaved);
+          if (mSkincare && mSkincare.notify !== false && mSkincare.time) {
+            const timeSig = parseAndNormalizeTime(mSkincare.time);
+            const alertKey = `morning-${timeSig}`;
+            if (timeSig === nowSig && !notifiedSet.has(alertKey)) {
+              notifiedSet.add(alertKey);
+              localStorage.setItem(storageKey, JSON.stringify(Array.from(notifiedSet)));
+              sendNativeNotification('Morning Skincare Time! ☀️', {
+                body: 'Time for your morning skincare routine: Gentle Face Wash, Vitamin C Serum & Sunscreen!',
+                tag: `skincare-morning-${todayStr}`,
+              });
+            }
+          }
+        }
+      } catch (e) {}
+
+      // B. Night Skincare
+      try {
+        const nSaved = localStorage.getItem('nyra_skincare_night');
+        if (nSaved) {
+          const nSkincare = JSON.parse(nSaved);
+          if (nSkincare && nSkincare.notify !== false && nSkincare.time) {
+            const timeSig = parseAndNormalizeTime(nSkincare.time);
+            const alertKey = `night-${timeSig}`;
+            if (timeSig === nowSig && !notifiedSet.has(alertKey)) {
+              notifiedSet.add(alertKey);
+              localStorage.setItem(storageKey, JSON.stringify(Array.from(notifiedSet)));
+              sendNativeNotification('Night Skincare Time! 🌙', {
+                body: 'Time for your night skincare routine: Double Cleanser, Retinol & Repair Cream!',
+                tag: `skincare-night-${todayStr}`,
+              });
+            }
+          }
+        }
+      } catch (e) {}
+
+      // C. Medications & Daily Supplements
+      try {
+        const routinesState = useStore.getState().routines || [];
+        routinesState.forEach((rt) => {
+          if (rt && rt.time && !rt.completed) {
+            const timeSig = parseAndNormalizeTime(rt.time);
+            const alertKey = `rt-${rt.id}-${timeSig}`;
+            if (timeSig === nowSig && !notifiedSet.has(alertKey)) {
+              notifiedSet.add(alertKey);
+              localStorage.setItem(storageKey, JSON.stringify(Array.from(notifiedSet)));
+              const icon = rt.type === 'medication' ? '💊' : '🌸';
+              sendNativeNotification(`${rt.type === 'medication' ? 'Medication' : 'Supplement'} Reminder ${icon}`, {
+                body: `Time to take your ${rt.name}!`,
+                tag: `routine-${rt.id}-${todayStr}`,
+              });
+            }
+          }
+        });
+      } catch (e) {}
+    };
+
+    checkScheduledRoutines();
+    const timer = setInterval(checkScheduledRoutines, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <Layout>
       <Component {...pageProps} />
       <PwaInstallPrompt />
     </Layout>
   );
+}
+
+// ── Time String Normalizer Helper ──
+function parseAndNormalizeTime(timeInput: string): string {
+  if (!timeInput) return '';
+  const clean = timeInput.trim().toLowerCase();
+
+  const match = clean.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+  if (match) {
+    let hrs = parseInt(match[1], 10);
+    const mins = match[2] ? parseInt(match[2], 10) : 0;
+    const period = match[3].toUpperCase();
+    if (hrs === 0) hrs = 12;
+    if (hrs > 12) hrs = hrs % 12 || 12;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${period}`;
+  }
+
+  const match24 = clean.match(/^(\d{1,2}):(\d{2})$/);
+  if (match24) {
+    let hrs = parseInt(match24[1], 10);
+    const mins = parseInt(match24[2], 10);
+    const period = hrs >= 12 ? 'PM' : 'AM';
+    hrs = hrs % 12 === 0 ? 12 : hrs % 12;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${period}`;
+  }
+
+  return timeInput.trim().toUpperCase();
 }
 
 // ── Native push notification scheduler ──
