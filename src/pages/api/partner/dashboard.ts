@@ -9,7 +9,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
   const supabase = supabaseAdmin();
 
   try {
-    // 1. Get current user profile (could be either role)
+    // 1. Get current user profile
     const { data: me } = await supabase
       .from('users')
       .select('id, name, role, connected_partner_id')
@@ -18,9 +18,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
     if (!me) return res.status(404).json({ error: 'User not found' });
 
-    // Determine whose cycle data to show
-    // - If partner role → show connected female user's data
-    // - If female user → show their own data (for their dashboard)
     const targetUserId = me.connected_partner_id || me.id;
 
     if (!me.connected_partner_id && me.role === 'partner') {
@@ -44,7 +41,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .order('date', { ascending: false })
       .limit(60);
 
-    // Calculate current day & phase from last ACTUAL (non-predicted) period
+    // 4. Calculate current cycle day & phase from last real period
     const periodLogs = (recentLogs || []).filter((l) => l.is_period && !l.is_predicted);
     const lastPeriodDate = periodLogs.length > 0 ? periodLogs[0].date : null;
 
@@ -65,130 +62,133 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       else currentPhase = 'Luteal Phase';
     }
 
-    // 4. Find the most recent log that actually has mood OR symptoms filled in
-    //    (could be different from the absolute most recent log date)
+    // 5. ONLY use TODAY's logged mood & symptoms — never fallback to old logs or phase defaults
+    const todayStr = new Date().toISOString().split('T')[0]; // "2026-07-28"
     const allLogs = recentLogs || [];
-    const latestLogWithMood = allLogs.find((l) => l.mood && l.mood.trim() !== '');
-    const latestLogWithSymptoms = allLogs.find((l) => Array.isArray(l.symptoms) && l.symptoms.length > 0);
-    const latestLog = allLogs[0]; // Most recent overall
+    const todayLog = allLogs.find((l) => l.date === todayStr);
 
-    // Extract best available mood & symptoms
-    const latestMood: string =
-      latestLogWithMood?.mood ||
-      latestLog?.mood ||
-      (currentPhase.includes('Ovulation')
-        ? 'Energetic & Happy'
-        : currentPhase.includes('Menstrual')
-        ? 'Sensitive & Resting'
-        : 'Calm & Balanced');
-
+    // null means not logged today
+    const latestMood: string | null = todayLog?.mood?.trim() || null;
     const latestSymptoms: string[] =
-      (latestLogWithSymptoms?.symptoms?.length ? latestLogWithSymptoms.symptoms : null) ||
-      (Array.isArray(latestLog?.symptoms) ? latestLog.symptoms : []);
+      todayLog && Array.isArray(todayLog.symptoms) && todayLog.symptoms.length > 0
+        ? todayLog.symptoms
+        : [];
 
-    const symptomsText =
-      latestSymptoms.length > 0 ? latestSymptoms.join(', ') : 'None logged recently';
+    const moodLogged = latestMood !== null;
+    const symptomsLogged = latestSymptoms.length > 0;
+    const symptomsText = symptomsLogged ? latestSymptoms.join(', ') : null;
 
     const userName = targetUser.name || 'her';
 
-    // 5. Energy level
-    let energyLevel = 'Moderate Energy';
-    const moodLower = latestMood.toLowerCase();
-    const hasAnxiety = moodLower.includes('anxious') || moodLower.includes('anxiety') || moodLower.includes('stress');
-    const hasSadness = moodLower.includes('sad') || moodLower.includes('low') || moodLower.includes('depress');
-    const hasHeadache = latestSymptoms.some((s) => s.toLowerCase().includes('headache') || s.toLowerCase().includes('migraine'));
-    const hasCramps = latestSymptoms.some((s) => s.toLowerCase().includes('cramp'));
-    const hasFatigue = latestSymptoms.some((s) => s.toLowerCase().includes('fatigue') || s.toLowerCase().includes('tired'));
+    // 6. Symptom/mood flags — only from real today's data
+    const moodLower = (latestMood || '').toLowerCase();
+    const hasAnxiety = moodLogged && (moodLower.includes('anxious') || moodLower.includes('anxiety') || moodLower.includes('stress'));
+    const hasSadness = moodLogged && (moodLower.includes('sad') || moodLower.includes('low') || moodLower.includes('depress'));
+    const hasHeadache = symptomsLogged && latestSymptoms.some((s) => s.toLowerCase().includes('headache') || s.toLowerCase().includes('migraine'));
+    const hasCramps = symptomsLogged && latestSymptoms.some((s) => s.toLowerCase().includes('cramp'));
+    const hasFatigue = symptomsLogged && latestSymptoms.some((s) => s.toLowerCase().includes('fatigue') || s.toLowerCase().includes('tired'));
 
-    if (hasFatigue || currentPhase.includes('Menstrual') || hasSadness) {
+    // 7. Energy level (phase-based is fine — it's cycle math, not user input)
+    let energyLevel = 'Moderate Energy';
+    if (hasFatigue || hasSadness || currentPhase.includes('Menstrual')) {
       energyLevel = 'Low Energy';
     } else if (currentPhase.includes('Ovulation')) {
       energyLevel = 'High Energy';
     }
 
-    // 6. Smart cravings based on real symptoms + mood
-    let cravings = 'Dark Chocolate & Chamomile Tea';
+    // 8. Cravings — only meaningful when symptoms/mood logged
+    let cravings: string | null = null;
     if (hasHeadache) {
       cravings = 'Water, Ginger Tea & Magnesium';
     } else if (hasCramps) {
       cravings = 'Warm Herbal Tea & Dark Chocolate';
-    } else if (hasFatigue || energyLevel === 'Low Energy') {
+    } else if (hasFatigue) {
       cravings = 'Magnesium Smoothie & Iron-rich Foods';
     } else if (hasAnxiety) {
       cravings = 'Chamomile Tea, Bananas & Comfort Food';
     }
 
-    // 7. Dynamic AI suggestions based on REAL mood & symptoms
-    const suggestions = [];
+    // 9. Smart AI suggestions based on real logged data
+    const suggestions: any[] = [];
 
-    // Suggestion 1 — Symptom-specific care
-    if (hasHeadache) {
+    if (!moodLogged && !symptomsLogged) {
+      // Nothing logged today — show phase-based general tip + prompt to check in
       suggestions.push({
-        icon: '🤕',
-        title: 'Headache Relief',
-        desc: `${userName} has logged a headache. Dim lights, offer water and a cold compress on her forehead. A gentle scalp massage or a quiet room can help more than medicine right now.`,
+        icon: currentPhase.includes('Menstrual') ? '🛋️' : currentPhase.includes('Ovulation') ? '💃' : currentPhase.includes('Follicular') ? '🌱' : '☕',
+        title: `${currentPhase} — Day ${currentDay}`,
+        desc: currentPhase.includes('Menstrual')
+          ? `${userName} is in her period phase. Provide warmth, gentle care, and check in on how she's feeling today.`
+          : currentPhase.includes('Ovulation')
+          ? `${userName}'s energy is likely at its peak this phase — great time for a date or a fun activity together!`
+          : currentPhase.includes('Follicular')
+          ? `${userName}'s energy is gradually building. A supportive and positive presence is perfect right now.`
+          : `${userName} may appreciate some extra patience and a quiet cozy evening together.`,
       });
-    } else if (hasCramps) {
       suggestions.push({
-        icon: '💊',
-        title: 'Cramp Comfort',
-        desc: `${userName} is experiencing cramps. A warm heating pad on her lower abdomen and a cup of chamomile or ginger tea can provide real relief. Stay close and be patient.`,
-      });
-    } else if (hasFatigue) {
-      suggestions.push({
-        icon: '😴',
-        title: 'Energy Support',
-        desc: `${userName} is feeling fatigued. Help her rest by taking small tasks off her plate. Iron-rich foods like lentils or spinach and staying hydrated will help her recover energy.`,
+        icon: '💬',
+        title: 'Mood & Symptoms Not Yet Logged Today',
+        desc: `${userName} hasn't logged her mood or symptoms yet today. Check in with her and ask how she's feeling — your care means everything! 💜`,
       });
     } else {
-      suggestions.push({
-        icon: '🌸',
-        title: `Craving Alert: ${cravings}`,
-        desc: `Based on ${userName}'s ${currentPhase} phase, surprising her with ${cravings.toLowerCase()} will genuinely brighten her day!`,
-      });
-    }
+      // Symptom-specific suggestion
+      if (hasHeadache) {
+        suggestions.push({
+          icon: '🤕',
+          title: 'Headache Relief',
+          desc: `${userName} has logged a headache today. Dim lights, offer water and a cold compress on her forehead. A gentle scalp massage or a quiet room can help more than medicine right now.`,
+        });
+      } else if (hasCramps) {
+        suggestions.push({
+          icon: '💊',
+          title: 'Cramp Comfort',
+          desc: `${userName} is experiencing cramps today. A warm heating pad on her lower abdomen and a cup of chamomile or ginger tea can provide real relief. Stay close and be patient.`,
+        });
+      } else if (hasFatigue) {
+        suggestions.push({
+          icon: '😴',
+          title: 'Energy Support',
+          desc: `${userName} is feeling fatigued today. Help her rest by taking small tasks off her plate. Iron-rich foods like lentils or spinach and staying hydrated will help her recover energy.`,
+        });
+      } else if (symptomsLogged) {
+        suggestions.push({
+          icon: '🌸',
+          title: 'Logged Symptoms Today',
+          desc: `${userName} logged: ${symptomsText}. Keep an eye on how she's feeling and offer comfort if needed 💕`,
+        });
+      }
 
-    // Suggestion 2 — Mood-specific support
-    if (hasAnxiety) {
-      suggestions.push({
-        icon: '🧘',
-        title: 'Anxiety Support',
-        desc: `${userName}'s mood is logged as "${latestMood}". Avoid heated topics today. Offer calm reassurance, a cozy movie night, or just sitting with her quietly. Your presence matters most.`,
-      });
-    } else if (hasSadness) {
-      suggestions.push({
-        icon: '💜',
-        title: 'Emotional Check-in',
-        desc: `${userName} seems low today. A simple "I'm here for you" text, a warm hug, or surprising her with her favourite snack can make a big difference. Don't try to fix — just listen.`,
-      });
-    } else {
+      // Mood suggestion
+      if (hasAnxiety) {
+        suggestions.push({
+          icon: '🧘',
+          title: 'Anxiety Support',
+          desc: `${userName}'s mood is logged as "${latestMood}" today. Avoid heated topics. Offer calm reassurance, a cozy movie night, or just sitting with her quietly. Your presence matters most.`,
+        });
+      } else if (hasSadness) {
+        suggestions.push({
+          icon: '💜',
+          title: 'Emotional Check-in',
+          desc: `${userName} seems low today. A simple "I'm here for you" text, a warm hug, or surprising her with her favourite snack can make a big difference. Don't try to fix — just listen.`,
+        });
+      } else if (moodLogged) {
+        suggestions.push({
+          icon: '❤️',
+          title: `Today's Mood: ${latestMood}`,
+          desc: `${userName} is feeling "${latestMood}" today. A warm acknowledgment and a kind gesture will go a long way! 💜`,
+        });
+      }
+
+      // Phase tip
       suggestions.push({
         icon: currentPhase.includes('Menstrual') ? '🛋️' : currentPhase.includes('Ovulation') ? '💃' : '☕',
-        title: currentPhase.includes('Menstrual')
-          ? 'Rest & Comfort Time'
-          : currentPhase.includes('Ovulation')
-          ? 'Date Night Energy!'
-          : 'Cozy Evening Together',
+        title: `${currentPhase} — Day ${currentDay}`,
         desc: currentPhase.includes('Menstrual')
-          ? `${userName} is in her period phase (Day ${currentDay}). Provide warmth, gentle care, and avoid making big plans.`
+          ? `${userName} is in her period phase. Provide warmth, gentle care, and avoid making big plans.`
           : currentPhase.includes('Ovulation')
           ? `${userName}'s energy is at its peak — perfect time for a date or an adventure together!`
           : `A calm, cozy evening with her favourite food and your company is exactly what she needs right now.`,
       });
     }
-
-    // Suggestion 3 — Mood summary always shown
-    suggestions.push({
-      icon: '❤️',
-      title: 'Today\'s Mood',
-      desc: `${userName} is feeling "${latestMood}" today. ${
-        hasAnxiety
-          ? 'Try not to add any extra pressure. Keep things calm and light around her.'
-          : hasSadness
-          ? 'Be extra gentle and check in on her through the day.'
-          : 'A warm acknowledgment and a kind gesture will go a long way today!'
-      }`,
-    });
 
     return res.status(200).json({
       isConnected: true,
@@ -200,9 +200,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
         updatedText: 'Updated just now',
         energyLevel,
         cravings,
-        latestMood,
+        latestMood,          // null = not logged today
         latestSymptoms,
-        symptomsText,
+        symptomsText,        // null = not logged today
+        moodLogged,
+        symptomsLogged,
       },
       suggestions,
     });

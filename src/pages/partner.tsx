@@ -1080,29 +1080,43 @@ export default function PartnerPage() {
                   <div className="md:col-span-4 flex flex-col gap-4">
                     {/* Mood */}
                     <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-5 border border-white/50 dark:border-[#3a2d58]/60 shadow-sm flex items-center gap-4 flex-1">
-                      <div className="w-10 h-10 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary border border-secondary/20 shrink-0 text-lg">
-                        😊
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border shrink-0 text-lg ${
+                        dashboardData?.cycleMetrics?.moodLogged
+                          ? 'bg-secondary/10 text-secondary border-secondary/20'
+                          : 'bg-gray-100 dark:bg-white/5 text-gray-400 border-gray-200 dark:border-white/10'
+                      }`}>
+                        {dashboardData?.cycleMetrics?.moodLogged ? '😊' : '—'}
                       </div>
                       <div>
                         <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-0.5">Mood</span>
-                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">
-                          {dashboardData?.cycleMetrics?.latestMood || 'Calm & Balanced'}
-                        </span>
+                        {dashboardData?.cycleMetrics?.moodLogged ? (
+                          <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">
+                            {dashboardData.cycleMetrics.latestMood}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400 dark:text-gray-500 italic font-medium">Not logged today</span>
+                        )}
                       </div>
                     </div>
                     
                     {/* Symptoms */}
                     <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-5 border border-white/50 dark:border-[#3a2d58]/60 shadow-sm flex items-center gap-4 flex-1">
-                      <div className="w-10 h-10 rounded-2xl bg-tertiary/10 flex items-center justify-center text-tertiary border border-tertiary/20 shrink-0 text-lg">
-                        🌸
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center border shrink-0 text-lg ${
+                        dashboardData?.cycleMetrics?.symptomsLogged
+                          ? 'bg-tertiary/10 text-tertiary border-tertiary/20'
+                          : 'bg-gray-100 dark:bg-white/5 text-gray-400 border-gray-200 dark:border-white/10'
+                      }`}>
+                        {dashboardData?.cycleMetrics?.symptomsLogged ? '🌸' : '—'}
                       </div>
                       <div>
                         <span className="text-[9px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-0.5">Symptoms</span>
-                        <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff] truncate max-w-[180px] block">
-                          {dashboardData?.cycleMetrics?.latestSymptoms?.length 
-                            ? dashboardData.cycleMetrics.latestSymptoms.join(', ')
-                            : 'No symptoms logged today'}
-                        </span>
+                        {dashboardData?.cycleMetrics?.symptomsLogged ? (
+                          <span className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff] truncate max-w-[180px] block">
+                            {dashboardData.cycleMetrics.symptomsText}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400 dark:text-gray-500 italic font-medium">Not logged today</span>
+                        )}
                       </div>
                     </div>
                   </div>
