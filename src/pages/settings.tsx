@@ -21,12 +21,12 @@ export default function SettingsPage() {
     dailyCheckins: false,
   });
 
-  // Privacy toggles
+  // Privacy toggles with localStorage & DB persistence
   const [privacy, setPrivacy] = useState({
     sharePeriod: true,
     shareEnergy: true,
     shareCravings: true,
-    shareMood: false,
+    shareMood: true,
   });
 
   // Delete Account Modal State
@@ -45,8 +45,16 @@ export default function SettingsPage() {
   const [resetErr, setResetErr] = useState('');
   const [isResetting, setIsResetting] = useState(false);
 
-  // Load notification settings from DB on mount
+  // Load notification & privacy settings from DB / localStorage on mount
   useEffect(() => {
+    try {
+      const savedPrivacy = localStorage.getItem('nyra_privacy_settings');
+      if (savedPrivacy) {
+        const parsed = JSON.parse(savedPrivacy);
+        if (parsed) setPrivacy(parsed);
+      }
+    } catch (e) {}
+
     apiGetNotificationSettings()
       .then(({ settings }) => {
         if (settings) {
@@ -94,11 +102,30 @@ export default function SettingsPage() {
   };
 
   const togglePrivacy = (key: keyof typeof privacy) => {
-    setPrivacy((prev) => ({ ...prev, [key]: !prev[key] }));
+    setPrivacy((prev) => {
+      const nextPrivacy = { ...prev, [key]: !prev[key] };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('nyra_privacy_settings', JSON.stringify(nextPrivacy));
+      }
+      return nextPrivacy;
+    });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaved(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nyra_privacy_settings', JSON.stringify(privacy));
+    }
+    try {
+      await apiUpdateNotificationSettings({
+        period_reminders: reminders.period,
+        fertile_window_alerts: reminders.ovulation,
+        water_reminders: reminders.water,
+        daily_checkins: reminders.dailyCheckins,
+        partner_updates: reminders.partnerUpdates,
+      });
+    } catch (err) {}
+
     setTimeout(() => {
       setIsSaved(false);
       router.push('/profile');
