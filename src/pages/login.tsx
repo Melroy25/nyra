@@ -23,6 +23,8 @@ export default function LoginPage() {
       if (token && currentUser) {
         if (currentUser.role === 'partner') {
           router.replace('/partner');
+        } else if (!currentUser.onboardingCompleted || !currentUser.lastPeriodDate) {
+          router.replace('/onboarding');
         } else {
           router.replace('/dashboard');
         }
@@ -81,10 +83,10 @@ export default function LoginPage() {
           user.cycleLength || 28
         );
       }
-      if (!user.onboardingCompleted && user.role === 'user') {
-        router.push('/onboarding');
-      } else if (user.role === 'partner') {
+      if (user.role === 'partner') {
         router.push('/partner');
+      } else if (!user.onboardingCompleted || !user.lastPeriodDate) {
+        router.push('/onboarding');
       } else {
         router.push('/dashboard');
       }
