@@ -329,20 +329,6 @@ export default function ProfilePage() {
 
           </div>
 
-          {/* ── Goals Section ── */}
-          <section className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm">
-            <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4`}>Your Active Focus &amp; Goals</h3>
-            <div className="flex flex-wrap gap-2.5">
-              {goals.map((goal, idx) => (
-                <span
-                  key={idx}
-                  className="px-4 py-2 bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 rounded-xl text-xs font-bold text-primary dark:text-[#d4b8ff]"
-                >
-                  {goal}
-                </span>
-              ))}
-            </div>
-          </section>
         </>
       )}
 
@@ -425,31 +411,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Goals Toggle (only for regular user) */}
-              {!isPartner && (
-                <div>
-                  <label className="block text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider mb-2">Focus & Goals</label>
-                  <div className="flex flex-wrap gap-2">
-                    {availableGoals.map((g) => {
-                      const selected = editGoals.includes(g);
-                      return (
-                        <button
-                          key={g}
-                          type="button"
-                          onClick={() => handleGoalToggle(g)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                            selected
-                              ? 'bg-primary text-white border-primary shadow-sm'
-                              : 'bg-white/40 dark:bg-[#1c1230] text-on-surface dark:text-[#c8bedd] border-outline-variant/30 dark:border-[#3a2d58]'
-                          }`}
-                        >
-                          {selected ? '✓ ' : ''}{g}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+
 
               {/* Error display */}
               {saveError && (
