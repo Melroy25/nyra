@@ -96,13 +96,15 @@ export default function CyclePage() {
     .map((l) => l.date)
     .sort();
 
-  let latestPeriodStartDate = user?.lastPeriodDate || onboardingData.lastPeriodDate || null;
+  let latestPeriodStartDate = user?.lastPeriodDate || (user as any)?.last_period_date || onboardingData.lastPeriodDate || null;
   if (actualPeriodLogs.length > 0) {
     const sorted = [...actualPeriodLogs].sort();
     let lastBlockStart = sorted[0];
     for (let i = 1; i < sorted.length; i++) {
-      const prev = new Date(sorted[i - 1]);
-      const curr = new Date(sorted[i]);
+      const parts1 = sorted[i - 1].split('-').map(Number);
+      const parts2 = sorted[i].split('-').map(Number);
+      const prev = new Date(parts1[0], parts1[1] - 1, parts1[2]);
+      const curr = new Date(parts2[0], parts2[1] - 1, parts2[2]);
       const diffDays = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
       if (diffDays > 2) {
         lastBlockStart = sorted[i];
@@ -111,14 +113,30 @@ export default function CyclePage() {
     latestPeriodStartDate = lastBlockStart;
   }
 
-  const cycleLength = user?.cycleLength || onboardingData.averageCycleLength || 28;
-  const periodDuration = user?.periodDuration || onboardingData.periodDuration || 5;
+  const cycleLength = user?.cycleLength || (user as any)?.cycle_length || onboardingData.averageCycleLength || 28;
+  const periodDuration = user?.periodDuration || (user as any)?.period_duration || onboardingData.periodDuration || 5;
 
+  // Initial period days (cycle 0) if user set a lastPeriodDate
+  const isInitialPeriodDay = (dateStr: string): boolean => {
+    if (!latestPeriodStartDate) return false;
+    const p1 = latestPeriodStartDate.split('-').map(Number);
+    const p2 = dateStr.split('-').map(Number);
+    if (!p1[0] || !p2[0]) return false;
+    const startMs = new Date(p1[0], p1[1] - 1, p1[2]).getTime();
+    const targetMs = new Date(p2[0], p2[1] - 1, p2[2]).getTime();
+
+    const diffDays = Math.round((targetMs - startMs) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays < periodDuration;
+  };
+
+  // Predicted future period days (cycle 1+)
   const isPredictedPeriodDay = (dateStr: string): boolean => {
     if (!latestPeriodStartDate) return false;
-    const startMs = new Date(latestPeriodStartDate).getTime();
-    const targetMs = new Date(dateStr).getTime();
-    if (isNaN(startMs) || isNaN(targetMs)) return false;
+    const p1 = latestPeriodStartDate.split('-').map(Number);
+    const p2 = dateStr.split('-').map(Number);
+    if (!p1[0] || !p2[0]) return false;
+    const startMs = new Date(p1[0], p1[1] - 1, p1[2]).getTime();
+    const targetMs = new Date(p2[0], p2[1] - 1, p2[2]).getTime();
 
     const diffDays = Math.round((targetMs - startMs) / (1000 * 60 * 60 * 24));
     if (diffDays < periodDuration) return false;
@@ -131,9 +149,11 @@ export default function CyclePage() {
 
   const isPredictedOvulationDay = (dateStr: string): boolean => {
     if (!latestPeriodStartDate) return false;
-    const startMs = new Date(latestPeriodStartDate).getTime();
-    const targetMs = new Date(dateStr).getTime();
-    if (isNaN(startMs) || isNaN(targetMs)) return false;
+    const p1 = latestPeriodStartDate.split('-').map(Number);
+    const p2 = dateStr.split('-').map(Number);
+    if (!p1[0] || !p2[0]) return false;
+    const startMs = new Date(p1[0], p1[1] - 1, p1[2]).getTime();
+    const targetMs = new Date(p2[0], p2[1] - 1, p2[2]).getTime();
 
     const diffDays = Math.round((targetMs - startMs) / (1000 * 60 * 60 * 24));
     if (diffDays < 0) return false;
@@ -150,7 +170,7 @@ export default function CyclePage() {
     let cls = 'aspect-square flex flex-col items-center justify-center rounded-2xl font-semibold text-sm transition-all cursor-pointer relative select-none ';
     if (!isCurrentMonth) { cls += 'opacity-25 '; }
 
-    const isActualPeriod = log?.isPeriod && !log?.isPredicted;
+    const isActualPeriod = (log?.isPeriod && !log?.isPredicted) || isInitialPeriodDay(dateStr);
     const isPredicted = log?.isPredicted || isPredictedPeriodDay(dateStr);
     const isOvulation = log?.isOvulation || isPredictedOvulationDay(dateStr);
 

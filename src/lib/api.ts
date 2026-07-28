@@ -47,22 +47,45 @@ export const apiPartnerCodeLogin = (partnerCode: string, email: string, password
   });
 
 
+export function normalizeUserObject(u: any) {
+  if (!u) return u;
+  return {
+    ...u,
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    age: u.age ? parseInt(String(u.age), 10) : undefined,
+    dob: u.date_of_birth || u.dateOfBirth || u.dob || '',
+    dateOfBirth: u.date_of_birth || u.dateOfBirth || u.dob || '',
+    lastPeriodDate: u.last_period_date || u.lastPeriodDate || '',
+    cycleLength: u.cycle_length ? parseInt(String(u.cycle_length), 10) : (u.cycleLength || 28),
+    periodDuration: u.period_duration ? parseInt(String(u.period_duration), 10) : (u.periodDuration || 5),
+    goals: Array.isArray(u.goals) ? u.goals : [],
+    partnerCode: u.partner_code || u.partnerCode || '',
+    connectedPartnerId: u.connected_partner_id || u.connectedPartnerId || '',
+    connectedPartner: u.connectedPartner || u.connected_partner || null,
+    onboardingCompleted: u.onboarding_completed ?? u.onboardingCompleted ?? false,
+    avatarUrl: u.avatar_url || u.avatarUrl || '',
+  };
+}
+
 // ── USER ──────────────────────────────────────
 
 export const apiGetProfile = () =>
-  request<{ user: any }>('/api/users/profile');
+  request<{ user: any }>('/api/users/profile').then(res => ({ ...res, user: normalizeUserObject(res?.user) }));
 
 export const apiUpdateProfile = (updates: Record<string, any>) =>
   request<{ user: any }>('/api/users/profile', {
     method: 'PATCH',
     body: JSON.stringify(updates),
-  });
+  }).then(res => ({ ...res, user: normalizeUserObject(res?.user) }));
 
 export const apiCompleteOnboarding = (data: Record<string, any>) =>
   request<{ success: boolean; user: any }>('/api/users/onboarding', {
     method: 'POST',
     body: JSON.stringify(data),
-  });
+  }).then(res => ({ ...res, user: normalizeUserObject(res?.user) }));
 
 export const apiConnectPartner = (partnerCode: string) =>
   request<{ success: boolean; connectedPartner: any }>('/api/users/connect-partner', {
@@ -73,7 +96,7 @@ export const apiConnectPartner = (partnerCode: string) =>
 export const apiRegenerateCode = () =>
   request<{ success: boolean; user: any }>('/api/users/regenerate-code', {
     method: 'POST',
-  });
+  }).then(res => ({ ...res, user: normalizeUserObject(res?.user) }));
 
 
 export const apiGetPartnerDashboard = () =>

@@ -207,14 +207,25 @@ export const useStore = create<AppState>((set, get) => ({
 
   // Auth actions
   setUser: (user) => {
-    set({ user });
+    const uAny = user as any;
+    const normalized = user ? {
+      ...user,
+      dob: user.dateOfBirth || uAny?.date_of_birth || user.dob || '',
+      dateOfBirth: user.dateOfBirth || uAny?.date_of_birth || user.dob || '',
+      lastPeriodDate: user.lastPeriodDate || uAny?.last_period_date || '',
+      cycleLength: user.cycleLength || uAny?.cycle_length || 28,
+      periodDuration: user.periodDuration || uAny?.period_duration || 5,
+    } : null;
+
+    set({ user: normalized });
     if (typeof window !== 'undefined') {
-      if (user) {
-        localStorage.setItem('nyra_cached_user', JSON.stringify(user));
+      if (normalized) {
+        localStorage.setItem('nyra_cached_user', JSON.stringify(normalized));
       } else {
         localStorage.removeItem('nyra_cached_user');
       }
     }
+    setTimeout(() => { get().recalculateCycleMetrics(); }, 50);
   },
   seedCycleLogs: (lastPeriodDate, periodDuration, cycleLength) => {
     // Only seed if localStorage & state have zero real period logs
@@ -405,21 +416,29 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   recalculateCycleMetrics: () => {
-    const rawDate = get().onboardingData.lastPeriodDate;
+    const userObj = get().user;
+    const rawDate = userObj?.lastPeriodDate || (userObj as any)?.last_period_date || get().onboardingData.lastPeriodDate || null;
     const actualLogs = get().cycleLogs.filter((l) => l.isPeriod && !l.isPredicted);
-    const lastLogDate = actualLogs.length > 0 ? actualLogs[actualLogs.length - 1].date : rawDate;
+    
+    let lastLogDate = rawDate;
+    if (actualLogs.length > 0) {
+      const sorted = [...actualLogs].sort((a, b) => a.date.localeCompare(b.date));
+      lastLogDate = sorted[sorted.length - 1].date;
+    }
 
     let currentDay = 1;
     let phase = 'Follicular';
-    const cycleLength = get().user?.cycleLength || get().onboardingData.averageCycleLength || 28;
-    const periodDur = get().user?.periodDuration || get().onboardingData.periodDuration || 5;
+    const cycleLength = userObj?.cycleLength || (userObj as any)?.cycle_length || get().onboardingData.averageCycleLength || 28;
+    const periodDur = userObj?.periodDuration || (userObj as any)?.period_duration || get().onboardingData.periodDuration || 5;
 
     if (lastLogDate) {
-      const lastPeriod = new Date(lastLogDate);
-      if (!isNaN(lastPeriod.getTime())) {
+      const parts = lastLogDate.split('-').map(Number);
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        const lastPeriodLocal = new Date(parts[0], parts[1] - 1, parts[2]);
         const today = new Date();
-        const diffMs = today.getTime() - lastPeriod.getTime();
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const diffMs = todayLocal.getTime() - lastPeriodLocal.getTime();
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
         if (diffDays >= 0) {
           currentDay = (diffDays % cycleLength) + 1;
         }
@@ -438,7 +457,7 @@ export const useStore = create<AppState>((set, get) => ({
       phase = 'Luteal';
     }
 
-    const nextPeriod = cycleLength - currentDay;
+    const nextPeriod = cycleLength - currentDay + 1;
 
     set({
       currentCycleDay: currentDay,
