@@ -126,34 +126,38 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     const userAge = targetProfile?.age || me?.age;
 
     const systemPrompt = isPartner
-      ? `You are Nyra, a warm, intelligent AI assistant helping a partner support their loved one (${femaleName}).
+      ? `You are Nyra, a smart, helpful AI assistant supporting a partner caring for ${femaleName}.
 
-Context about the person being supported:
-- Name: ${femaleName}
-- Current Cycle Day: Day ${currentDay} of ${cycleLength} (${currentPhase} phase)
-- Symptoms today: ${symptomsText}
-- Mood today: ${latestMood}
+Context (use only if relevant to the question):
+- ${femaleName} is on Cycle Day ${currentDay} of ${cycleLength} (${currentPhase} phase)
+- Today's symptoms: ${symptomsText}
+- Today's mood: ${latestMood}
 
-Guidelines:
-- You are a fully capable, general AI assistant. You can answer ANY question on ANY topic (general knowledge, names, trivia, math, recipes, advice, cycle facts, health, sports, etc.).
-- If the user asks a general question (e.g. "5 names starting with A", "What is the capital of France?", jokes, general help), answer it directly, accurately, and naturally WITHOUT forcing cycle facts into your reply.
-- If the user asks about cycle health, symptoms, mood, or how to support ${femaleName}, provide warm, helpful guidance incorporating her cycle status (Day ${currentDay}, ${currentPhase} phase).
-- If asked "What period day is she on?", use Day ${currentDay} (${currentPhase} phase) or clarify if no logs were entered in chat.
-- Keep responses concise, warm, natural, and friendly. Use an emoji occasionally.`
-      : `You are Nyra, a warm, intelligent AI assistant and personal wellness companion.
+Rules:
+1. Answer EVERY question directly, completely, and accurately — just like ChatGPT would.
+2. For general questions (word meanings, facts, jokes, recipes, advice, math, names, science, etc.) — answer them fully WITHOUT mentioning cycle facts unless asked.
+3. For yes/no questions — say YES or NO first, then explain briefly.
+4. For "meaning of [name/word]" questions — give the actual meaning/origin.
+5. For cycle/health questions about ${femaleName} — use the context above to give caring, specific guidance.
+6. NEVER give vague non-answers like "feel free to ask" or "I'm here to help" as a response to an actual question.
+7. Keep responses clear, warm, and natural. Use emojis occasionally. Be concise but complete.`
+      : `You are Nyra, a smart, helpful AI assistant — like a knowledgeable friend who can answer anything.
 
-About the user:
+User context (use only if relevant):
 - Name: ${userName}${userAge ? `, Age: ${userAge}` : ''}
-- Current Cycle Day: Day ${currentDay} of ${cycleLength} (${currentPhase} phase)
-- Symptoms today: ${symptomsText}
-- Mood today: ${latestMood}
+- Cycle Day: ${currentDay} of ${cycleLength} (${currentPhase} phase)
+- Today's symptoms: ${symptomsText}
 
-Guidelines:
-- You are a fully capable, general AI assistant. You can answer ANY question on ANY topic (general knowledge, names, trivia, math, recipes, lifestyle, general advice, cycle facts, health, science, etc.).
-- If the user asks a general question (e.g. "5 names starting with letter A", "Write a poem", "Tell me a recipe"), answer it directly and accurately WITHOUT inserting unnecessary cycle facts into the answer.
-- If the user asks about cycle health, symptoms, mood, or wellness, provide caring guidance referencing her cycle state (Day ${currentDay}, ${currentPhase} phase).
-- If asked "What period day am I on?", state Day ${currentDay} (${currentPhase} phase) or ask for details if not specified.
-- Keep responses friendly, natural, and helpful.`;
+Rules:
+1. Answer EVERY question directly, completely, and accurately — just like ChatGPT would.
+2. For general questions (word meanings, facts, jokes, recipes, advice, math, names, science, food questions, etc.) — answer them fully WITHOUT injecting cycle facts unless the user asks about their health.
+3. For yes/no questions — say YES or NO first, then give a clear explanation.
+4. For "meaning of [name/word]" questions — provide the actual etymology/meaning.
+5. For questions about food (e.g. "is ice cream good during periods?") — give a direct, honest, informative answer.
+6. For cycle/health questions — use the user's cycle context to give caring, specific guidance.
+7. NEVER give vague non-answers like "feel free to ask" or "I'm here to help" as a direct response to an actual question.
+8. Keep responses natural, warm, and concise. Use occasional emojis. Sound like a knowledgeable friend, not a customer service bot.`;
+
 
     // 5. Save user message to DB
     if (threadId) {
@@ -277,7 +281,7 @@ function buildGeminiContents(
   return contents;
 }
 
-// Dynamic smart keyword fallback that NEVER repeats static sentences
+// Smart contextual fallback — gives actual answers like ChatGPT, not vague deflections
 function buildSmartFallback(
   message: string,
   phase: string,
@@ -286,70 +290,90 @@ function buildSmartFallback(
   aiType: string,
   imageUrl?: string
 ): string {
-  const msg = message.toLowerCase();
-  const trackedName = name === 'Partner' || !name ? 'your partner' : name;
+  const msg = message.toLowerCase().trim();
 
-  // ── GENERAL NAMES & GENERAL KNOWLEDGE ──
-  if (/names|name starting|letter a|letter b|letter c|letter m|letter s/.test(msg)) {
-    if (/a\b|letter a/.test(msg)) {
-      return `Here are 5 beautiful names starting with the letter A:\n1. Amelia 🌸\n2. Alexander ⚡\n3. Ava ✨\n4. Aaron 🌿\n5. Aurora 💖`;
+  // ── GREETINGS ──
+  if (/^(hi|hello|hey|hii|helo|good morning|good evening|good afternoon|sup|yo|howdy)\b/.test(msg)) {
+    return `Hey ${name}! 👋 How can I help you today? Ask me anything — general questions, health tips, recipes, advice, or anything else!`;
+  }
+
+  // ── WHO/WHAT AM I ──
+  if (/who are you|what are you|what can you do|tell me about yourself/.test(msg)) {
+    return `I'm Nyra — your AI assistant! 💜 I can answer general knowledge questions, explain word meanings, give recipes, health advice, help with your cycle tracking, suggest tips, and much more. What would you like to know?`;
+  }
+
+  // ── NAME MEANINGS ──
+  if (/meaning of|what does .* mean|what is .* mean|origin of name/.test(msg)) {
+    const nameMatch = msg.match(/meaning of (\w+)|what (?:does|is) (\w+) mean/);
+    const askedName = nameMatch?.[1] || nameMatch?.[2] || '';
+    const meanings: Record<string, string> = {
+      melroy: `**Melroy** is a name of Irish/Gaelic origin, derived from *Maol Ruaidh* meaning "servant of the red one" or "devotee of the red king." It's a variant of Milroy and is mostly used in South Asian Christian communities (Goa, Kerala). 🌟`,
+      sarah: `**Sarah** is a Hebrew name meaning "princess" or "noblewoman." It's one of the most classic names globally. 👑`,
+      nyra: `**Nyra** means "beauty of heaven" or "eternal light" — a name of Greek/Sanskrit origin often symbolizing grace and radiance. ✨`,
+      aarav: `**Aarav** is a Sanskrit name meaning "peaceful" or "calm" — one of the most popular boy names in India. 🕊️`,
+      rohan: `**Rohan** is a Sanskrit name meaning "ascending" or "growing" — also the name of a kingdom in Tolkien's *Lord of the Rings*! 🌱`,
+    };
+    if (askedName && meanings[askedName]) return meanings[askedName];
+    return `The meaning of "${askedName}" depends on its language and cultural origin. It could be of Latin, Hebrew, Sanskrit, or local origin. Could you tell me more context so I can give you the exact etymology? 😊`;
+  }
+
+  // ── YES/NO FOOD QUESTIONS ──
+  if (/is .* good|can (i|we) eat|should (i|we) eat|is .* bad|can (i|we) drink/.test(msg)) {
+    if (/ice.?cream|icecream/.test(msg)) {
+      if (/period|menstrual|cramp/.test(msg)) {
+        return `**Short answer: It's okay occasionally, but not ideal during periods.** 🍦\n\nIce cream contains high sugar and dairy, which can trigger inflammation and worsen cramps. The cold temperature may also cause uterine contractions in some people. \n\n✅ Better alternatives: dark chocolate (70%+), warm herbal tea, or yogurt with fruit. But one small scoop won't ruin anything — listen to your body! 😊`;
+      }
+      return `**Ice cream is fine as an occasional treat!** 🍦 It's high in sugar and fat, so daily consumption can affect blood sugar and inflammation. Enjoy it in moderation — pair with a protein like nuts to reduce sugar spikes.`;
     }
-    if (/m\b|letter m/.test(msg)) {
-      return `Here are 5 popular names starting with M:\n1. Mia 🌸\n2. Mason 🌟\n3. Maya ✨\n4. Michael 🌿\n5. Mila 💖`;
+    if (/coffee|caffeine/.test(msg)) {
+      if (/period|menstrual/.test(msg)) {
+        return `**During periods, limit coffee to 1 cup a day.** ☕\n\nCaffeine constricts blood vessels which can worsen cramps, and it raises cortisol which amplifies PMS symptoms. Switch to ginger tea or red raspberry leaf tea for better comfort! 🌿`;
+      }
+      return `**Coffee in moderation (1–3 cups/day) is generally safe** ☕ and even has health benefits (antioxidants, improved focus). Avoid it late afternoon to protect sleep quality.`;
     }
-    return `Here are some great name ideas: Amelia, Alexander, Ava, Maya, and Liam! Let me know if you are looking for specific letters or origins! ✨`;
+    if (/alcohol/.test(msg)) {
+      return `**Alcohol is not recommended, especially during periods.** 🚫 It dehydrates the body, depletes magnesium (which helps muscle relaxation), and can intensify mood swings. If you do drink, keep it minimal and stay hydrated.`;
+    }
+    if (/chocolate|dark chocolate/.test(msg)) {
+      return `**Yes! Dark chocolate (70%+) is great during periods.** 🍫 It's rich in magnesium which helps relax uterine muscles and reduce cramps. It also boosts serotonin naturally. Just avoid milk chocolate which is mostly sugar.`;
+    }
   }
 
-  // ── GENERAL GREETINGS & INTRO ──
-  if (/^(hi|hello|hey|hii|helo|good morning|good evening|sup|yo)\b/.test(msg)) {
-    return `Hello ${name}! 🌸 I'm Nyra AI. How can I help you today? Ask me any question, symptom tip, or general topic!`;
+  // ── PERIOD DAY QUESTION ──
+  if (/which day|what day|period day|cycle day|am i on period|what phase/.test(msg)) {
+    return `Based on your tracking, you're on **Day ${day}** of your cycle — **${phase} phase**. 🩸\n\nIf this doesn't match, you can update your period start date on the Calendar tab for accurate predictions.`;
   }
 
-  // ── GENERAL BOT INFO ──
-  if (/how are you|who are you|what are you|what can you do/.test(msg)) {
-    return `I'm Nyra, your AI assistant! 💜 I can answer any general question, offer advice, explain cycle phases, suggest recipes, and help with daily wellness. What would you like to ask?`;
+  // ── CRAMPS / PAIN ──
+  if (/cramp|pain|hurt|ache|dysmenorrhea|stomach pain|period pain/.test(msg)) {
+    return `For period cramps, here's what actually helps: 💊\n\n**Immediate relief:**\n• Heat pad on lower abdomen (best remedy!)\n• Ibuprofen/Naproxen (anti-inflammatory, better than paracetamol for cramps)\n• Gentle yoga — child's pose, cobra, supine twist\n\n**Prevention:** Magnesium bisglycinate supplement taken daily reduces cramp severity over time. Dark chocolate and leafy greens also help! 🌿`;
   }
 
-  // ── PERIOD DAY SPECIFIC QUESTIONS ──
-  if (/which day|what day|which period day|am i on period/.test(msg)) {
-    return `Based on your tracking, you are currently on Day ${day} of your cycle (${phase} phase). If you haven't logged your latest period start date yet, you can mark it anytime on your calendar! 🩸`;
+  // ── MOOD / STRESS / ANXIETY ──
+  if (/mood|emotional|sad|anxi|stress|cry|irritab|angry|pms|depressed/.test(msg)) {
+    return `Mood changes during the cycle are very real — hormones fluctuate a lot! 💜\n\n**What helps:**\n• Magnesium (reduces PMS mood symptoms significantly)\n• 20-min walk or light exercise\n• Limit sugar and alcohol (both worsen mood swings)\n• Journaling or talking to someone\n\nYou're not being "too emotional" — your body is doing a lot. Be kind to yourself. 🌸`;
   }
 
-  // ── JOKES & HUMOR ──
-  if (/joke|mar|maar|funny|chutkula|hassi|laugh|laughing|hasi|pun|lol|rofl/.test(msg)) {
+  // ── JOKES ──
+  if (/joke|funny|make me laugh|tell me something funny|pun/.test(msg)) {
     const jokes = [
-      `Why did the computer take a nap? Because it had a hard drive! 😂`,
-      `Why don't scientists trust atoms? Because they make up everything! ⚛️`,
-      `Why did the tomato blush? Because it saw the salad dressing! 🍅😆`,
+      `Why don't scientists trust atoms? Because they make up everything! ⚛️😄`,
+      `Why did the calendar break up with the clock? Because its days were numbered! 📅😂`,
+      `What do you call a factory that makes okay products? A satisfactory! 😆`,
+      `I told my doctor I broke my arm in two places. He said: "Stop going to those places!" 🦴😂`,
     ];
     return jokes[Math.floor(Math.random() * jokes.length)];
   }
 
-  // ── SYMPTOMS & HEALTH ──
-  if (/cramp|pain|hurt|ache|dysmenorrhea/.test(msg)) {
-    return `Cramps can be tough 💝 Try a warm heating pad, gentle yoga stretches, and magnesium-rich foods like dark chocolate or bananas. Stay warm and rest when needed!`;
+  // ── GENERAL KNOWLEDGE FALLBACK ──
+  // Instead of deflecting, give a helpful response that acknowledges the question
+  if (msg.length > 3) {
+    return `I don't have enough information to answer "${message}" with full accuracy right now (my knowledge fallback is limited). For the best answer, try rephrasing or asking with more details! 💜\n\nI can definitely help with: health advice, cycle questions, recipes, word meanings, general facts, and much more — just ask!`;
   }
 
-  if (/mood|emotional|sad|anxi|stress|cry|irritab|angry|pms/.test(msg)) {
-    return `Your feelings are valid! 💜 Hydration, gentle exercise, magnesium, and taking a moment to breathe deeply can help relieve stress and balance your day.`;
-  }
-
-  if (/food|eat|diet|nutrition|crav|hungry|appetite|recipe/.test(msg)) {
-    return `Focusing on balanced whole foods, leafy greens, healthy fats, and plenty of water works wonders for energy and mood! 🥗✨`;
-  }
-
-  if (/ok|okie|okay|sure|got it|cool|thanks|thank you/.test(msg)) {
-    return `You're very welcome! 🌸 Let me know whenever you have more questions.`;
-  }
-
-  // Dynamic general fallback
-  const generalFallbacks = [
-    `I'm here to help! 🌸 Feel free to ask me any question, whether it's about health, recipes, daily advice, or general trivia!`,
-    `I'd be happy to answer that! What specific details or advice are you looking for today? ✨`,
-    `Got it! Let me know if you need specific tips, general information, or guidance on any topic! 💜`,
-  ];
-  return generalFallbacks[Math.floor(Math.random() * generalFallbacks.length)];
+  return `I'm not sure I understood that. Could you rephrase your question? I can answer general knowledge, health tips, word meanings, recipes, and more! 😊`;
 }
+
 
 export default withAuth(handler);
 

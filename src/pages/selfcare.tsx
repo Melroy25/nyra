@@ -125,7 +125,38 @@ export default function SelfCarePage() {
 
   const [activeTab, setActiveTab] = useState<'notes' | 'routines'>('notes');
 
-  // ── 1. MY NOTES STATE ─────────────────────────────────────────────────────
+  // ── Water weekly history from localStorage ──────────────────────────────
+  const [weeklyWaterData, setWeeklyWaterData] = React.useState<{ day: string; amount: number; isToday: boolean; hasData: boolean }[]>([]);
+
+  React.useEffect(() => {
+    const today = new Date();
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const result: { day: string; amount: number; isToday: boolean; hasData: boolean }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayLabel = days[d.getDay()];
+      const isToday = i === 0;
+      const stored = localStorage.getItem(`nyra_water_${dateStr}`);
+      const amount = stored !== null ? parseInt(stored, 10) : (isToday ? useStore.getState().waterIntake : 0);
+      const hasData = stored !== null || isToday;
+      result.push({ day: dayLabel, amount, isToday, hasData });
+    }
+    setWeeklyWaterData(result);
+  }, [waterIntake]);
+
+  // Save today's waterIntake to localStorage whenever it changes
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.setItem(`nyra_water_${today}`, String(waterIntake));
+  }, [waterIntake]);
+
+  const daysWithRealData = weeklyWaterData.filter(d => d.hasData && d.amount > 0).length;
+
+
+  // \u2500\u2500 1. MY NOTES STATE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   const [notes, setNotes] = useState<Note[]>(defaultNotes);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -923,42 +954,56 @@ export default function SelfCarePage() {
                     </span>
                   </div>
 
-                  {/* Bar Chart Container */}
-                  <div className="flex items-end justify-between h-32 pt-4 pb-1 px-2 gap-1.5 border-b border-black/5 dark:border-white/5">
-                    {[
-                      { day: 'Mon', amount: 1750 },
-                      { day: 'Tue', amount: 2000 },
-                      { day: 'Wed', amount: 1500 },
-                      { day: 'Thu', amount: 2250 },
-                      { day: 'Fri', amount: 1800 },
-                      { day: 'Sat', amount: 2000 },
-                      { day: 'Sun', amount: waterIntake, isToday: true },
-                    ].map((d) => {
-                      const heightPercent = Math.min(100, Math.max(10, Math.round((d.amount / waterGoal) * 100)));
-                      return (
-                        <div key={d.day} className="flex-1 flex flex-col items-center gap-1.5 group h-full justify-end">
-                          <span className="text-[9px] font-bold text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">
-                            {d.amount}
-                          </span>
-                          <div className="w-full max-w-[24px] bg-cyan-500/10 dark:bg-cyan-500/20 rounded-t-lg relative overflow-hidden h-full flex items-end">
-                            <motion.div
-                              initial={{ height: 0 }}
-                              animate={{ height: `${heightPercent}%` }}
-                              transition={{ duration: 0.5 }}
-                              className={`w-full rounded-t-lg ${
-                                d.isToday
-                                  ? 'bg-gradient-to-t from-primary to-cyan-400 shadow-md'
-                                  : 'bg-primary/50 dark:bg-primary/40'
-                              }`}
-                            />
+                  {daysWithRealData < 2 ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-3">
+                      <Droplet className="w-8 h-8 text-cyan-400/40" />
+                      <p className="text-xs font-semibold text-on-surface-variant dark:text-[#c8bedd] text-center">
+                        Graph will appear once you have at least 2 days of water data.
+                      </p>
+                      <p className="text-[10px] text-on-surface-variant/60 dark:text-[#c8bedd]/60 text-center">
+                        Keep logging water today and tomorrow!
+                      </p>
+                    </div>
+                  ) : (
+                    /* Bar Chart Container */
+                    <div className="flex items-end justify-between h-32 pt-4 pb-1 px-2 gap-1.5 border-b border-black/5 dark:border-white/5">
+                      {weeklyWaterData.map((d) => {
+                        if (!d.hasData || d.amount === 0) {
+                          return (
+                            <div key={d.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                              <div className="w-full max-w-[24px] h-full flex items-end">
+                                <div className="w-full rounded-t-lg bg-black/5 dark:bg-white/5" style={{ height: '4px' }} />
+                              </div>
+                              <span className="text-[10px] font-bold text-on-surface-variant/40">{d.day}</span>
+                            </div>
+                          );
+                        }
+                        const heightPercent = Math.min(100, Math.max(8, Math.round((d.amount / waterGoal) * 100)));
+                        return (
+                          <div key={d.day} className="flex-1 flex flex-col items-center gap-1.5 group h-full justify-end">
+                            <span className="text-[9px] font-bold text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity">
+                              {d.amount}
+                            </span>
+                            <div className="w-full max-w-[24px] bg-cyan-500/10 dark:bg-cyan-500/20 rounded-t-lg relative overflow-hidden h-full flex items-end">
+                              <motion.div
+                                initial={{ height: 0 }}
+                                animate={{ height: `${heightPercent}%` }}
+                                transition={{ duration: 0.5 }}
+                                className={`w-full rounded-t-lg ${
+                                  d.isToday
+                                    ? 'bg-gradient-to-t from-primary to-cyan-400 shadow-md'
+                                    : 'bg-primary/50 dark:bg-primary/40'
+                                }`}
+                              />
+                            </div>
+                            <span className={`text-[10px] font-bold ${d.isToday ? 'text-primary dark:text-[#d4b8ff]' : 'text-on-surface-variant'}`}>
+                              {d.day}
+                            </span>
                           </div>
-                          <span className={`text-[10px] font-bold ${d.isToday ? 'text-primary dark:text-[#d4b8ff]' : 'text-on-surface-variant'}`}>
-                            {d.day}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -78,8 +78,8 @@ export default function ProfilePage() {
   })();
   const age = calculatedAge;
   const avatarUrl = user?.avatarUrl || undefined;
-  const cycleLength = user?.cycleLength || onboardingData.averageCycleLength || 28;
-  const periodDuration = user?.periodDuration || onboardingData.periodDuration || 5;
+  const cycleLength = user?.cycleLength || (user as any)?.cycle_length || onboardingData.averageCycleLength || 28;
+  const periodDuration = user?.periodDuration || (user as any)?.period_duration || onboardingData.periodDuration || 5;
   const goals = user?.goals && user.goals.length > 0 ? user.goals : onboardingData.goals || ['Track cycle'];
   const connectedPartnerName = user?.connectedPartner?.name || 'Partner';
 
