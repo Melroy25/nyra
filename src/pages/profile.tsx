@@ -219,7 +219,9 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex justify-between items-center text-xs font-semibold">
                   <span className={labelCls}>Connection Code</span>
-                  <span className="font-bold text-primary dark:text-[#d4b8ff]">{user?.partnerCode || 'Active'}</span>
+                  <span className="font-bold text-primary dark:text-[#d4b8ff]">
+                    {user?.connectedPartner?.partnerCode || (user?.connectedPartner as any)?.partner_code || user?.partnerCode || 'Active'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -316,7 +318,9 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
                     <span className={labelCls}>Partner Connection Code</span>
-                    <span className={`font-bold ${headingCls}`}>{user?.partnerCode || 'Not Generated'}</span>
+                    <span className={`font-bold ${headingCls}`}>
+                      {user?.connectedPartner?.partnerCode || (user?.connectedPartner as any)?.partner_code || user?.partnerCode || 'Not Generated'}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-xs font-semibold">
                     <span className={labelCls}>Partner View Permissions</span>

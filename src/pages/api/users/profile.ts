@@ -69,9 +69,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       periodDuration: rawUser.period_duration || 5,
       lastPeriodDate,
       goals: rawUser.goals || [],
-      partnerCode: rawUser.partner_code,
+      partnerCode: (rawUser.role === 'partner' && connectedPartner?.partner_code)
+        ? connectedPartner.partner_code
+        : rawUser.partner_code,
       connectedPartnerId: rawUser.connected_partner_id,
-      connectedPartner,
+      connectedPartner: connectedPartner ? {
+        id: connectedPartner.id,
+        name: connectedPartner.name,
+        email: connectedPartner.email,
+        role: connectedPartner.role,
+        partnerCode: connectedPartner.partner_code,
+        partner_code: connectedPartner.partner_code,
+      } : null,
       onboardingCompleted: rawUser.onboarding_completed || false,
       avatarUrl: rawUser.avatar_url,
     };

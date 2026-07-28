@@ -260,10 +260,9 @@ export default function PartnerPage() {
   const myName = user?.name || 'User';
   const connectedPartnerName = user?.connectedPartner?.name || chatPartnerInfo?.name || 'Partner';
   const trackedUserName = isPartner ? connectedPartnerName : myName;
-  const displayPairingCode = user?.partnerCode || '';
-  const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
-
   const [dashboardData, setDashboardData] = useState<any>(null);
+  const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
+  const displayPairingCode = user?.connectedPartner?.partnerCode || (user?.connectedPartner as any)?.partner_code || dashboardData?.partner?.partner_code || user?.partnerCode || '';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch Live Partner Dashboard Data
