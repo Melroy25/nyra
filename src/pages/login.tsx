@@ -31,8 +31,8 @@ export default function LoginPage() {
   }, [user, router]);
 
 
-  // Mode: 'choose' | 'login' | 'register' | 'partner'
-  const [mode, setMode] = useState<'choose' | 'login' | 'register' | 'partner'>('choose');
+  // Mode: 'choose' | 'login' | 'register' | 'partner' | 'forgot'
+  const [mode, setMode] = useState<'choose' | 'login' | 'register' | 'partner' | 'forgot'>('choose');
   const [partnerTab, setPartnerTab] = useState<'code' | 'email'>('code');
 
   const [email, setEmail] = useState('');
@@ -43,6 +43,12 @@ export default function LoginPage() {
   const [partnerEmail, setPartnerEmail] = useState('');
   const [partnerPassword, setPartnerPassword] = useState('');
   const [showPartnerPassword, setShowPartnerPassword] = useState(false);
+
+  // Forgot password & 6-digit code state
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
+  const [otpCode, setOtpCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -245,12 +251,138 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <div className="flex justify-end -mt-1 mb-1">
+                <button
+                  type="button"
+                  onClick={() => { setMode('forgot'); setForgotStep(1); setErrorMsg(''); setSuccessMsg(''); }}
+                  className="text-xs font-bold text-primary dark:text-[#d4b8ff] hover:underline"
+                >
+                  Forgot Password?
+                </button>
+              </div>
               {errorMsg && <p className="text-xs font-bold text-red-500 dark:text-red-400 text-center">{errorMsg}</p>}
               <button type="submit" disabled={loading} className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-sm shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 mt-1">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><ArrowRight className="w-4 h-4" /> Sign In</>}
               </button>
             </form>
             <button onClick={() => { setMode('choose'); setErrorMsg(''); }} className="mt-5 text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] hover:text-primary transition-colors">← Back</button>
+          </>
+        )}
+
+        {/* ─── FORGOT PASSWORD / 6-DIGIT CODE RESET ─── */}
+        {mode === 'forgot' && (
+          <>
+            <h1 className="font-serif font-bold text-2xl text-[#18003d] dark:text-[#eee6ff] mb-1 text-center">Reset Password 🔑</h1>
+            <p className="text-sm text-[#3d3050] dark:text-[#c8bedd] mb-6 font-medium text-center">
+              {forgotStep === 1 ? 'Enter your email to receive a 6-digit code.' : 'Enter the 6-digit code and your new password.'}
+            </p>
+
+            {forgotStep === 1 ? (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!email.trim()) { setErrorMsg('Please enter your email.'); return; }
+                setErrorMsg(''); setSuccessMsg(''); setLoading(true);
+                try {
+                  const res = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ step: 'request', email }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error || 'Failed to send code');
+                  setSuccessMsg(data.message || '6-digit verification code sent to your email!');
+                  setForgotStep(2);
+                } catch (err: any) {
+                  setErrorMsg(err.message || 'Could not send verification code.');
+                } finally {
+                  setLoading(false);
+                }
+              }} className="w-full flex flex-col gap-3">
+                <input 
+                  type="email" 
+                  value={email} 
+                  onChange={e => setEmail(e.target.value)} 
+                  placeholder="Your email address" 
+                  required
+                  className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 dark:placeholder-[#8a7fa0]"
+                />
+                {errorMsg && <p className="text-xs font-bold text-red-500 dark:text-red-400 text-center">{errorMsg}</p>}
+                {successMsg && <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">{successMsg}</p>}
+                <button 
+                  type="submit" 
+                  disabled={loading} 
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-sm shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 mt-1"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Mail className="w-4 h-4" /> Send 6-Digit Code</>}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!otpCode.trim()) { setErrorMsg('Please enter the 6-digit code.'); return; }
+                if (newPassword.length < 6) { setErrorMsg('Password must be at least 6 characters.'); return; }
+                setErrorMsg(''); setSuccessMsg(''); setLoading(true);
+                try {
+                  const res = await fetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ step: 'reset', email, otp: otpCode, newPassword }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error || 'Invalid code or failed to reset password');
+                  setSuccessMsg('Password changed successfully! Signing you in...');
+                  setTimeout(async () => {
+                    try {
+                      const loginRes = await apiLogin(email, newPassword);
+                      localStorage.setItem('nyra_token', loginRes.token);
+                      setUser(loginRes.user);
+                      router.push('/dashboard');
+                    } catch {
+                      setMode('login');
+                    }
+                  }, 1000);
+                } catch (err: any) {
+                  setErrorMsg(err.message || 'Failed to change password. Please check your 6-digit code.');
+                } finally {
+                  setLoading(false);
+                }
+              }} className="w-full flex flex-col gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-primary uppercase tracking-wider block mb-1">6-Digit Code</label>
+                  <input 
+                    type="text" 
+                    value={otpCode} 
+                    onChange={e => setOtpCode(e.target.value)} 
+                    placeholder="Enter 6-digit code" 
+                    maxLength={10}
+                    required
+                    className="w-full px-4 py-3 rounded-2xl border border-primary/40 bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-bold tracking-widest text-center outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 dark:placeholder-[#8a7fa0]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider block mb-1">New Password</label>
+                  <input 
+                    type="password" 
+                    value={newPassword} 
+                    onChange={e => setNewPassword(e.target.value)} 
+                    placeholder="New password (min. 6 chars)" 
+                    required
+                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant/40 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-[#18003d] dark:text-[#eee6ff] text-sm font-semibold outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 dark:placeholder-[#8a7fa0]"
+                  />
+                </div>
+                {errorMsg && <p className="text-xs font-bold text-red-500 dark:text-red-400 text-center">{errorMsg}</p>}
+                {successMsg && <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 text-center">{successMsg}</p>}
+                <button 
+                  type="submit" 
+                  disabled={loading} 
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-sm shadow-md shadow-primary/20 hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 mt-1"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Lock className="w-4 h-4" /> Change Password &amp; Sign In</>}
+                </button>
+              </form>
+            )}
+
+            <button onClick={() => { setMode('login'); setErrorMsg(''); setSuccessMsg(''); }} className="mt-5 text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] hover:text-primary transition-colors">← Back to Sign In</button>
           </>
         )}
 
