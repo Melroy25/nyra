@@ -90,6 +90,7 @@ interface AppState {
   addRoutine: (name: string, time: string, frequency: string, type: RoutineItem['type']) => void;
   deleteRoutine: (id: string) => void;
   addWater: (amount: number) => void;
+  setWaterGoal: (goal: number) => void;
   resetWater: () => void;
 }
 
@@ -612,6 +613,8 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       waterIntake: Math.min(state.waterIntake + amount, 4000),
     })),
+
+  setWaterGoal: (goal) => set({ waterGoal: goal }),
 
   resetWater: () => set({ waterIntake: 0 }),
 }));
