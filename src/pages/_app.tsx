@@ -145,11 +145,13 @@ export default function App({ Component, pageProps }: AppProps) {
     }
 
     const checkIncomingPartnerMessages = async () => {
+      // Pause polling if window is hidden to save battery & CPU performance
+      if (document.visibilityState !== 'visible') return;
+
       const token = localStorage.getItem('nyra_token');
       if (!token) return;
 
       try {
-        // Background poll — no markRead/heartbeat, just check for new messages
         const { messages, partnerInfo } = await apiGetMessages('auto');
         if (!messages || messages.length === 0) {
           useStore.getState().setUnreadCount(0);
@@ -160,7 +162,6 @@ export default function App({ Component, pageProps }: AppProps) {
           try { return JSON.parse(localStorage.getItem('nyra_cached_user') || '{}')?.id; } catch (e) { return null; }
         })();
 
-        // Compute unread count for badges across app
         const unreadCount = messages.filter(
           (m: any) => m.sender_id !== currentUserId && !m.is_read
         ).length;
@@ -169,7 +170,6 @@ export default function App({ Component, pageProps }: AppProps) {
         const partnerName = partnerInfo?.name || 'Partner';
         let newIdsAdded = false;
 
-        // On very first poll after load, seed all existing messages silently into known set
         if (isInitialPollRef.current) {
           isInitialPollRef.current = false;
           messages.forEach((msg: any) => {
@@ -184,7 +184,6 @@ export default function App({ Component, pageProps }: AppProps) {
           return;
         }
 
-        // ONLY skip push notification if user is actively viewing the CHAT tab while window is visible
         const isActivelyChatting =
           router.pathname === '/partner' &&
           router.query.tab === 'chat' &&
@@ -210,7 +209,6 @@ export default function App({ Component, pageProps }: AppProps) {
           }
         });
 
-        // Persist known IDs to localStorage (keep last 200) to survive page reloads
         if (newIdsAdded) {
           try {
             const arr = Array.from(knownMsgIdsRef.current).slice(-200);
@@ -221,15 +219,16 @@ export default function App({ Component, pageProps }: AppProps) {
     };
 
     checkIncomingPartnerMessages();
-    const interval = setInterval(checkIncomingPartnerMessages, 10000);
+    const interval = setInterval(checkIncomingPartnerMessages, 15000);
     return () => clearInterval(interval);
   }, [user?.id]);
 
-  // ── Real-Time Scheduled Routine Notification Inspector ──
+  // ── Real-Time Scheduled Routine Notification Inspector (Lightweight 60s interval) ──
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const checkScheduledRoutines = () => {
+      if (document.visibilityState !== 'visible') return;
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
       const now = new Date();
@@ -310,7 +309,7 @@ export default function App({ Component, pageProps }: AppProps) {
     };
 
     checkScheduledRoutines();
-    const timer = setInterval(checkScheduledRoutines, 15000);
+    const timer = setInterval(checkScheduledRoutines, 60000);
     return () => clearInterval(timer);
   }, []);
 
@@ -354,40 +353,74 @@ async function scheduleNativeNotifications() {
   if (typeof window === 'undefined' || Notification.permission !== 'granted') return;
 
   try {
+    // Priority: local settings first (0ms instant toggle check)
+    let isWaterEnabled = false;
+    let isPeriodEnabled = true;
+    let isOvulationEnabled = true;
+    let isDailyCheckinEnabled = false;
+
+    try {
+      const cached = localStorage.getItem('nyra_notification_settings');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        isWaterEnabled = parsed.water_reminders ?? false;
+        isPeriodEnabled = parsed.period_reminders ?? true;
+        isOvulationEnabled = parsed.fertile_window_alerts ?? true;
+        isDailyCheckinEnabled = parsed.daily_checkins ?? false;
+      }
+    } catch (e) {}
+
     const [{ settings }, metricsData] = await Promise.all([
-      apiGetNotificationSettings(),
+      apiGetNotificationSettings().catch(() => ({ settings: null })),
       apiGetCycleMetrics().catch(() => null),
     ]);
 
-    if (!settings || !metricsData) return;
-
-    const daysLeft = metricsData.nextPeriodDaysLeft;
-    const phase = metricsData.currentPhase;
-
-    // Period reminder — fire when 2 days away
-    if (settings.period_reminders && daysLeft <= 2 && daysLeft >= 0) {
-      sendNativeNotification('Period Starting Soon 🩸', {
-        body: `Your period is expected in about ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. Prepare your self-care essentials!`,
-        tag: 'nyra-period-reminder',
-      });
+    if (settings) {
+      isWaterEnabled = settings.water_reminders ?? isWaterEnabled;
+      isPeriodEnabled = settings.period_reminders ?? isPeriodEnabled;
+      isOvulationEnabled = settings.fertile_window_alerts ?? isOvulationEnabled;
+      isDailyCheckinEnabled = settings.daily_checkins ?? isDailyCheckinEnabled;
     }
 
-    // Fertile window alert — fire during ovulation phase
-    if (settings.fertile_window_alerts && phase === 'Ovulation') {
-      sendNativeNotification('Fertile Window 🌸', {
-        body: 'You are in your fertile window today. Your energy and confidence are at their peak!',
-        tag: 'nyra-ovulation',
-      });
+    const todayStr = new Date().toISOString().split('T')[0];
+    const nowMs = Date.now();
+
+    // 1. Period reminder — max once per day, when period is <= 2 days away
+    if (isPeriodEnabled && metricsData) {
+      const daysLeft = metricsData.nextPeriodDaysLeft;
+      if (daysLeft <= 2 && daysLeft >= 0) {
+        const lastPeriodRemKey = `nyra_period_rem_${todayStr}`;
+        if (!localStorage.getItem(lastPeriodRemKey)) {
+          sendNativeNotification('Period Starting Soon 🩸', {
+            body: `Your period is expected in about ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. Prepare your self-care essentials!`,
+            tag: 'nyra-period-reminder',
+          });
+          localStorage.setItem(lastPeriodRemKey, 'true');
+        }
+      }
     }
 
-    // Daily check-in reminder
-    if (settings.daily_checkins) {
+    // 2. Fertile window alert — max once per day during Ovulation phase
+    if (isOvulationEnabled && metricsData) {
+      const phase = metricsData.currentPhase;
+      if (phase === 'Ovulation') {
+        const lastOvKey = `nyra_ovulation_rem_${todayStr}`;
+        if (!localStorage.getItem(lastOvKey)) {
+          sendNativeNotification('Fertile Window 🌸', {
+            body: 'You are in your fertile window today. Your energy and confidence are at their peak!',
+            tag: 'nyra-ovulation',
+          });
+          localStorage.setItem(lastOvKey, 'true');
+        }
+      }
+    }
+
+    // 3. Daily check-in reminder — max once per day (8am - 1pm)
+    if (isDailyCheckinEnabled) {
       const lastCheckinKey = 'nyra_last_checkin';
       const lastCheckin = localStorage.getItem(lastCheckinKey);
-      const todayStr = new Date().toISOString().split('T')[0];
       if (lastCheckin !== todayStr) {
         const hour = new Date().getHours();
-        // Only send if morning/midday (8am - 1pm)
         if (hour >= 8 && hour <= 13) {
           sendNativeNotification('Daily Check-In 💜', {
             body: 'How are you feeling today? Log your mood and symptoms in Nyra.',
@@ -398,14 +431,24 @@ async function scheduleNativeNotifications() {
       }
     }
 
-    // Water reminder — every hour during waking hours
-    if (settings.water_reminders) {
+    // 4. Drinking Water Reminder (STRICT CHECK: IF OFF -> ZERO REMINDERS, IF ON -> MAX 8 PER DAY, AT LEAST 90 MINS APART)
+    if (isWaterEnabled) {
       const hour = new Date().getHours();
       if (hour >= 8 && hour <= 21) {
-        sendNativeNotification('Hydration Reminder 💧', {
-          body: 'Time to drink some water! Staying hydrated supports your cycle health.',
-          tag: 'nyra-water',
-        });
+        const countKey = `nyra_water_daily_count_${todayStr}`;
+        const lastTimeKey = `nyra_water_last_timestamp`;
+
+        const currentCount = parseInt(localStorage.getItem(countKey) || '0', 10);
+        const lastTime = parseInt(localStorage.getItem(lastTimeKey) || '0', 10);
+
+        if (currentCount < 8 && (nowMs - lastTime >= 5400000 || lastTime === 0)) {
+          sendNativeNotification('Hydration Reminder 💧', {
+            body: 'Time to drink a glass of water! Staying hydrated supports your cycle health.',
+            tag: 'nyra-water',
+          });
+          localStorage.setItem(countKey, String(currentCount + 1));
+          localStorage.setItem(lastTimeKey, String(nowMs));
+        }
       }
     }
   } catch (err) {

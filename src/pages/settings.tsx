@@ -74,7 +74,28 @@ export default function SettingsPage() {
 
   const toggleReminder = async (key: keyof typeof reminders) => {
     const newVal = !reminders[key];
-    setReminders((prev) => ({ ...prev, [key]: newVal }));
+    const nextReminders = { ...reminders, [key]: newVal };
+    setReminders(nextReminders);
+
+    // Save to localStorage immediately so background notification scheduler respects toggle 0ms instantly
+    if (typeof window !== 'undefined') {
+      const dbKeyMap: Record<string, string> = {
+        period: 'period_reminders',
+        ovulation: 'fertile_window_alerts',
+        water: 'water_reminders',
+        medication: 'daily_checkins',
+        partnerUpdates: 'partner_updates',
+        dailyCheckins: 'daily_checkins',
+      };
+      const notifObj = {
+        period_reminders: nextReminders.period,
+        fertile_window_alerts: nextReminders.ovulation,
+        water_reminders: nextReminders.water,
+        daily_checkins: nextReminders.dailyCheckins,
+        partner_updates: nextReminders.partnerUpdates,
+      };
+      localStorage.setItem('nyra_notification_settings', JSON.stringify(notifObj));
+    }
 
     if (newVal) {
       const granted = await requestNativeNotificationPermission();
