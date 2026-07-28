@@ -52,24 +52,66 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 2. Generate unique partner code
     const partnerCode = `NYRA-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
-    // 3. Create user profile in public.users
-    const { data: userProfile, error: profileError } = await supabase
-      .from('users')
-      .insert({
-        auth_id: authData.user.id,
-        email,
-        name,
-        role: sanitizedRole,
-        partner_code: partnerCode,
-      })
-      .select()
-      .single();
+    // 3. Create or update user profile in public.users (resilient against duplicate emails/auth_ids)
+    let userProfile = null;
 
-    if (profileError) {
-      // Cleanup auth user if profile creation fails
-      await supabase.auth.admin.deleteUser(authData.user.id);
-      logger.error('Failed to create user profile in DB', profileError);
-      return res.status(500).json({ error: 'Failed to complete registration profile.' });
+    const { data: existingProfile } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingProfile) {
+      const { data: updatedProfile, error: updateError } = await supabase
+        .from('users')
+        .update({
+          auth_id: authData.user.id,
+          name,
+          role: sanitizedRole,
+          partner_code: existingProfile.partner_code || partnerCode,
+        })
+        .eq('id', existingProfile.id)
+        .select()
+        .single();
+
+      if (!updateError && updatedProfile) {
+        userProfile = updatedProfile;
+      }
+    }
+
+    if (!userProfile) {
+      const { data: createdProfile, error: insertError } = await supabase
+        .from('users')
+        .upsert(
+          {
+            auth_id: authData.user.id,
+            email,
+            name,
+            role: sanitizedRole,
+            partner_code: partnerCode,
+          },
+          { onConflict: 'email' }
+        )
+        .select()
+        .single();
+
+      if (insertError) {
+        logger.error('Failed to create user profile in DB', insertError);
+        const { data: fallbackProfile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (fallbackProfile) {
+          userProfile = fallbackProfile;
+        } else {
+          await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {});
+          return res.status(400).json({ error: insertError.message || 'Failed to complete registration profile.' });
+        }
+      } else {
+        userProfile = createdProfile;
+      }
     }
 
     // 4. Create default notification settings
