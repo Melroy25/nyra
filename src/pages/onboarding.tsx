@@ -24,20 +24,17 @@ export default function OnboardingPage() {
         setErrorMsg('Please enter a valid age (10-60).');
         return;
       }
+      setOnboardingStep(2);
+      return;
     }
 
-    // Validate Step 2 — last period date is mandatory
+    // Validate Step 2 & Complete Setup — last period date is mandatory
     if (onboardingStep === 2) {
       if (!onboardingData.lastPeriodDate) {
         setErrorMsg('Please enter your last period start date. This is required for accurate predictions.');
         return;
       }
-    }
 
-    if (onboardingStep < 3) {
-      setOnboardingStep(onboardingStep + 1);
-    } else {
-      // Step 3 complete — save to backend
       setIsSaving(true);
       try {
         const res = await apiCompleteOnboarding({
@@ -47,7 +44,7 @@ export default function OnboardingPage() {
           lastPeriodDate: onboardingData.lastPeriodDate,
           cycleLength: onboardingData.averageCycleLength,
           periodDuration: onboardingData.periodDuration,
-          goals: onboardingData.goals,
+          goals: onboardingData.goals || [],
         });
 
         if (user) {
@@ -83,23 +80,6 @@ export default function OnboardingPage() {
     }
   };
 
-  const goalsList = [
-    { id: 'Track cycle', title: 'Track Menstrual Cycle', desc: 'Log flows, monitor regularity, and get predictions.' },
-    { id: 'Improve nutrition', title: 'Improve Nutrition', desc: 'Sync meals and cravings with hormonal cycle phases.' },
-    { id: 'Understand symptoms', title: 'Understand Symptoms', desc: 'Discover correlations between physical changes and hormones.' },
-    { id: 'Improve wellness', title: 'Improve Wellness & Sleep', desc: 'Routines and sounds for restorative self-care.' },
-    { id: 'Fertility tracking', title: 'Track Fertility Window', desc: 'Monitor ovulation peaks and fertile windows.' },
-  ];
-
-  const handleGoalToggle = (goalId: string) => {
-    const currentGoals = onboardingData.goals;
-    if (currentGoals.includes(goalId)) {
-      updateOnboardingData({ goals: currentGoals.filter((g) => g !== goalId) });
-    } else {
-      updateOnboardingData({ goals: [...currentGoals, goalId] });
-    }
-  };
-
   return (
     <div className="bg-nebula min-h-screen relative overflow-hidden flex items-center justify-center p-container-padding-mobile md:p-container-padding-desktop transition-colors duration-300">
       
@@ -120,16 +100,16 @@ export default function OnboardingPage() {
 
       <div className="relative z-10 w-full max-w-[500px] flex flex-col gap-6">
         
-        {/* Progress Bar */}
+        {/* Progress Bar (2 Steps) */}
         <div className="w-full flex flex-col gap-2">
           <div className="flex justify-between items-center text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-widest px-1">
-            <span>Step {onboardingStep} of 3</span>
-            <span>{Math.round((onboardingStep / 3) * 100)}%</span>
+            <span>Step {onboardingStep} of 2</span>
+            <span>{Math.round((onboardingStep / 2) * 100)}%</span>
           </div>
           <div className="w-full h-2 bg-white/50 dark:bg-[#1c1230] border border-white/40 dark:border-[#3a2d58]/60 rounded-full overflow-hidden">
             <div 
               className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-300"
-              style={{ width: `${(onboardingStep / 3) * 100}%` }}
+              style={{ width: `${(onboardingStep / 2) * 100}%` }}
             ></div>
           </div>
         </div>
@@ -298,49 +278,6 @@ export default function OnboardingPage() {
                 </div>
               </motion.div>
             )}
-
-            {onboardingStep === 3 && (
-              <motion.div
-                key="step-3"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.25 }}
-                className="space-y-6"
-              >
-                <div>
-                  <h1 className="font-serif font-bold text-2xl md:text-3xl text-[#18003d] dark:text-[#eee6ff] mb-2">Configure goals 🎯</h1>
-                  <p className="text-sm text-[#3d3050] dark:text-[#c8bedd] font-medium">Select what you would like to focus on inside Nyra.</p>
-                </div>
-
-                <div className="space-y-3 max-h-[300px] overflow-y-auto no-scrollbar pr-1">
-                  {goalsList.map((goal) => {
-                    const isSelected = onboardingData.goals.includes(goal.id);
-                    return (
-                      <button
-                        key={goal.id}
-                        onClick={() => handleGoalToggle(goal.id)}
-                        className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between ${
-                          isSelected
-                            ? 'bg-primary/10 dark:bg-primary/20 border-primary dark:border-primary/60 shadow-sm'
-                            : 'bg-white/40 dark:bg-[#1c1230]/60 border-outline-variant/60 dark:border-[#3a2d58]/60 hover:bg-white/70 dark:hover:bg-[#261d48]'
-                        }`}
-                      >
-                        <div className="space-y-1 pr-4">
-                          <h4 className="font-bold text-sm text-[#18003d] dark:text-[#eee6ff]">{goal.title}</h4>
-                          <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] leading-normal font-medium">{goal.desc}</p>
-                        </div>
-                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
-                          isSelected ? 'bg-primary border-primary text-white' : 'border-outline-variant dark:border-[#3a2d58]'
-                        }`}>
-                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
           </AnimatePresence>
 
           {/* Error message */}
@@ -368,7 +305,7 @@ export default function OnboardingPage() {
             >
               {isSaving ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
-              ) : onboardingStep === 3 ? 'Complete Setup 🌸' : 'Continue'}
+              ) : onboardingStep === 2 ? 'Complete Setup 🌸' : 'Continue'}
             </button>
           </div>
         </motion.div>
