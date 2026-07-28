@@ -60,8 +60,20 @@ export default function AIPage() {
   const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0];
   const messages = activeThread?.messages || [];
 
-  // Load threads from backend on mount
+  // Restore cached AI threads from localStorage after mount for 0ms instant render
   useEffect(() => {
+    try {
+      const cached = localStorage.getItem('nyra_cached_ai_threads');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setThreads(parsed);
+          setActiveThreadId(parsed[0].id);
+          setIsLoadingThreads(false);
+        }
+      }
+    } catch (e) {}
+
     const token = typeof window !== 'undefined' ? localStorage.getItem('nyra_token') : null;
     if (!token) { setIsLoadingThreads(false); return; }
     
@@ -100,7 +112,11 @@ export default function AIPage() {
         timestamp: m.created_at || new Date().toISOString(),
         isRead: true,
       }));
-      setThreads(prev => prev.map(t => t.id === threadId ? { ...t, messages: formatted } : t));
+      setThreads(prev => {
+        const next = prev.map(t => t.id === threadId ? { ...t, messages: formatted } : t);
+        try { localStorage.setItem('nyra_cached_ai_threads', JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
     } catch {}
     setIsLoadingThreads(false);
   };

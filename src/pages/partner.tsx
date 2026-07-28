@@ -269,15 +269,26 @@ export default function PartnerPage() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
 
-  // Restore client cache after mount to prevent SSR React #418 hydration mismatch
+  // Restore client cache after mount to prevent SSR React #418 hydration mismatch & ensure 0ms instant loading
   useEffect(() => {
     try {
-      const cached = localStorage.getItem('nyra_cached_partner_dashboard');
-      if (cached) {
-        const parsed = JSON.parse(cached);
+      const cachedDashboard = localStorage.getItem('nyra_cached_partner_dashboard');
+      if (cachedDashboard) {
+        const parsed = JSON.parse(cachedDashboard);
         if (parsed) {
           setDashboardData(parsed);
           setIsDashboardLoading(false);
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const cachedChatMsgs = localStorage.getItem('nyra_cached_chat_messages');
+      if (cachedChatMsgs) {
+        const parsedMsgs = JSON.parse(cachedChatMsgs);
+        if (Array.isArray(parsedMsgs) && parsedMsgs.length > 0) {
+          setMessages(parsedMsgs);
+          setIsChatLoading(false);
         }
       }
     } catch (e) {}
@@ -359,14 +370,6 @@ export default function PartnerPage() {
     return null;
   });
 
-  // Clear messages when leaving chat tab to avoid showing stale data on re-entry
-  useEffect(() => {
-    if (activeTab !== 'chat') {
-      setMessages([]);
-      setIsChatLoading(true);
-    }
-  }, [activeTab]);
-
   // ── Live message polling ─────────────────────────────────────────────────
   useEffect(() => {
     if (activeTab !== 'chat') return;
@@ -399,22 +402,23 @@ export default function PartnerPage() {
             );
           }
           if (liveMsgs) {
-            setMessages(() => {
-              const formatted = liveMsgs.map((m: any) => ({
-                id: m.id,
-                senderId: m.sender_id,
-                text: m.text,
-                sticker: m.sticker,
-                reaction: m.reaction,
-                mediaUrl: m.media_url,
-                mediaType: m.media_type,
-                timestamp: m.created_at,
-                is_read: m.is_read,
-                is_edited: m.is_edited,
-                replyTo: m.reply_to || m.replyTo,
-              }));
-              return formatted;
-            });
+            const formatted = liveMsgs.map((m: any) => ({
+              id: m.id,
+              senderId: m.sender_id,
+              text: m.text,
+              sticker: m.sticker,
+              reaction: m.reaction,
+              mediaUrl: m.media_url,
+              mediaType: m.media_type,
+              timestamp: m.created_at,
+              is_read: m.is_read,
+              is_edited: m.is_edited,
+              replyTo: m.reply_to || m.replyTo,
+            }));
+            setMessages(formatted);
+            try {
+              localStorage.setItem('nyra_cached_chat_messages', JSON.stringify(formatted));
+            } catch (e) {}
           }
           setIsChatLoading(false);
         })
