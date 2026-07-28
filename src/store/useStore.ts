@@ -425,8 +425,29 @@ export const useStore = create<AppState>((set, get) => ({
     
     let lastLogDate = rawDate;
     if (actualLogs.length > 0) {
-      const sorted = [...actualLogs].sort((a, b) => a.date.localeCompare(b.date));
-      lastLogDate = sorted[sorted.length - 1].date;
+      const dates = Array.from(new Set(actualLogs.map((l) => l.date))).sort((a, b) => a.localeCompare(b));
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // Find period start dates (dates where the day before is not a logged period day)
+      const periodStarts: string[] = [];
+      for (const dStr of dates) {
+        const parts = dStr.split('-').map(Number);
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        d.setDate(d.getDate() - 1);
+        const prevStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (!dates.includes(prevStr)) {
+          periodStarts.push(dStr);
+        }
+      }
+
+      const validStarts = periodStarts.filter((s) => s <= todayStr);
+      if (validStarts.length > 0) {
+        lastLogDate = validStarts[validStarts.length - 1];
+      } else if (periodStarts.length > 0) {
+        lastLogDate = periodStarts[periodStarts.length - 1];
+      } else {
+        lastLogDate = dates[0];
+      }
     }
 
     let currentDay = 1;

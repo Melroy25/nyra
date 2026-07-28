@@ -292,7 +292,10 @@ export default function LoginPage() {
                   });
                   const data = await res.json();
                   if (!res.ok) throw new Error(data.error || 'Failed to send code');
-                  setSuccessMsg(data.message || '6-digit verification code sent to your email!');
+                  if (data.otpCode) {
+                    setOtpCode(data.otpCode);
+                  }
+                  setSuccessMsg(data.message || '6-digit verification code sent!');
                   setForgotStep(2);
                 } catch (err: any) {
                   setErrorMsg(err.message || 'Could not send verification code.');

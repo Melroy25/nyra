@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useStore } from '../store/useStore';
 import { Calendar, Heart, Pencil, X, Check, Loader2, Camera, User, Sparkles, MessageCircle, Settings, Shield } from 'lucide-react';
@@ -86,13 +86,20 @@ export default function ProfilePage() {
   // Modal State
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editName, setEditName] = useState(name);
-  const [editAge, setEditAge] = useState(age);
+  const [editAge, setEditAge] = useState<number | ''>(age || '');
   const [editDob, setEditDob] = useState(dob);
   const [editAvatar, setEditAvatar] = useState<string | undefined>(avatarUrl);
   const [editGoals, setEditGoals] = useState<string[]>(goals);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (name) setEditName(name);
+    if (age) setEditAge(age);
+    if (dob) setEditDob(dob);
+    if (avatarUrl) setEditAvatar(avatarUrl);
+  }, [name, age, dob, avatarUrl]);
 
   const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -122,10 +129,12 @@ export default function ProfilePage() {
     setIsSaving(true);
 
     try {
+      const numAge = typeof editAge === 'number' ? editAge : (age || 0);
+
       // Call Supabase API
       const res = await apiUpdateProfile({
         name: editName,
-        age: editAge,
+        age: numAge,
         dateOfBirth: editDob,
         goals: editGoals,
         avatarUrl: editAvatar,
@@ -136,7 +145,7 @@ export default function ProfilePage() {
           ...user,
           ...(res?.user || {}),
           name: res?.user?.name || editName,
-          age: res?.user?.age || editAge,
+          age: res?.user?.age || numAge,
           dateOfBirth: res?.user?.dateOfBirth || editDob,
           avatarUrl: res?.user?.avatarUrl || editAvatar || undefined,
           goals: res?.user?.goals || editGoals,
@@ -147,7 +156,7 @@ export default function ProfilePage() {
       // Sync local Zustand state
       updateOnboardingData({
         name: editName,
-        age: editAge,
+        age: numAge,
         dob: editDob,
         goals: editGoals,
       });
@@ -409,8 +418,8 @@ export default function ProfilePage() {
                   <label className="block text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider mb-1">Age</label>
                   <input
                     type="number"
-                    value={editAge || ''}
-                    onChange={(e) => setEditAge(parseInt(e.target.value) || 0)}
+                    value={editAge || age || ''}
+                    onChange={(e) => setEditAge(parseInt(e.target.value) || '')}
                     placeholder="Enter age"
                     className="w-full px-4 py-2.5 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-sm font-semibold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
                   />
@@ -419,7 +428,7 @@ export default function ProfilePage() {
                   <label className="block text-xs font-bold text-[#3d3050] dark:text-[#c8bedd] uppercase tracking-wider mb-1">Date of Birth</label>
                   <input
                     type="date"
-                    value={editDob}
+                    value={editDob || dob || ''}
                     onChange={(e) => setEditDob(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-sm font-semibold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
                   />
