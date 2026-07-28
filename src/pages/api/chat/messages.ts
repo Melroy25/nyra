@@ -149,7 +149,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       }
     } catch (e) {}
 
-    return res.status(200).json({ messages, threadId, partnerInfo });
+    return res.status(200).json({ messages, threadId, partnerInfo, myUserId: authUser.userId });
   }
 
   // ── POST: send message ────────────────────────────────────────────────────

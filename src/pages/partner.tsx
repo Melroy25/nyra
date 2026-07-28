@@ -101,18 +101,7 @@ export default function PartnerPage() {
   const [chatThreadId, setChatThreadId] = useState<string | null>(null);
   const [chatPartnerInfo, setChatPartnerInfo] = useState<any>(() => user?.connectedPartner || null);
   const [replyingToMessage, setReplyingToMessage] = useState<any | null>(null);
-  const [isChatLoading, setIsChatLoading] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('nyra_chat_msg_cache');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          return !(Array.isArray(parsed) && parsed.length > 0);
-        }
-      } catch (e) {}
-    }
-    return true;
-  });
+  const [isChatLoading, setIsChatLoading] = useState<boolean>(true);
   const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -320,20 +309,21 @@ export default function PartnerPage() {
     } catch (e) {}
   };
 
-  // Polling for live chat messages when on 'chat' tab
-  // ── Instant cache load: show last messages immediately on mount ──────────
+  // Track the authenticated user's real ID from API responses for correct alignment
+  const [authUserId, setAuthUserId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      try { return JSON.parse(localStorage.getItem('nyra_cached_user') || '{}')?.id || null; } catch { return null; }
+    }
+    return null;
+  });
+
+  // Clear messages when leaving chat tab to avoid showing stale data on re-entry
   useEffect(() => {
-    if (activeTab !== 'chat') return;
-    try {
-      const cached = localStorage.getItem('nyra_chat_msg_cache');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
-        }
-      }
-    } catch (e) {}
-  }, []); // Only on mount
+    if (activeTab !== 'chat') {
+      setMessages([]);
+      setIsChatLoading(true);
+    }
+  }, [activeTab]);
 
   // ── Live message polling ─────────────────────────────────────────────────
   useEffect(() => {
@@ -343,9 +333,19 @@ export default function PartnerPage() {
 
     const fetchLiveMessages = (opts: { markRead?: boolean; heartbeat?: boolean } = {}) => {
       apiGetMessages('auto', opts)
-        .then(({ messages: liveMsgs, threadId, partnerInfo }) => {
+        .then(({ messages: liveMsgs, threadId, partnerInfo, myUserId }) => {
           if (!isActiveView) return;
           if (threadId) setChatThreadId(threadId);
+          // Capture real authenticated user ID from server response for correct bubble alignment
+          if (myUserId) {
+            setAuthUserId(myUserId);
+            try {
+              const cached = JSON.parse(localStorage.getItem('nyra_cached_user') || '{}');
+              if (cached.id !== myUserId) {
+                localStorage.setItem('nyra_cached_user', JSON.stringify({ ...cached, id: myUserId }));
+              }
+            } catch {}
+          }
           if (partnerInfo) {
             setChatPartnerInfo((prev: any) =>
               prev?.id === partnerInfo.id &&
@@ -357,7 +357,7 @@ export default function PartnerPage() {
             );
           }
           if (liveMsgs) {
-            setMessages((prev) => {
+            setMessages(() => {
               const formatted = liveMsgs.map((m: any) => ({
                 id: m.id,
                 senderId: m.sender_id,
@@ -368,39 +368,10 @@ export default function PartnerPage() {
                 mediaType: m.media_type,
                 timestamp: m.created_at,
                 is_read: m.is_read,
+                is_edited: m.is_edited,
                 replyTo: m.reply_to || m.replyTo,
               }));
-
-              // Keep ANY local message that is not yet in liveMsgs GET output (under 60s old)
-              // This guarantees sent messages NEVER vanish while waiting for database GET
-              const recentUnconfirmedLocalMsgs = prev.filter((p) => {
-                const isAlreadyInLive = formatted.some(
-                  (f) => f.id === p.id || (f.text === p.text && f.senderId === p.senderId)
-                );
-                if (isAlreadyInLive) return false;
-                const ageMs = Date.now() - new Date(p.timestamp || Date.now()).getTime();
-                return ageMs < 60000;
-              });
-              const merged = [...formatted, ...recentUnconfirmedLocalMsgs];
-
-              // Smart diff to avoid unnecessary re-renders
-              const isDifferent =
-                merged.length !== prev.length ||
-                merged.some(
-                  (m, idx) =>
-                    prev[idx]?.id !== m.id ||
-                    prev[idx]?.reaction !== m.reaction ||
-                    prev[idx]?.text !== m.text ||
-                    prev[idx]?.is_read !== m.is_read
-                );
-
-              if (isDifferent) {
-                try {
-                  localStorage.setItem('nyra_chat_msg_cache', JSON.stringify(merged.slice(-80)));
-                } catch (e) {}
-                return merged;
-              }
-              return prev;
+              return formatted;
             });
           }
           setIsChatLoading(false);
@@ -530,6 +501,10 @@ export default function PartnerPage() {
               : m
           )
         );
+        // Update authUserId from sent message if not already set
+        if (!authUserId && sentMsg.sender_id) {
+          setAuthUserId(sentMsg.sender_id);
+        }
       }
     } catch (err) {
       console.log('Chat backend sync fallback:', err);
@@ -763,15 +738,18 @@ export default function PartnerPage() {
   const userPrompts = partnerAiMessages.filter((m) => m.senderId === user?.id || m.senderId === 'user' || m.senderId === 'partner-john');
 
   // True if this message was sent by the currently logged-in user
+  // Uses authUserId captured from server response (most reliable) then falls back to user store
   const isMsgSentByMe = useCallback((msg: any) => {
     if (!msg) return false;
     const sid = msg.senderId || msg.sender_id;
-    if (user?.id && sid === user.id) return true;
-    if (!user?.id) {
-      return isPartner ? (sid === 'partner-john' || sid === 'partner') : (sid === 'user-sarah' || sid === 'user');
-    }
+    if (!sid) return false;
+    // Primary: use real server-confirmed user ID
+    if (authUserId && sid === authUserId) return true;
+    if (authUserId && sid !== authUserId) return false;
+    // Fallback: use store user ID
+    if (user?.id) return sid === user.id;
     return false;
-  }, [user?.id, isPartner]);
+  }, [authUserId, user?.id]);
 
   // Compute partner last active time at component scope (used in ticks + header)
   const partnerIncomingMsgsList = messages.filter((m: any) => !isMsgSentByMe(m));

@@ -123,7 +123,7 @@ export const apiGetMessages = (threadId: string = 'auto', opts: { markRead?: boo
   const params = new URLSearchParams({ threadId });
   if (opts.markRead) params.set('markRead', '1');
   if (opts.heartbeat) params.set('heartbeat', '1');
-  return request<{ messages: any[]; threadId: string; partnerInfo: any | null }>(`/api/chat/messages?${params}`);
+  return request<{ messages: any[]; threadId: string; partnerInfo: any | null; myUserId?: string }>(`/api/chat/messages?${params}`);
 };
 
 export const apiSendMessage = (
