@@ -165,10 +165,10 @@ export const apiClearChat = (threadId: string, clearForMe: boolean) =>
 
 // ── AI CHAT ───────────────────────────────────
 
-export const apiAiChat = (threadId: string, message: string, aiType: 'nyra' | 'partner' = 'nyra') =>
+export const apiAiChat = (threadId: string, message: string, aiType: 'nyra' | 'partner' = 'nyra', imageUrl?: string) =>
   request<{ reply: string }>('/api/ai/chat', {
     method: 'POST',
-    body: JSON.stringify({ threadId, message, aiType }),
+    body: JSON.stringify({ threadId, message, aiType, imageUrl }),
   });
 
 // ── ROUTINES ──────────────────────────────────

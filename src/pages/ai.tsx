@@ -15,6 +15,7 @@ interface AiMessage {
   timestamp: string;
   reaction?: string;
   isRead?: boolean;
+  imageUrl?: string;
 }
 
 interface AiThread {
@@ -34,6 +35,7 @@ export default function AIPage() {
   const [isLoadingThreads, setIsLoadingThreads] = useState(true);
   
   const [inputVal, setInputVal] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [showThreadsDrawer, setShowThreadsDrawer] = useState(false);
   const [showOutline, setShowOutline] = useState(false);
@@ -53,6 +55,7 @@ export default function AIPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const inputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0];
   const messages = activeThread?.messages || [];
@@ -116,10 +119,22 @@ export default function AIPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSend = async () => {
-    if (!inputVal.trim() || isTyping) return;
-    const text = inputVal.trim();
+    if ((!inputVal.trim() && !selectedImage) || isTyping) return;
+    const text = inputVal.trim() || 'Analyzed attached image.';
+    const attachedImage = selectedImage;
     setInputVal('');
+    setSelectedImage(null);
     
     const token = typeof window !== 'undefined' ? localStorage.getItem('nyra_token') : null;
     if (!token) {
@@ -131,6 +146,7 @@ export default function AIPage() {
       id: `u-${Date.now()}`,
       senderId: 'user',
       text,
+      imageUrl: attachedImage || undefined,
       timestamp: new Date().toISOString(),
       isRead: false,
     };
@@ -138,7 +154,7 @@ export default function AIPage() {
     setIsTyping(true);
 
     try {
-      const { reply } = await apiAiChat(activeThread?.id || 'auto', text, 'nyra');
+      const { reply } = await apiAiChat(activeThread?.id || 'auto', text, 'nyra', attachedImage || undefined);
       // Mark user message as delivered
       setThreads(prev => prev.map(t => t.id === activeThread?.id 
         ? { ...t, messages: t.messages.map(m => m.id === userMsg.id ? { ...m, isRead: true } : m) }
@@ -434,6 +450,15 @@ export default function AIPage() {
                     {!isUser && (
                       <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-gradient-to-b from-[#a855f7] to-[#7c3aed] rounded-full" />
                     )}
+                    {msg.imageUrl && (
+                      <div className="mb-2 overflow-hidden rounded-xl">
+                        <img
+                          src={msg.imageUrl}
+                          alt="Attached"
+                          className="max-h-48 w-auto rounded-xl object-cover border border-black/10 dark:border-white/10"
+                        />
+                      </div>
+                    )}
                     <p className="whitespace-pre-line pl-[2px]">{msg.text}</p>
 
                     {/* Reaction badge */}
@@ -520,11 +545,37 @@ export default function AIPage() {
         </div>
 
         {/* ── INPUT BAR (like chat) ── */}
-        <div className="bg-white dark:bg-[#160e2e] px-3 py-3 border-t border-black/8 dark:border-[#2a1f45]/60 shrink-0">
+        <div className="bg-white dark:bg-[#160e2e] px-3 py-3 border-t border-black/8 dark:border-[#2a1f45]/60 shrink-0 flex flex-col gap-2">
+          {/* Image Preview Badge */}
+          {selectedImage && (
+            <div className="relative inline-block w-20 h-20 rounded-xl overflow-hidden border-2 border-[#7c3aed] shadow-md ml-2">
+              <img src={selectedImage} alt="Selected" className="w-full h-full object-cover" />
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-red-500 transition-colors"
+                title="Remove image"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
-            {/* Emoji quick button */}
-            <button className="p-2 text-[#9d8fc0] hover:text-[#7c3aed] transition-colors shrink-0">
-              <Smile className="w-5 h-5" />
+            <input
+              type="file"
+              ref={imageInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+
+            {/* Image Attachment Button */}
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              className="p-2 text-[#9d8fc0] hover:text-[#7c3aed] transition-colors shrink-0"
+              title="Attach image for Nyra AI"
+            >
+              <Paperclip className="w-5 h-5" />
             </button>
 
             {/* Input */}
@@ -534,14 +585,14 @@ export default function AIPage() {
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-              placeholder={`Message Nyra...`}
+              placeholder={selectedImage ? `Ask Nyra AI about this image...` : `Message Nyra...`}
               className="flex-1 px-4 py-2.5 rounded-full border border-black/10 dark:border-[#2a1f45] bg-[#f5f0ff] dark:bg-[#1e1538] text-[#18003d] dark:text-[#eee6ff] placeholder-[#9d8fc0] dark:placeholder-[#6b5b95] text-[13px] font-medium outline-none focus:border-[#7c3aed]/50 focus:ring-2 focus:ring-[#7c3aed]/10 transition-all"
             />
 
             {/* Send button */}
             <button
               onClick={handleSend}
-              disabled={isTyping || !inputVal.trim()}
+              disabled={isTyping || (!inputVal.trim() && !selectedImage)}
               className="w-10 h-10 rounded-full bg-gradient-to-br from-[#a855f7] to-[#7c3aed] text-white flex items-center justify-center shadow-md shadow-[#7c3aed]/30 active:scale-90 hover:shadow-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             >
               {isTyping

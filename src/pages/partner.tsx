@@ -93,6 +93,8 @@ export default function PartnerPage() {
   const [editingTitle, setEditingTitle] = useState('');
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedPartnerAiImage, setSelectedPartnerAiImage] = useState<string | null>(null);
+  const aiImageInputRef = useRef<HTMLInputElement>(null);
   const [drawerTab, setDrawerTab] = useState<'emojis' | 'stickers'>('emojis');
 
   // ── Voice Note ────────────────────────────────────────────────────────────
@@ -757,17 +759,30 @@ export default function PartnerPage() {
 
   // Handle Partner AI Chat query (real API call)
   const [isPartnerAiTyping, setIsPartnerAiTyping] = useState(false);
+  const handlePartnerAiImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedPartnerAiImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSendPartnerAi = async (promptText?: string) => {
-    const textToSend = promptText || partnerAiInput;
-    if (!textToSend.trim() || isPartnerAiTyping) return;
+    const textToSend = promptText || partnerAiInput || (selectedPartnerAiImage ? 'Analyzed attached image.' : '');
+    const attachedImg = selectedPartnerAiImage;
+    if ((!textToSend.trim() && !attachedImg) || isPartnerAiTyping) return;
+
     if (!promptText) setPartnerAiInput('');
+    setSelectedPartnerAiImage(null);
 
     // Add user message (isAi = false)
-    addPartnerAiMessage(textToSend.trim(), false);
+    addPartnerAiMessage(textToSend.trim(), false, attachedImg || undefined);
     setIsPartnerAiTyping(true);
 
     try {
-      const { reply } = await apiAiChat(activePartnerAiThread?.id || 'auto', textToSend.trim(), 'partner');
+      const { reply } = await apiAiChat(activePartnerAiThread?.id || 'auto', textToSend.trim(), 'partner', attachedImg || undefined);
       // Add AI reply (isAi = true)
       addPartnerAiMessage(reply || 'I am here to help you support her.', true);
     } catch {
@@ -2074,6 +2089,15 @@ export default function PartnerPage() {
                           {!isUser && (
                             <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-gradient-to-b from-[#a855f7] to-[#7c3aed] rounded-full" />
                           )}
+                          {msg.imageUrl && (
+                            <div className="mb-2 overflow-hidden rounded-xl">
+                              <img
+                                src={msg.imageUrl}
+                                alt="Attached"
+                                className="max-h-48 w-auto rounded-xl object-cover border border-black/10 dark:border-white/10"
+                              />
+                            </div>
+                          )}
                           <p className="whitespace-pre-line pl-[2px]">{msg.text}</p>
                         </div>
 
@@ -2120,24 +2144,57 @@ export default function PartnerPage() {
               </div>
 
               {/* AI Input Footer */}
-              <div className="bg-white/80 dark:bg-[#1c1230]/90 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex items-center gap-2">
-                <input 
-                  type="text" 
-                  placeholder={`Ask Nyra AI how to support ${trackedUserName}...`}
-                  value={partnerAiInput}
-                  onChange={(e) => setPartnerAiInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendPartnerAi()}
-                  className="flex-1 px-4 py-3 rounded-full border border-outline-variant/60 dark:border-[#3a2d58] focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 outline-none text-xs font-semibold bg-white/90 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0] shadow-inner"
-                />
-                <button 
-                  onClick={() => handleSendPartnerAi()}
-                  disabled={!partnerAiInput.trim() || isPartnerAiTyping}
-                  className={`w-10 h-10 rounded-full bg-gradient-to-r from-tertiary to-primary text-white flex items-center justify-center shadow-md transition-all ${
-                    !partnerAiInput.trim() || isPartnerAiTyping ? 'opacity-40 cursor-not-allowed' : 'hover:scale-105 active:scale-95'
-                  }`}
-                >
-                  <ArrowUp className="w-5 h-5" />
-                </button>
+              <div className="bg-white/80 dark:bg-[#1c1230]/90 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex flex-col gap-2">
+                {/* Image Preview Badge */}
+                {selectedPartnerAiImage && (
+                  <div className="relative inline-block w-20 h-20 rounded-xl overflow-hidden border-2 border-[#7c3aed] shadow-md ml-2">
+                    <img src={selectedPartnerAiImage} alt="Selected" className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => setSelectedPartnerAiImage(null)}
+                      className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-red-500 transition-colors"
+                      title="Remove image"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={aiImageInputRef}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePartnerAiImageSelect}
+                  />
+
+                  {/* Image Attachment Button */}
+                  <button
+                    onClick={() => aiImageInputRef.current?.click()}
+                    className="p-2 text-[#9d8fc0] hover:text-[#7c3aed] transition-colors shrink-0"
+                    title="Attach image for Partner AI"
+                  >
+                    <Paperclip className="w-5 h-5" />
+                  </button>
+
+                  <input 
+                    type="text" 
+                    placeholder={selectedPartnerAiImage ? `Ask Nyra AI about this image...` : `Ask Nyra AI how to support ${trackedUserName}...`}
+                    value={partnerAiInput}
+                    onChange={(e) => setPartnerAiInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendPartnerAi()}
+                    className="flex-1 px-4 py-3 rounded-full border border-outline-variant/60 dark:border-[#3a2d58] focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 outline-none text-xs font-semibold bg-white/90 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0] shadow-inner"
+                  />
+                  <button 
+                    onClick={() => handleSendPartnerAi()}
+                    disabled={(!partnerAiInput.trim() && !selectedPartnerAiImage) || isPartnerAiTyping}
+                    className={`w-10 h-10 rounded-full bg-gradient-to-r from-tertiary to-primary text-white flex items-center justify-center shadow-md transition-all ${
+                      (!partnerAiInput.trim() && !selectedPartnerAiImage) || isPartnerAiTyping ? 'opacity-40 cursor-not-allowed' : 'hover:scale-105 active:scale-95'
+                    }`}
+                  >
+                    <ArrowUp className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
             {/* ── DRAWER 1: MULTIPLE CHAT THREADS SLIDE-OUT ── */}

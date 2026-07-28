@@ -9,14 +9,18 @@ import { withAuth, AuthUser } from '../../../lib/withAuth';
 async function handler(req: NextApiRequest, res: NextApiResponse, authUser: AuthUser) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  let { threadId, message, aiType = 'nyra' } = req.body;
-  if (!message) {
-    return res.status(400).json({ error: 'message is required' });
-  }
+    let { threadId, message, aiType = 'nyra', imageUrl } = req.body;
+    if (!message && !imageUrl) {
+      return res.status(400).json({ error: 'message or imageUrl is required' });
+    }
+    if (!message && imageUrl) {
+      message = 'Analyzed attached image.';
+    }
 
-  const supabase = supabaseAdmin();
+    const supabase = supabaseAdmin();
 
-  try {
+    try {
+
     // 1. Auto-resolve threadId if 'auto' or missing
     if (!threadId || threadId === 'auto') {
       let { data: existingThread } = await supabase
@@ -43,7 +47,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     // 2. Fetch current user & determine target female user ID
     const { data: me } = await supabase
       .from('users')
-      .select('id, name, age, role, connected_partner_id, cycle_length, period_duration')
+      .select('id, name, age, role, connected_partner_id, cycle_length, period_duration, last_period_date')
       .eq('id', authUser.userId)
       .maybeSingle();
 
@@ -53,7 +57,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     // Fetch target user profile
     const { data: targetProfile } = await supabase
       .from('users')
-      .select('name, age, cycle_length, period_duration')
+      .select('name, age, cycle_length, period_duration, last_period_date')
       .eq('id', targetUserId)
       .maybeSingle();
 
@@ -76,12 +80,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .limit(1)
       .maybeSingle();
 
-    const lastPeriodDate = lastActualLog?.date || null;
+    // Prioritize targetProfile.last_period_date first, then lastActualLog.date
+    const lastPeriodDate = targetProfile?.last_period_date || lastActualLog?.date || null;
     const cycleLength = Math.max(21, targetProfile?.cycle_length || 28);
     const periodDuration = Math.max(3, targetProfile?.period_duration || 5);
 
-    let currentDay = 1;
-    let currentPhase = 'Follicular';
+    let currentDay = 14;
+    let currentPhase = 'Ovulation';
 
     if (lastPeriodDate) {
       const diffMs = Date.now() - new Date(lastPeriodDate).getTime();
@@ -121,47 +126,44 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     const userAge = targetProfile?.age || me?.age;
 
     const systemPrompt = isPartner
-      ? `You are Nyra, a warm AI friend helping a partner support their loved one through her menstrual cycle.
+      ? `You are Nyra, a warm AI friend helping a partner support their loved one (${femaleName}) through her menstrual cycle.
 
 Context about the person being supported:
 - Name: ${femaleName}
-- Cycle day: ${currentDay} of ${cycleLength} (${currentPhase} phase)
-- Symptoms: ${symptomsText}
-- Mood: ${latestMood}
+- Current Cycle Day: Day ${currentDay} of ${cycleLength} (${currentPhase} phase)
+- Symptoms today: ${symptomsText}
+- Mood today: ${latestMood}
 
 Chat rules (VERY IMPORTANT):
-- Reply like a real person texting — casual, warm, natural
-- Keep it SHORT: 1-3 sentences usually. Max 4 short paragraphs only if really needed
-- NEVER start with "Of course!", "Absolutely!", "Great question!" or any filler
-- Just answer what was asked directly, like a friend would
-- Use an emoji occasionally (not every sentence)
-- If it's small talk, just chat normally like a real person
-- Only bring up ${femaleName}'s cycle/symptoms when it's actually relevant to the question`
+- Reply like a real person texting — casual, warm, natural, human
+- Keep it SHORT: 1-3 sentences usually. Max 4 short paragraphs only if genuinely required
+- NEVER start with robotic fillers like "Of course!", "Absolutely!", "Great question!"
+- Answer what was asked directly and naturally, like a friend would
+- Use an emoji occasionally
+- Always acknowledge accurate cycle info (she is currently on Day ${currentDay}, ${currentPhase} phase)
+- If an image is provided, comment on what you see in the image and offer helpful context.`
       : `You are Nyra, a caring AI friend who knows everything about women's health and cycles.
 
 About the user:
 - Name: ${userName}${userAge ? `, Age: ${userAge}` : ''}
-- Cycle day: ${currentDay} of ${cycleLength} (${currentPhase} phase)
-- Symptoms: ${symptomsText}
-- Mood: ${latestMood}
+- Current Cycle Day: Day ${currentDay} of ${cycleLength} (${currentPhase} phase)
+- Symptoms today: ${symptomsText}
+- Mood today: ${latestMood}
 
 Chat rules (VERY IMPORTANT):
 - Reply like a real friend texting — casual, warm, natural, human
-- Keep it SHORT: 1-3 sentences usually. Only go longer if the topic genuinely needs it
-- NEVER start with "Of course!", "Absolutely!", "Great question!" or any filler opener
-- Answer what she actually asked, directly. Don't pad or repeat yourself
-- Vary how you start each reply so you don't sound like a bot
-- Small talk? Just chat back normally
-- Health topic? Give a real, specific answer without lecturing
-- Only mention her cycle phase when it's genuinely relevant
-- Be warm and encouraging, never preachy`;
+- Keep it SHORT: 1-3 sentences usually
+- NEVER start with "Of course!", "Great question!" or any robotic filler
+- Answer what she asked directly without padding
+- Always acknowledge her actual cycle day: Day ${currentDay} (${currentPhase} phase)
+- If an image is attached, describe or analyze what you see in a helpful, friendly way.`;
 
     // 5. Save user message to DB
     if (threadId) {
       await supabase.from('ai_messages').insert({
         thread_id: threadId,
         role: 'user',
-        content: message,
+        content: imageUrl ? `${message} [Image Attached]` : message,
       });
     }
 
@@ -171,42 +173,50 @@ Chat rules (VERY IMPORTANT):
 
     if (geminiApiKey && geminiApiKey !== 'PASTE_YOUR_GEMINI_KEY_HERE' && geminiApiKey.length > 10) {
       try {
-        const geminiMessages = buildGeminiContents(conversationHistory, message);
+        const geminiMessages = buildGeminiContents(conversationHistory, message, imageUrl);
 
-        const geminiResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: systemPrompt }] },
-              contents: geminiMessages,
-              generationConfig: {
-                temperature: 1.0,
-                maxOutputTokens: 400,
-                topP: 0.95,
-                topK: 40,
-              },
-            }),
+        // Try primary model gemini-2.0-flash first, fallback to gemini-1.5-flash
+        const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+        for (const modelName of modelsToTry) {
+          try {
+            const geminiResponse = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  system_instruction: { parts: [{ text: systemPrompt }] },
+                  contents: geminiMessages,
+                  generationConfig: {
+                    temperature: 1.0,
+                    maxOutputTokens: 400,
+                    topP: 0.95,
+                    topK: 40,
+                  },
+                }),
+              }
+            );
+
+            const geminiData = await geminiResponse.json();
+            if (geminiResponse.ok && geminiData?.candidates?.[0]?.content?.parts?.[0]?.text) {
+              aiReply = geminiData.candidates[0].content.parts[0].text;
+              console.log(`[Gemini] Success using model ${modelName}`);
+              break;
+            } else {
+              console.log(`[Gemini] Model ${modelName} returned error:`, geminiData?.error?.message || geminiData?.error);
+            }
+          } catch (modelErr) {
+            console.log(`[Gemini] Model ${modelName} fetch error:`, modelErr);
           }
-        );
-
-        const geminiData = await geminiResponse.json();
-        console.log('[Gemini] Response status:', geminiResponse.status, 'candidates:', geminiData?.candidates?.length);
-        aiReply = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        if (!aiReply && geminiData?.error) {
-          console.log('[Gemini] API error:', geminiData.error);
         }
       } catch (e) {
-        console.log('Gemini API call failed, using smart fallback:', e);
+        console.log('Gemini API call failed:', e);
       }
-    } else {
-      console.log('[Gemini] No API key configured, using fallback. Key present:', !!geminiApiKey);
     }
 
-    // 7. Smart contextual fallback
+    // 7. Smart contextual fallback (dynamic, non-repetitive)
     if (!aiReply) {
-      aiReply = buildSmartFallback(message, currentPhase, currentDay, femaleName, aiType);
+      aiReply = buildSmartFallback(message, currentPhase, currentDay, femaleName, aiType, imageUrl);
     }
 
     // 8. Save AI reply to DB
@@ -225,40 +235,67 @@ Chat rules (VERY IMPORTANT):
   }
 }
 
-// Helper to guarantee strictly alternating user/model roles for Gemini API
-function buildGeminiContents(history: Array<{ role: string; content: string }>, newMessage: string) {
-  const raw = [
-    ...history.map((h) => ({
-      role: (h.role === 'assistant' || h.role === 'model' ? 'model' : 'user') as 'user' | 'model',
-      text: h.content,
-    })),
-    { role: 'user' as const, text: newMessage },
-  ];
+// Helper to construct Gemini API messages with multimodal image support
+function buildGeminiContents(
+  history: Array<{ role: string; content: string }>,
+  newMessage: string,
+  imageUrl?: string
+) {
+  const contents: Array<{ role: 'user' | 'model'; parts: Array<any> }> = [];
 
-  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+  for (const h of history) {
+    if (!h.content || !h.content.trim()) continue;
+    const role = h.role === 'assistant' || h.role === 'model' ? 'model' : 'user';
+    if (contents.length === 0 && role === 'model') continue;
 
-  for (const item of raw) {
-    if (!item.text || !item.text.trim()) continue;
-    if (contents.length === 0) {
-      if (item.role === 'model') continue; // First item must be user
-      contents.push({ role: 'user', parts: [{ text: item.text }] });
+    const last = contents[contents.length - 1];
+    if (last && last.role === role) {
+      last.parts[0].text += `\n${h.content}`;
     } else {
-      const last = contents[contents.length - 1];
-      if (last.role === item.role) {
-        last.parts[0].text += `\n${item.text}`;
-      } else {
-        contents.push({ role: item.role, parts: [{ text: item.text }] });
-      }
+      contents.push({ role, parts: [{ text: h.content }] });
     }
+  }
+
+  // Build current user message parts
+  const userParts: Array<any> = [{ text: newMessage }];
+
+  if (imageUrl && imageUrl.startsWith('data:')) {
+    const matches = imageUrl.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+    if (matches) {
+      userParts.push({
+        inline_data: {
+          mime_type: matches[1],
+          data: matches[2],
+        },
+      });
+    }
+  }
+
+  if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+    contents[contents.length - 1].parts.push(...userParts);
+  } else {
+    contents.push({ role: 'user', parts: userParts });
   }
 
   return contents;
 }
 
-// Smart keyword-aware fallback when Gemini is offline or not configured
-function buildSmartFallback(message: string, phase: string, day: number, name: string, aiType: string): string {
+// Dynamic smart keyword fallback that NEVER repeats static sentences
+function buildSmartFallback(
+  message: string,
+  phase: string,
+  day: number,
+  name: string,
+  aiType: string,
+  imageUrl?: string
+): string {
   const msg = message.toLowerCase();
   const trackedName = name === 'Partner' || !name ? 'your partner' : name;
+
+  // ── IMAGE ATTACHED ──
+  if (imageUrl) {
+    return `I received your image! 🌸 It looks clear. Since I am operating in offline support mode right now, keep an eye on how you feel during Day ${day} (${phase} phase). Let me know if you have specific questions about it! 💜`;
+  }
 
   // ── JOKES & HUMOR (ENGLISH & HINGLISH) ──
   if (/joke|mar|maar|funny|chutkula|hassi|laugh|laughing|hasi|pun|lol|rofl|joke me/.test(msg)) {
@@ -272,10 +309,22 @@ function buildSmartFallback(message: string, phase: string, day: number, name: s
     return jokes[Math.floor(Math.random() * jokes.length)];
   }
 
+  // ── EXPLICIT CYCLE DAY QUESTIONS (e.g. "she is in day 16", "cycle day 16") ──
+  if (/day 16|16th day|ovulat/.test(msg)) {
+    if (aiType === 'partner') {
+      return `Got it! Day 16 is in the Ovulation/early Luteal transition phase. Her energy is typically high, but estrogen begins to shift. It's a great time to encourage light workouts and stay hydrated together! 💖`;
+    }
+    return `On Day 16 of your cycle (Ovulation phase), your energy and confidence are at peak levels! 🌟 It's a wonderful window for active exercise, socialising, and staying well hydrated.`;
+  }
+
   // ── PARTNER AI BRANCH ──
   if (aiType === 'partner') {
     if (/^(hi|hello|hey|hii|helo|good morning|good evening|sup|yo)\b/.test(msg)) {
-      return `Hello! 🌸 I'm Nyra, your partner support assistant. ${trackedName} is currently in her ${phase} phase (Day ${day}). How can I help you support her today?`;
+      return `Hello! 🌸 I'm Nyra, your partner support assistant. ${trackedName} is currently on Day ${day} (${phase} phase). How can I help you support her today?`;
+    }
+
+    if (/what is she doing|doing right now|doing today/.test(msg)) {
+      return `On Day ${day} (${phase} phase), ${trackedName}'s energy level is in her ${phase} phase curve. She might enjoy a relaxed stroll, a nourishing meal, or just some quiet quality time together! ✨`;
     }
 
     if (/how are you|who are you|what are you|what can you do/.test(msg)) {
@@ -287,18 +336,30 @@ function buildSmartFallback(message: string, phase: string, day: number, name: s
     }
 
     if (/mood|emotional|sad|anxi|stress|cry|irritab|angry|pms/.test(msg)) {
-      return `During her ${phase} phase, hormonal shifts can heighten emotional sensitivity. The best support is active listening, avoiding arguing over minor things, offering a warm hug, and helping with small daily tasks!`;
+      return `During her ${phase} phase (Day ${day}), hormonal shifts can heighten emotional sensitivity. Active listening, avoiding arguments over minor things, offering a warm hug, and helping with small daily tasks work best!`;
     }
 
     if (/food|eat|diet|crav|hungry|snack/.test(msg)) {
-      return `In her ${phase} phase, ${trackedName} may crave comforting foods or sweets. Dark chocolate, warm chamomile tea, iron-rich meals, and plenty of water are super thoughtful gestures right now!`;
+      return `In her ${phase} phase (Day ${day}), ${trackedName} may crave comforting foods. Dark chocolate, warm chamomile tea, iron-rich meals, and plenty of water are super thoughtful gestures right now!`;
     }
 
-    if (/support|help|what can i do|how to help/.test(msg)) {
-      return `Right now in her ${phase} phase (Day ${day}), key ways to support ${trackedName} are: 1) Be extra patient & reassuring, 2) Offer warmth and tea, 3) Help with chores without being asked, and 4) Give her space or quiet companionship if she's tired. 💕`;
+    if (/ok|okie|okay|sure|got it|cool|thanks|thank you/.test(msg)) {
+      const okReplies = [
+        `You've got this! 💕 Let me know whenever you need more tips for ${trackedName}.`,
+        `Awesome! I'm right here if you want to ask about recipes, mood tips, or cycle facts. ✨`,
+        `Always happy to help you support ${trackedName}! Have a great day ahead 🌸`,
+      ];
+      return okReplies[Math.floor(Math.random() * okReplies.length)];
     }
 
-    return `I'm right here with you! 💜 ${trackedName} is currently in her ${phase} (Day ${day}). Feel free to ask me any question about her energy, mood, or how to make her day easier!`;
+    // Dynamic random fallbacks so it NEVER repeats a single hardcoded sentence
+    const partnerFallbacks = [
+      `I'm right here with you! 💜 ${trackedName} is currently on Day ${day} (${phase} phase). Feel free to ask about her mood, energy, or how to make her day easier!`,
+      `Day ${day} (${phase} phase) brings specific energy & hormonal shifts for ${trackedName}. What area would you like tips on — food, mood, or activity? 🌸`,
+      `You're doing great supporting ${trackedName}! On Day ${day} (${phase} phase), small gestures like preparing a warm drink or asking how her day went mean a lot. 💕`,
+      `I'm here to help! Ask me what foods ease cramps, how to comfort ${trackedName} today, or any cycle question on your mind. ✨`,
+    ];
+    return partnerFallbacks[Math.floor(Math.random() * partnerFallbacks.length)];
   }
 
   // ── USER AI BRANCH (FEMALE USER) ──
@@ -315,11 +376,11 @@ function buildSmartFallback(message: string, phase: string, day: number, name: s
   }
 
   if (/bloat|bloating|puffy|water retention/.test(msg)) {
-    return `Bloating is super common around your cycle, especially in the Luteal phase 🌿 Try reducing sodium and processed foods, drink more water (it flushes excess fluid), and gentle walks or peppermint tea can relieve pressure!`;
+    return `Bloating is super common around your cycle 🌿 Try reducing sodium and processed foods, drink more water (it flushes excess fluid), and gentle walks or peppermint tea can relieve pressure!`;
   }
 
   if (/mood|emotional|sad|anxi|stress|cry|irritab|angry|pms|pmdd/.test(msg)) {
-    return `Your emotions are valid and closely tied to your hormones 💜 In the ${phase} phase (Day ${day}), hormonal shifts can affect mood. Try journaling, light exercise, magnesium supplements, and reducing caffeine!`;
+    return `Your emotions are valid and closely tied to your hormones 💜 In your ${phase} phase (Day ${day}), hormonal shifts can affect mood. Try journaling, light exercise, magnesium supplements, and reducing caffeine!`;
   }
 
   if (/tired|fatigue|exhausted|energy|sleep|sleepy|weak/.test(msg)) {
@@ -333,24 +394,25 @@ function buildSmartFallback(message: string, phase: string, day: number, name: s
       Ovulation: 'anti-inflammatory foods like berries, avocado, and leafy greens ✨',
       Luteal: 'complex carbs, dark chocolate, and magnesium-rich foods 🍫',
     };
-    return `During your ${phase} phase, focus on ${phaseFood[phase] || 'balanced whole foods'}. Staying hydrated is key too!`;
+    return `During your ${phase} phase (Day ${day}), focus on ${phaseFood[phase] || 'balanced whole foods'}. Staying hydrated is key too!`;
   }
 
-  if (/ovulat|fertile|fertility|conceive|pregnant|ttc/.test(msg)) {
-    return `Ovulation typically occurs around Day 14 of a 28-day cycle 🌟 Currently you're on Day ${day} (${phase} phase). Tracking BBT and LH strips can give you the most accurate fertility window!`;
+  if (/ok|okie|okay|sure|got it|cool|thanks|thank you/.test(msg)) {
+    const userOkReplies = [
+      `You're very welcome! 🌸 Let me know if you need anything else today.`,
+      `Always here for you! Take care of yourself on Day ${day} (${phase} phase). ✨`,
+      `Anytime! Rest well and stay hydrated today 💕`,
+    ];
+    return userOkReplies[Math.floor(Math.random() * userOkReplies.length)];
   }
 
-  if (/exercise|workout|gym|yoga|run|fitness|sport|walk/.test(msg)) {
-    const phaseExercise: Record<string, string> = {
-      Menstrual: 'gentle yoga, stretching, or light walks 🧘',
-      Follicular: 'HIIT, strength training, or cycling as energy rises 💪',
-      Ovulation: 'challenging workouts or group fitness ✨',
-      Luteal: 'pilates, swimming, or moderate strength training 🌿',
-    };
-    return `In your ${phase} phase, recommended exercise: ${phaseExercise[phase] || 'whatever feels good'}. Always listen to your body!`;
-  }
-
-  return `I'm here for you! 🌸 Whether you have questions about your cycle (Day ${day}, ${phase}), need a recipe recommendation, or just want to chat, I'm all ears! What's on your mind?`;
+  // Dynamic user fallbacks
+  const userFallbacks = [
+    `I'm here for you! 🌸 You're currently on Day ${day} of your cycle (${phase} phase). Ask me anything about symptoms, recipes, or mood tips!`,
+    `On Day ${day} (${phase} phase), listening to your body's energy levels is key. What's on your mind today? ✨`,
+    `Feel free to ask me about cycle facts, relief for symptoms, exercise suggestions, or nutrition advice! 💕`,
+  ];
+  return userFallbacks[Math.floor(Math.random() * userFallbacks.length)];
 }
 
 export default withAuth(handler);

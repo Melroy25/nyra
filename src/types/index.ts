@@ -77,6 +77,7 @@ export interface ChatMessage {
   timestamp: string; // ISO string
   sticker?: string;
   reaction?: string;
+  imageUrl?: string;
 }
 
 export interface ChatThread {

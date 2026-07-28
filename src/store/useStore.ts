@@ -83,7 +83,7 @@ interface AppState {
   createPartnerAiThread: (title?: string) => string;
   renamePartnerAiThread: (id: string, title: string) => void;
   deletePartnerAiThread: (id: string) => void;
-  addPartnerAiMessage: (text: string, isAi?: boolean) => void;
+  addPartnerAiMessage: (text: string, isAi?: boolean, imageUrl?: string) => void;
 
   // Routine Actions
   toggleRoutine: (id: string) => void;
@@ -566,14 +566,15 @@ export const useStore = create<AppState>((set, get) => ({
       };
     }),
 
-  addPartnerAiMessage: (text, isAi = false) => {
+  addPartnerAiMessage: (text, isAi = false, imageUrl?: string) => {
     const activeId = get().activePartnerAiThreadId;
-    if (!activeId || !text.trim()) return;
+    if (!activeId || (!text.trim() && !imageUrl)) return;
 
     const newMsg: ChatMessage = {
       id: `p-${isAi ? 'ai' : 'user'}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       senderId: isAi ? 'nyra-ai' : 'user',
       text: text.trim(),
+      imageUrl,
       timestamp: new Date().toISOString(),
     };
 
