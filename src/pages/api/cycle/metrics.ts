@@ -21,19 +21,42 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     const cycleLength = userProfile?.cycle_length || 28;
     const periodDuration = userProfile?.period_duration || 5;
 
-    // 2. Fetch recent cycle logs
+    // 2. Fetch recent cycle logs (ordered ascending by date)
     const { data: logs } = await supabase
       .from('cycle_logs')
       .select('*')
       .eq('user_id', authUser.userId)
-      .order('date', { ascending: false })
-      .limit(60);
+      .order('date', { ascending: true });
 
-    // 3. Find last ACTUAL period start date
+    // 3. Find last ACTUAL period start date using block start detection
     const periodLogs = (logs || []).filter((l) => l.is_period && !l.is_predicted);
-    const lastPeriodDate = periodLogs.length > 0
-      ? periodLogs[periodLogs.length - 1].date
-      : userProfile?.last_period_date || null;
+    let lastPeriodDate = userProfile?.last_period_date || null;
+
+    if (periodLogs.length > 0) {
+      const dates = Array.from(new Set(periodLogs.map((l) => l.date))).sort((a, b) => a.localeCompare(b));
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // Find period block start dates (dates where previous day is not a logged period day)
+      const periodStarts: string[] = [];
+      for (const dStr of dates) {
+        const parts = dStr.split('-').map(Number);
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        d.setDate(d.getDate() - 1);
+        const prevStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (!dates.includes(prevStr)) {
+          periodStarts.push(dStr);
+        }
+      }
+
+      const validStarts = periodStarts.filter((s) => s <= todayStr);
+      if (validStarts.length > 0) {
+        lastPeriodDate = validStarts[validStarts.length - 1];
+      } else if (periodStarts.length > 0) {
+        lastPeriodDate = periodStarts[periodStarts.length - 1];
+      } else {
+        lastPeriodDate = dates[0];
+      }
+    }
 
     let currentDay = 1;
     let currentPhase = 'Follicular';

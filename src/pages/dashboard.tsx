@@ -103,6 +103,15 @@ export default function DashboardPage() {
     }
   };
 
+  const storeDay = useStore((state) => state.currentCycleDay);
+  const storePhase = useStore((state) => state.currentCyclePhase);
+  const storeDaysLeft = useStore((state) => state.nextPeriodDaysLeft);
+  const recalculateCycleMetrics = useStore((state) => state.recalculateCycleMetrics);
+
+  useEffect(() => {
+    recalculateCycleMetrics();
+  }, [cycleLogs]);
+
   useEffect(() => {
     if (user?.id) {
       if (!cycleMetrics) setMetricsLoading(true);
@@ -124,9 +133,9 @@ export default function DashboardPage() {
     }
   }, [user?.id]);
 
-  const currentCycleDay = cycleMetrics?.currentDay ?? 1;
-  const currentCyclePhase = cycleMetrics?.currentPhase ?? 'Follicular';
-  const nextPeriodDaysLeft = cycleMetrics?.nextPeriodDaysLeft ?? 28;
+  const currentCycleDay = cycleMetrics?.currentDay ?? storeDay ?? 1;
+  const currentCyclePhase = cycleMetrics?.currentPhase ?? storePhase ?? 'Follicular';
+  const nextPeriodDaysLeft = cycleMetrics?.nextPeriodDaysLeft ?? storeDaysLeft ?? 28;
   const todayMood = cycleMetrics?.todayMood;
   const todaySymptoms = cycleMetrics?.todaySymptoms ?? [];
 
