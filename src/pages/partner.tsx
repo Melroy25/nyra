@@ -104,6 +104,8 @@ export default function PartnerPage() {
   const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
   const [voicePlaying, setVoicePlaying] = useState<Record<string, boolean>>({});
   const [voiceProgress, setVoiceProgress] = useState<Record<string, number>>({}); // 0-1
+  const [voiceDuration, setVoiceDuration] = useState<Record<string, number>>({}); // total seconds
+  const [voiceCurrentTime, setVoiceCurrentTime] = useState<Record<string, number>>({}); // elapsed seconds
 
   // ── Telegram-like message features ──────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
@@ -1274,7 +1276,8 @@ export default function PartnerPage() {
                         const playing = voicePlaying[msg.id] || false;
                         const progress = voiceProgress[msg.id] || 0;
                         return (
-                          <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl mb-1 ${
+                          <div className="flex flex-col gap-1 mb-1">
+                          <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl ${
                             isSentByMe
                               ? 'bg-gradient-to-br from-[#7c3aed] to-[#a855f7] text-white'
                               : 'bg-white dark:bg-[#1e1535] border border-black/6 dark:border-[#3a2d58]/60'
@@ -1284,10 +1287,23 @@ export default function PartnerPage() {
                               ref={el => { audioRefs.current[msg.id] = el; }}
                               src={mediaUrl}
                               preload="metadata"
-                              onEnded={() => setVoicePlaying(prev => ({ ...prev, [msg.id]: false }))}
+                              onLoadedMetadata={(e) => {
+                                const el = e.currentTarget;
+                                if (el.duration && isFinite(el.duration)) {
+                                  setVoiceDuration(prev => ({ ...prev, [msg.id]: el.duration }));
+                                }
+                              }}
+                              onEnded={() => {
+                                setVoicePlaying(prev => ({ ...prev, [msg.id]: false }));
+                                setVoiceCurrentTime(prev => ({ ...prev, [msg.id]: 0 }));
+                                setVoiceProgress(prev => ({ ...prev, [msg.id]: 0 }));
+                              }}
                               onTimeUpdate={(e) => {
                                 const el = e.currentTarget;
-                                if (el.duration) setVoiceProgress(prev => ({ ...prev, [msg.id]: el.currentTime / el.duration }));
+                                if (el.duration && isFinite(el.duration)) {
+                                  setVoiceProgress(prev => ({ ...prev, [msg.id]: el.currentTime / el.duration }));
+                                  setVoiceCurrentTime(prev => ({ ...prev, [msg.id]: el.currentTime }));
+                                }
                               }}
                             />
                             {/* Play/Pause */}
@@ -1331,6 +1347,26 @@ export default function PartnerPage() {
                             >
                               {rate}x
                             </button>
+                          </div>
+
+                          {/* Duration row: elapsed / total */}
+                          <div className={`flex items-center justify-between px-1 mt-0.5 ${
+                            isSentByMe ? 'text-white/70' : 'text-[#9d8fc0] dark:text-[#6b5b95]'
+                          }`}>
+                            <span className="text-[10px] font-semibold tabular-nums">
+                              {voiceCurrentTime[msg.id] != null && voiceCurrentTime[msg.id] > 0
+                                ? formatSeconds(Math.floor(voiceCurrentTime[msg.id]))
+                                : '0:00'
+                              }
+                            </span>
+                            <span className="text-[9px] opacity-50">/</span>
+                            <span className="text-[10px] font-semibold tabular-nums">
+                              {voiceDuration[msg.id] && isFinite(voiceDuration[msg.id])
+                                ? formatSeconds(Math.floor(voiceDuration[msg.id]))
+                                : '--:--'
+                              }
+                            </span>
+                          </div>
                           </div>
                         );
                       })()}
