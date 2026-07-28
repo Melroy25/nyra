@@ -165,28 +165,9 @@ export const useStore = create<AppState>((set, get) => ({
   partnerAiThreads: [
     {
       id: 'p-thread-1',
-      title: 'Luteal Phase Support',
-      messages: [
-        {
-          id: 'p-ai-1',
-          senderId: 'nyra-ai',
-          text: "Hello John! 👋 I'm Nyra AI, your partner support assistant. Sarah is currently in her Luteal Phase (Day 24). How can I help you support her today?",
-          timestamp: '2026-01-01T00:00:00.000Z',
-        }
-      ],
+      title: 'Partner Support Chat',
+      messages: [],
     },
-    {
-      id: 'p-thread-2',
-      title: 'Cramps & Nutrition Advice',
-      messages: [
-        {
-          id: 'p-ai-2-init',
-          senderId: 'nyra-ai',
-          text: "Welcome to Nutrition Advice thread. Ask me what recipes or foods can comfort Sarah when she experiences cravings or cramps!",
-          timestamp: '2026-01-01T00:00:00.000Z',
-        }
-      ],
-    }
   ],
   activePartnerAiThreadId: 'p-thread-1',
 

@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { 
   Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, ArrowUp, PlusCircle, Check, CheckCheck, HelpCircle, Bot,
   Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2,
-  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown, Bell, BellOff, Reply
+  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown, Bell, BellOff, Reply, Sun, Moon
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,6 +16,8 @@ export default function PartnerPage() {
   const { 
     user, 
     setUser,
+    darkMode,
+    toggleDarkMode,
     unreadCount,
     setUnreadCount,
     chatThreads, 
@@ -90,6 +92,7 @@ export default function PartnerPage() {
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [drawerTab, setDrawerTab] = useState<'emojis' | 'stickers'>('emojis');
 
   // ── Voice Note ────────────────────────────────────────────────────────────
@@ -804,9 +807,11 @@ export default function PartnerPage() {
   };
 
   const handleCopyText = (text: string, msgId: string) => {
-    navigator.clipboard.writeText(text);
-    setSpeakingMessageId(msgId);
-    setTimeout(() => setSpeakingMessageId(null), 1000);
+    if (typeof window !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedId(msgId);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
   };
 
   const handleSpeakText = (text: string, msgId: string) => {
@@ -1904,184 +1909,236 @@ export default function PartnerPage() {
             className="fixed inset-0 z-50 p-2.5 sm:p-4 bg-[#0a0514]/60 backdrop-blur-md flex flex-col justify-center items-center overflow-hidden"
           >
             <div className="w-full h-full max-w-5xl bg-white dark:bg-[#120b24] rounded-3xl border border-black/10 dark:border-[#3a2d58]/80 shadow-2xl flex flex-col overflow-hidden relative">
-              {/* AI Header with Back Button, Thread Menu & Prompt Index Buttons */}
-            <div className="flex justify-between items-center bg-white/80 dark:bg-[#1c1230]/90 backdrop-blur-md px-4 py-3 border-b border-black/8 dark:border-[#3a2d58]/60 shrink-0">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <button 
+              {/* AI Header with Back Button, Avatar, Online Status, Threads, New Chat & Theme Controls */}
+              <div className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-[#160e2e] border-b border-black/8 dark:border-[#2a1f45]/60 shadow-sm shrink-0">
+                {/* Back */}
+                <button
                   onClick={() => router.push('/partner?tab=dashboard')}
-                  className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-xl transition-colors text-[#3d3050] dark:text-[#c8bedd]"
+                  className="p-2 -ml-1 hover:bg-black/5 dark:hover:bg-white/8 rounded-full transition-colors"
                   title="Back to Dashboard"
                 >
-                  <ArrowLeft className="w-5 h-5" />
+                  <ArrowLeft className="w-5 h-5 text-[#3d2a6b] dark:text-[#c8bedd]" />
                 </button>
-                <button 
-                  onClick={() => setShowAiThreadsDrawer(!showAiThreadsDrawer)}
-                  className="p-2 hover:bg-primary/10 dark:hover:bg-primary/20 rounded-xl transition-colors text-[#3d3050] dark:text-[#c8bedd]"
-                  title="Multiple Chat Threads"
-                >
-                  <Menu className="w-5 h-5 text-tertiary" />
-                </button>
-                <div className="w-9 h-9 rounded-2xl bg-tertiary/10 border border-tertiary/20 flex items-center justify-center text-tertiary shadow-sm shrink-0">
-                  <Sparkles className="w-5 h-5 animate-pulse" />
+
+                {/* Nyra Avatar with online indicator */}
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#a855f7] to-[#7c3aed] flex items-center justify-center shadow-md border-2 border-white dark:border-[#2a1f45] overflow-hidden">
+                    <img src="/logo.png" alt="Nyra" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    <Sparkles className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-white dark:border-[#160e2e] rounded-full" />
                 </div>
-                <div>
-                  <h3 className="font-serif font-bold text-sm text-[#18003d] dark:text-[#eee6ff] truncate max-w-[150px] sm:max-w-[250px]">
-                    {activePartnerAiThread?.title || 'Partner AI Support'}
-                  </h3>
-                  <span className="text-[10px] font-bold text-tertiary block mt-0.5">Specialized Cycle Advice for Partners</span>
+
+                {/* Name & status */}
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-bold text-[15px] text-[#18003d] dark:text-[#eee6ff] leading-tight">Nyra Partner AI</h2>
+                  <p className="text-[11px] text-green-500 font-semibold">
+                    {isPartnerAiTyping ? (
+                      <span className="text-primary animate-pulse">typing...</span>
+                    ) : 'Online'}
+                  </p>
                 </div>
-              </div>
 
-              {/* Right actions: Prompt Outline Index + New Chat */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setShowAiOutline(!showAiOutline)}
-                  title="Prompt-to-Prompt Index"
-                  className={`p-2 rounded-xl transition-colors ${
-                    showAiOutline ? 'bg-tertiary text-white' : 'text-[#3d3050] dark:text-[#c8bedd] hover:bg-tertiary/10'
-                  }`}
-                >
-                  <ListFilter className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={handleCreateNewAiChat}
-                  title="Create New Partner Chat Thread"
-                  className="px-3 py-1.5 rounded-xl bg-tertiary/10 text-tertiary hover:bg-tertiary/20 font-bold text-xs flex items-center gap-1 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">New Chat</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Prompt Suggestions Bar */}
-            <div className="px-4 py-2 bg-white/40 dark:bg-[#100c20]/60 border-b border-black/8 dark:border-[#3a2d58]/40 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
-              <button 
-                onClick={() => handleSendPartnerAi(`How can I support ${trackedUserName} during her Luteal Phase?`)}
-                className="px-3 py-1 rounded-xl border border-tertiary/30 bg-tertiary/5 dark:bg-tertiary/10 hover:bg-tertiary/20 text-tertiary text-[11px] font-semibold shrink-0 transition-colors"
-              >
-                🌸 Support Luteal phase?
-              </button>
-              <button 
-                onClick={() => handleSendPartnerAi("What foods ease her cramps?")}
-                className="px-3 py-1 rounded-xl border border-tertiary/30 bg-tertiary/5 dark:bg-tertiary/10 hover:bg-tertiary/20 text-tertiary text-[11px] font-semibold shrink-0 transition-colors"
-              >
-                🍫 Foods for cramps?
-              </button>
-              <button 
-                onClick={() => handleSendPartnerAi("How to comfort her when energy is low?")}
-                className="px-3 py-1 rounded-xl border border-tertiary/30 bg-tertiary/5 dark:bg-tertiary/10 hover:bg-tertiary/20 text-tertiary text-[11px] font-semibold shrink-0 transition-colors"
-              >
-                ✨ Comfort low energy?
-              </button>
-            </div>
-
-            {/* AI Chat Messages Body */}
-            <div className="flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-3 bg-white/30 dark:bg-[#0d0818]/60 relative">
-              {partnerAiMessages.map((msg, idx) => {
-                const isUser = msg.senderId === 'user' || msg.senderId === user?.id;
-                const isSpeaking = speakingMessageId === msg.id;
-                const prevMsg = partnerAiMessages[idx - 1];
-                const showAvatar = !isUser && (idx === 0 || prevMsg?.senderId === 'user' || prevMsg?.senderId === user?.id);
-
-                return (
-                  <div 
-                    key={msg.id} 
-                    ref={(el) => { messageRefs.current[msg.id] = el; }}
-                    className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} group items-end gap-1.5`}
+                {/* Right controls */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setShowAiThreadsDrawer(!showAiThreadsDrawer)}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/8 rounded-full transition-colors"
+                    title="Chat Threads"
                   >
-                    {/* Bot avatar on left */}
-                    {!isUser && (
-                      <div className="w-8 shrink-0 flex items-end">
-                        {showAvatar ? (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-tertiary to-primary flex items-center justify-center shadow-sm border border-white/30 overflow-hidden">
-                            <Bot className="w-4 h-4 text-white" />
-                          </div>
-                        ) : <div className="w-8" />}
-                      </div>
-                    )}
+                    <Menu className="w-5 h-5 text-[#7c3aed]" />
+                  </button>
+                  <button
+                    onClick={handleCreateNewAiChat}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/8 rounded-full transition-colors"
+                    title="New Chat"
+                  >
+                    <Plus className="w-5 h-5 text-[#7c3aed]" />
+                  </button>
+                  <button
+                    onClick={() => setShowAiOutline(!showAiOutline)}
+                    className={`p-2 rounded-full transition-colors ${showAiOutline ? 'bg-primary/15' : 'hover:bg-black/5 dark:hover:bg-white/8'}`}
+                    title="Prompt Index"
+                  >
+                    <ListFilter className="w-5 h-5 text-[#7c3aed]" />
+                  </button>
+                  <button
+                    onClick={toggleDarkMode}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/8 rounded-full transition-colors"
+                    title="Toggle Theme"
+                  >
+                    {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-[#7c3aed]" />}
+                  </button>
+                </div>
+              </div>
 
-                    <div className={`max-w-[82%] relative group/bubble`}>
-                      <div className={`rounded-2xl px-4 py-3 text-xs font-medium leading-relaxed border shadow-sm relative ${
-                        isUser 
-                          ? 'bg-gradient-to-r from-primary to-secondary text-white border-primary/20 rounded-br-sm' 
-                          : 'glass-card bg-white/95 dark:bg-[#1c1230]/95 text-[#18003d] dark:text-[#eee6ff] border-white/60 dark:border-[#3a2d58]/60 rounded-bl-sm'
-                      }`}>
-                        {/* Purple vertical bar accent for bot */}
-                        {!isUser && (
-                          <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-gradient-to-b from-tertiary to-primary rounded-full" />
-                        )}
+              {/* Quick Prompts Bar */}
+              <div className="flex gap-2 px-3 py-2 overflow-x-auto no-scrollbar bg-white/60 dark:bg-[#160e2e]/80 border-b border-black/5 dark:border-[#2a1f45]/40 shrink-0">
+                <button
+                  onClick={() => handleSendPartnerAi(`How can I support ${trackedUserName} during her current cycle phase?`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#f0e6ff] dark:bg-[#2a1f45] text-[#7c3aed] dark:text-[#c4aaff] text-[11px] font-bold shrink-0 hover:bg-[#e4d1ff] dark:hover:bg-[#3a2d58] transition-colors border border-[#d4b8ff]/40 dark:border-[#3a2d58]"
+                >
+                  <span>🌸</span>
+                  <span>Support {trackedUserName}'s phase?</span>
+                </button>
+                <button
+                  onClick={() => handleSendPartnerAi("What foods ease her cramps?")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#f0e6ff] dark:bg-[#2a1f45] text-[#7c3aed] dark:text-[#c4aaff] text-[11px] font-bold shrink-0 hover:bg-[#e4d1ff] dark:hover:bg-[#3a2d58] transition-colors border border-[#d4b8ff]/40 dark:border-[#3a2d58]"
+                >
+                  <span>🍫</span>
+                  <span>Foods for cramps?</span>
+                </button>
+                <button
+                  onClick={() => handleSendPartnerAi("How to comfort her when energy is low?")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#f0e6ff] dark:bg-[#2a1f45] text-[#7c3aed] dark:text-[#c4aaff] text-[11px] font-bold shrink-0 hover:bg-[#e4d1ff] dark:hover:bg-[#3a2d58] transition-colors border border-[#d4b8ff]/40 dark:border-[#3a2d58]"
+                >
+                  <span>✨</span>
+                  <span>Comfort low energy?</span>
+                </button>
+                <button
+                  onClick={() => handleSendPartnerAi("What thoughtful gestures brighten her day?")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#f0e6ff] dark:bg-[#2a1f45] text-[#7c3aed] dark:text-[#c4aaff] text-[11px] font-bold shrink-0 hover:bg-[#e4d1ff] dark:hover:bg-[#3a2d58] transition-colors border border-[#d4b8ff]/40 dark:border-[#3a2d58]"
+                >
+                  <span>💕</span>
+                  <span>Gentle gestures?</span>
+                </button>
+              </div>
 
-                        {!isUser && (
-                          <div className="flex items-center justify-between gap-2 mb-1.5 text-tertiary font-bold text-[10px]">
-                            <div className="flex items-center gap-1.5">
-                              <Sparkles className="w-3 h-3 text-tertiary animate-pulse" />
-                              <span>Nyra Partner AI</span>
-                            </div>
-                            
-                            {/* Audio Speak & Copy Buttons */}
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleSpeakText(msg.text, msg.id)}
-                                className={`p-1 rounded hover:bg-tertiary/10 transition-colors ${
-                                  isSpeaking ? 'text-primary animate-pulse' : 'text-[#3d3050] dark:text-[#c8bedd]'
-                                }`}
-                                title="Listen aloud"
-                              >
-                                <Volume2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleCopyText(msg.text, msg.id)}
-                                className="p-1 rounded text-[#3d3050] dark:text-[#c8bedd] hover:bg-tertiary/10 transition-colors"
-                                title="Copy text"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        <p className="whitespace-pre-line">{msg.text}</p>
-                      </div>
+              {/* AI Messages Body */}
+              <div
+                className="flex-1 overflow-y-auto no-scrollbar px-3 py-4 space-y-1 relative"
+                style={{ background: darkMode ? 'linear-gradient(180deg, #0d0820 0%, #130a2a 100%)' : 'linear-gradient(180deg, #f7f2ff 0%, #f0e9ff 100%)' }}
+              >
+                {/* Empty State */}
+                {partnerAiMessages.length === 0 && !isPartnerAiTyping && (
+                  <div className="flex flex-col items-center justify-center py-16 gap-5 text-center my-auto">
+                    <motion.div
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="w-20 h-20 rounded-full bg-gradient-to-br from-[#a855f7] to-[#7c3aed] flex items-center justify-center shadow-xl mb-2"
+                    >
+                      <Sparkles className="w-10 h-10 text-white" />
+                    </motion.div>
+                    <div>
+                      <h3 className="font-bold text-xl text-[#18003d] dark:text-[#eee6ff] mb-1">
+                        Hey{user?.name ? `, ${user.name}` : ''}! 🌸
+                      </h3>
+                      <p className="text-[13px] text-[#6b5b95] dark:text-[#9d8fc0] font-medium leading-relaxed">
+                        I'm Nyra Partner AI, your personal partner support companion.<br />
+                        Ask me anything — about {trackedUserName}'s cycle phase, mood,<br />
+                        cravings, or how to support her today! 💜
+                      </p>
                     </div>
                   </div>
-                );
-              })}
+                )}
 
-              {/* Typing indicator */}
-              {isPartnerAiTyping && (
-                <div className="flex justify-start items-end gap-1.5 mt-1">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-tertiary to-primary flex items-center justify-center shadow-sm">
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="glass-card bg-white/90 dark:bg-[#1c1230]/90 px-4 py-3 rounded-2xl rounded-bl-sm border border-white/60 dark:border-[#3a2d58]/60 flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-tertiary animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-1.5 h-1.5 rounded-full bg-secondary animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
-                </div>
-              )}
-              <div ref={aiChatEndRef} />
-            </div>
+                {/* Message Bubbles */}
+                {partnerAiMessages.map((msg, idx) => {
+                  const isUser = msg.senderId === 'user' || msg.senderId === user?.id;
+                  const isSpeaking = speakingMessageId === msg.id;
+                  const prevMsg = partnerAiMessages[idx - 1];
+                  const showAvatar = !isUser && (idx === 0 || prevMsg?.senderId === 'user' || prevMsg?.senderId === user?.id);
+                  const isGrouped = !isUser && idx > 0 && prevMsg?.senderId !== 'user' && prevMsg?.senderId !== user?.id;
 
-            {/* AI Input Footer */}
-            <div className="bg-white/80 dark:bg-[#1c1230]/90 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex items-center gap-2">
-              <input 
-                type="text" 
-                placeholder={`Ask Nyra AI how to support ${trackedUserName}...`}
-                value={partnerAiInput}
-                onChange={(e) => setPartnerAiInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendPartnerAi()}
-                className="flex-1 px-4 py-3 rounded-full border border-outline-variant/60 dark:border-[#3a2d58] focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 outline-none text-xs font-semibold bg-white/90 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0] shadow-inner"
-              />
-              <button 
-                onClick={() => handleSendPartnerAi()}
-                disabled={!partnerAiInput.trim() || isPartnerAiTyping}
-                className={`w-10 h-10 rounded-full bg-gradient-to-r from-tertiary to-primary text-white flex items-center justify-center shadow-md transition-all ${
-                  !partnerAiInput.trim() || isPartnerAiTyping ? 'opacity-40 cursor-not-allowed' : 'hover:scale-105 active:scale-95'
-                }`}
-              >
-                <ArrowUp className="w-5 h-5" />
-              </button>
-            </div>
+                  return (
+                    <motion.div
+                      key={msg.id}
+                      ref={(el) => { messageRefs.current[msg.id] = el; }}
+                      initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+                      className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} ${isGrouped ? 'mt-0.5' : 'mt-3'}`}
+                    >
+                      {/* Avatar on left */}
+                      {!isUser && (
+                        <div className="w-8 shrink-0 mr-1.5 flex items-end">
+                          {showAvatar ? (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#a855f7] to-[#7c3aed] flex items-center justify-center shadow-sm border border-white/30 overflow-hidden">
+                              <img src="/logo.png" alt="Nyra" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                              <Sparkles className="w-4 h-4 text-white" />
+                            </div>
+                          ) : <div className="w-8" />}
+                        </div>
+                      )}
+
+                      <div className="max-w-[78%] relative group">
+                        <div className={`
+                          px-4 py-2.5 rounded-2xl text-[13.5px] font-medium leading-relaxed relative select-none
+                          ${isUser
+                            ? 'bg-[#7c3aed] text-white rounded-tr-sm shadow-md shadow-[#7c3aed]/20'
+                            : 'bg-white dark:bg-[#1e1538] text-[#18003d] dark:text-[#eee6ff] rounded-tl-sm shadow-sm border border-black/5 dark:border-[#3a2d58]/50'
+                          }
+                          ${isGrouped && isUser ? 'rounded-tr-2xl' : ''}
+                          ${isGrouped && !isUser ? 'rounded-tl-2xl' : ''}
+                        `}>
+                          {!isUser && (
+                            <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-gradient-to-b from-[#a855f7] to-[#7c3aed] rounded-full" />
+                          )}
+                          <p className="whitespace-pre-line pl-[2px]">{msg.text}</p>
+                        </div>
+
+                        {/* Action buttons + time row */}
+                        <div className={`flex items-center gap-2 mt-1 px-1 ${isUser ? 'justify-end' : 'justify-start'}`}>
+                          <button
+                            onClick={() => handleCopyText(msg.text, msg.id)}
+                            className="text-[#9d8fc0] hover:text-[#7c3aed] transition-colors"
+                            title="Copy text"
+                          >
+                            {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            onClick={() => handleSpeakText(msg.text, msg.id)}
+                            className={`transition-colors ${isSpeaking ? 'text-[#7c3aed] animate-pulse' : 'text-[#9d8fc0] hover:text-[#7c3aed]'}`}
+                            title={isSpeaking ? 'Stop' : 'Read aloud'}
+                          >
+                            <Volume2 className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-[10px] text-[#9d8fc0] dark:text-[#6b5b95]">
+                            {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </span>
+                          {isUser && <CheckCheck className="w-3 h-3 text-[#7c3aed]" />}
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+
+                {/* Typing indicator */}
+                {isPartnerAiTyping && (
+                  <div className="flex justify-start items-end gap-1.5 mt-2">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#a855f7] to-[#7c3aed] flex items-center justify-center shadow-sm">
+                      <Sparkles className="w-4 h-4 text-white animate-spin" />
+                    </div>
+                    <div className="bg-white dark:bg-[#1e1538] px-4 py-3 rounded-2xl rounded-bl-sm border border-black/5 dark:border-[#3a2d58]/50 flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#7c3aed] animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#a855f7] animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#c4aaff] animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                )}
+                <div ref={aiChatEndRef} />
+              </div>
+
+              {/* AI Input Footer */}
+              <div className="bg-white/80 dark:bg-[#1c1230]/90 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex items-center gap-2">
+                <input 
+                  type="text" 
+                  placeholder={`Ask Nyra AI how to support ${trackedUserName}...`}
+                  value={partnerAiInput}
+                  onChange={(e) => setPartnerAiInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendPartnerAi()}
+                  className="flex-1 px-4 py-3 rounded-full border border-outline-variant/60 dark:border-[#3a2d58] focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 outline-none text-xs font-semibold bg-white/90 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0] shadow-inner"
+                />
+                <button 
+                  onClick={() => handleSendPartnerAi()}
+                  disabled={!partnerAiInput.trim() || isPartnerAiTyping}
+                  className={`w-10 h-10 rounded-full bg-gradient-to-r from-tertiary to-primary text-white flex items-center justify-center shadow-md transition-all ${
+                    !partnerAiInput.trim() || isPartnerAiTyping ? 'opacity-40 cursor-not-allowed' : 'hover:scale-105 active:scale-95'
+                  }`}
+                >
+                  <ArrowUp className="w-5 h-5" />
+                </button>
+              </div>
 
             {/* ── DRAWER 1: MULTIPLE CHAT THREADS SLIDE-OUT ── */}
             <AnimatePresence>
