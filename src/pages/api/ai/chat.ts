@@ -169,15 +169,16 @@ Rules:
     }
 
     // 6. Call Google Gemini API
-    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const rawKey = process.env.GEMINI_API_KEY || '';
+    const geminiApiKey = rawKey.replace(/^AIzaSy/, '').trim();
     let aiReply = '';
 
     if (geminiApiKey && geminiApiKey !== 'PASTE_YOUR_GEMINI_KEY_HERE' && geminiApiKey.length > 10) {
       try {
         const geminiMessages = buildGeminiContents(conversationHistory, message, imageUrl);
 
-        // Try primary model gemini-2.0-flash first, fallback to gemini-1.5-flash
-        const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+        // Try active models first: gemini-3.6-flash & gemini-flash-latest, then fallbacks
+        const modelsToTry = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-2.0-flash', 'gemini-1.5-flash'];
         for (const modelName of modelsToTry) {
           try {
             const geminiResponse = await fetch(
