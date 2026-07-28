@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Sparkles, Calendar, Smile, Activity, Moon, HeartPulse, ArrowRight, Loader2, Droplet, Plus, RotateCcw, Clock, ChevronDown, ChevronUp, FileText, Trash2 } from 'lucide-react';
+import { Sparkles, Calendar, Smile, Activity, Moon, HeartPulse, ArrowRight, Loader2, Droplet, Plus, RotateCcw, Clock, ChevronDown, ChevronUp, FileText, Trash2, HelpCircle, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { motion } from 'framer-motion';
 import { apiGetCycleMetrics } from '../lib/api';
+import { getCycleDayDetails } from '../lib/cycleGuide';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -248,22 +249,71 @@ export default function DashboardPage() {
         </div>
 
         {/* AI Insight Card Widget */}
-        <div className="md:col-span-4 glass-card rounded-2xl p-6 md:p-8 ai-glow flex flex-col justify-between">
+        <div className="md:col-span-4 glass-card rounded-2xl p-5 md:p-6 ai-glow flex flex-col justify-between relative overflow-hidden">
           <div>
-            <div className="flex items-center gap-2 mb-4 text-tertiary">
-              <Sparkles className="w-5 h-5 text-tertiary animate-pulse" />
-              <span className="font-bold text-sm text-tertiary">Nyra Insight</span>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2 text-tertiary">
+                <Sparkles className="w-5 h-5 text-tertiary animate-pulse" />
+                <span className="font-bold text-sm text-tertiary">Nyra Cycle Insight</span>
+              </div>
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-tertiary/10 text-tertiary border border-tertiary/20">
+                {getCycleDayDetails(currentCycleDay, cycleMetrics?.cycleLength || 28).phaseEmoji} Day {currentCycleDay}
+              </span>
             </div>
-            <p className="text-base text-[#18003d] dark:text-[#eee6ff] italic leading-relaxed">
-              &quot;{insight}&quot;
+
+            {/* Quick summary headline */}
+            <p className="text-xs font-bold text-[#18003d] dark:text-[#eee6ff] mb-3 leading-snug">
+              {getCycleDayDetails(currentCycleDay, cycleMetrics?.cycleLength || 28).summary}
             </p>
+
+            {/* 3 Clear Sections */}
+            <div className="space-y-2.5 text-xs">
+              {/* Section 1: Biological Process */}
+              <div className="p-3 rounded-xl bg-white/50 dark:bg-[#16102a]/60 border border-black/5 dark:border-white/5 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-primary dark:text-[#d4b8ff]">
+                  <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>What is happening?</span>
+                </div>
+                <p className="text-[#3d3050] dark:text-[#c8bedd] font-medium leading-relaxed text-[11px]">
+                  {getCycleDayDetails(currentCycleDay, cycleMetrics?.cycleLength || 28).whatIsIt}
+                </p>
+              </div>
+
+              {/* Section 2: Physical & Emotional Feeling */}
+              <div className="p-3 rounded-xl bg-white/50 dark:bg-[#16102a]/60 border border-black/5 dark:border-white/5 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-secondary dark:text-[#ccbeff]">
+                  <HeartPulse className="w-3.5 h-3.5 shrink-0" />
+                  <span>How you might feel:</span>
+                </div>
+                <p className="text-[#3d3050] dark:text-[#c8bedd] font-medium leading-relaxed text-[11px]">
+                  {getCycleDayDetails(currentCycleDay, cycleMetrics?.cycleLength || 28).howYouFeel}
+                </p>
+              </div>
+
+              {/* Section 3: Recommended Actions */}
+              <div className="p-3 rounded-xl bg-white/50 dark:bg-[#16102a]/60 border border-black/5 dark:border-white/5 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>What to do today:</span>
+                </div>
+                <ul className="space-y-1 text-[#3d3050] dark:text-[#c8bedd] font-medium text-[11px]">
+                  {getCycleDayDetails(currentCycleDay, cycleMetrics?.cycleLength || 28).whatToDo.map((tip, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <span className="text-primary font-bold">•</span>
+                      <span>{tip}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
-          <div className="mt-6">
+
+          <div className="mt-4 pt-3 border-t border-black/5 dark:border-white/5">
             <button
               onClick={() => router.push('/ai')}
-              className="w-full py-3 rounded-2xl border border-tertiary/30 text-tertiary font-bold text-xs hover:bg-tertiary/10 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-2xl border border-tertiary/40 bg-tertiary/5 hover:bg-tertiary/15 text-tertiary font-bold text-xs transition-all flex items-center justify-center gap-2"
             >
-              Ask Nyra AI <ArrowRight className="w-4 h-4" />
+              Ask Nyra AI for details <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>

@@ -4,12 +4,13 @@ import { useStore } from '../store/useStore';
 import { 
   Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, ArrowUp, PlusCircle, Check, CheckCheck, HelpCircle, Bot,
   Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2,
-  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown, Bell, BellOff, Reply, Sun, Moon
+  Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown, Bell, BellOff, Reply, Sun, Moon, CheckCircle2, HeartPulse
 } from 'lucide-react';
 import { mockStickers, mockReactions } from '../data/chat';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiConnectPartner, apiRegenerateCode, apiGetMessages, apiSendMessage, apiAddReaction, apiEditMessage, apiDeleteMessage, apiClearChat, apiGetPartnerDashboard, apiAiChat } from '../lib/api';
 import { useRealtimeChat } from '../hooks/useRealtimeChat';
+import { getCycleDayDetails } from '../lib/cycleGuide';
 
 export default function PartnerPage() {
   const router = useRouter();
@@ -1134,28 +1135,58 @@ export default function PartnerPage() {
                 <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-6 md:p-8 ai-glow relative overflow-hidden border border-white/50 dark:border-[#3a2d58]/60 shadow-sm">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-tertiary/20 rounded-full blur-3xl"></div>
                   
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="w-10 h-10 rounded-2xl bg-tertiary/10 border border-tertiary/20 flex items-center justify-center text-tertiary shadow-inner z-10 shrink-0">
-                      <Sparkles className="w-5 h-5 animate-pulse" />
-                    </div>
-                    <div className="z-10">
-                      <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Nyra AI Suggests</h3>
-                      <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-semibold">How you can support {trackedUserName} today</p>
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-tertiary/10 border border-tertiary/20 flex items-center justify-center text-tertiary shadow-inner shrink-0">
+                        <Sparkles className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Nyra Partner Insight</h3>
+                        <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-semibold">
+                          Understanding {trackedUserName}'s Day {dashboardData?.cycleMetrics?.currentDay || 16} ({dashboardData?.cycleMetrics?.currentPhase || 'Ovulation'})
+                        </p>
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 z-10 relative">
-                    {(dashboardData?.suggestions || [
-                      { title: 'Offer a quiet evening', desc: 'Her low energy suggests she might appreciate resting instead of going out.' },
-                      { title: 'Bring a small treat', desc: 'She logged cravings for chocolate. A small surprise will mean a lot!' },
-                    ]).map((s: any, idx: number) => (
-                      <div key={idx} className="bg-white/60 dark:bg-[#1c1230]/70 border border-white/50 dark:border-[#3a2d58]/60 p-4 rounded-2xl space-y-1">
-                        <h4 className="font-bold text-xs text-[#18003d] dark:text-[#eee6ff]">{s.title}</h4>
-                        <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium">
-                          {s.desc}
-                        </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 z-10 relative text-xs">
+                    {/* Section 1: Biological Process */}
+                    <div className="bg-white/60 dark:bg-[#1c1230]/70 border border-white/50 dark:border-[#3a2d58]/60 p-4 rounded-2xl space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-primary dark:text-[#d4b8ff]">
+                        <HelpCircle className="w-4 h-4 shrink-0" />
+                        <span>What is happening?</span>
                       </div>
-                    ))}
+                      <p className="text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium text-[11.5px]">
+                        {getCycleDayDetails(dashboardData?.cycleMetrics?.currentDay || 16).whatIsIt}
+                      </p>
+                    </div>
+
+                    {/* Section 2: What she might feel */}
+                    <div className="bg-white/60 dark:bg-[#1c1230]/70 border border-white/50 dark:border-[#3a2d58]/60 p-4 rounded-2xl space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-secondary dark:text-[#ccbeff]">
+                        <HeartPulse className="w-4 h-4 shrink-0" />
+                        <span>How she might feel:</span>
+                      </div>
+                      <p className="text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium text-[11.5px]">
+                        {getCycleDayDetails(dashboardData?.cycleMetrics?.currentDay || 16).howYouFeel}
+                      </p>
+                    </div>
+
+                    {/* Section 3: How to support her today */}
+                    <div className="bg-white/60 dark:bg-[#1c1230]/70 border border-white/50 dark:border-[#3a2d58]/60 p-4 rounded-2xl space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>How to support her today:</span>
+                      </div>
+                      <ul className="space-y-1 text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium text-[11.5px] pl-1">
+                        {getCycleDayDetails(dashboardData?.cycleMetrics?.currentDay || 16).partnerTips.map((tip, i) => (
+                          <li key={i} className="flex items-start gap-1.5">
+                            <span className="text-primary font-bold">•</span>
+                            <span>{tip}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 </div>
 
