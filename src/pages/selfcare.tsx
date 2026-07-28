@@ -42,6 +42,73 @@ const defaultNotes: Note[] = [
   },
 ];
 
+// ── Structured Time Selector Dropdown Component ──
+function StructuredTimePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (newTime: string) => void;
+}) {
+  const parseVal = (str: string) => {
+    const clean = (str || '08:00 AM').trim();
+    const match = clean.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (match) {
+      return {
+        hour: match[1].padStart(2, '0'),
+        minute: match[2],
+        period: match[3].toUpperCase(),
+      };
+    }
+    return { hour: '08', minute: '00', period: 'AM' };
+  };
+
+  const { hour, minute, period } = parseVal(value);
+
+  const hours = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+  const minutes = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {/* Hour Select */}
+      <select
+        value={hour}
+        onChange={(e) => onChange(`${e.target.value}:${minute} ${period}`)}
+        className="px-3 py-2.5 rounded-xl border border-outline-variant/50 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] font-bold text-xs outline-none cursor-pointer"
+      >
+        {hours.map((h) => (
+          <option key={h} value={h} className="bg-white dark:bg-[#16102a]">
+            {h} Hour
+          </option>
+        ))}
+      </select>
+
+      {/* Minute Select */}
+      <select
+        value={minute}
+        onChange={(e) => onChange(`${hour}:${e.target.value} ${period}`)}
+        className="px-3 py-2.5 rounded-xl border border-outline-variant/50 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] font-bold text-xs outline-none cursor-pointer"
+      >
+        {minutes.map((m) => (
+          <option key={m} value={m} className="bg-white dark:bg-[#16102a]">
+            :{m} Min
+          </option>
+        ))}
+      </select>
+
+      {/* AM / PM Select */}
+      <select
+        value={period}
+        onChange={(e) => onChange(`${hour}:${minute} ${e.target.value}`)}
+        className="px-3 py-2.5 rounded-xl border border-outline-variant/50 dark:border-[#3a2d58] bg-primary text-white font-bold text-xs outline-none cursor-pointer"
+      >
+        <option value="AM" className="bg-white text-black dark:bg-[#16102a] dark:text-white">AM</option>
+        <option value="PM" className="bg-white text-black dark:bg-[#16102a] dark:text-white">PM</option>
+      </select>
+    </div>
+  );
+}
+
 export default function SelfCarePage() {
   const { 
     routines, 
@@ -59,15 +126,7 @@ export default function SelfCarePage() {
   const [activeTab, setActiveTab] = useState<'notes' | 'routines'>('notes');
 
   // ── 1. MY NOTES STATE ─────────────────────────────────────────────────────
-  const [notes, setNotes] = useState<Note[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nyra_user_notes');
-      if (saved) {
-        try { return JSON.parse(saved); } catch {}
-      }
-    }
-    return defaultNotes;
-  });
+  const [notes, setNotes] = useState<Note[]>(defaultNotes);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -90,47 +149,61 @@ export default function SelfCarePage() {
   const [undoSecondsLeft, setUndoSecondsLeft] = useState(0);
   const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Save notes to localStorage
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('nyra_user_notes', JSON.stringify(notes));
-    }
-  }, [notes]);
-
   // ── 2. SKINCARE ROUTINES CUSTOMIZER STATE ──────────────────────────────────
-  const [morningSkincare, setMorningSkincare] = useState<SkincareRoutineConfig>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nyra_skincare_morning');
-      if (saved) { try { return JSON.parse(saved); } catch {} }
-    }
-    return {
-      time: '08:30 AM',
-      notify: true,
-      steps: [
-        { id: 'ms-1', name: 'Gentle Face Wash', completed: false },
-        { id: 'ms-2', name: 'Brush Teeth & Floss', completed: false },
-        { id: 'ms-3', name: 'Vitamin C Serum', completed: false },
-        { id: 'ms-4', name: 'Moisturizer & Sunscreen SPF 50', completed: false },
-      ],
-    };
+  const [morningSkincare, setMorningSkincare] = useState<SkincareRoutineConfig>({
+    time: '08:30 AM',
+    notify: true,
+    steps: [
+      { id: 'ms-1', name: 'Gentle Face Wash', completed: false },
+      { id: 'ms-2', name: 'Brush Teeth & Floss', completed: false },
+      { id: 'ms-3', name: 'Vitamin C Serum', completed: false },
+      { id: 'ms-4', name: 'Moisturizer & Sunscreen SPF 50', completed: false },
+    ],
   });
 
-  const [nightSkincare, setNightSkincare] = useState<SkincareRoutineConfig>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('nyra_skincare_night');
-      if (saved) { try { return JSON.parse(saved); } catch {} }
-    }
-    return {
-      time: '10:00 PM',
-      notify: true,
-      steps: [
-        { id: 'ns-1', name: 'Double Cleanser / Micellar Water', completed: false },
-        { id: 'ns-2', name: 'Brush Teeth', completed: false },
-        { id: 'ns-3', name: 'Retinol / Niacinamide Serum', completed: false },
-        { id: 'ns-4', name: 'Night Repair Cream & Eye Cream', completed: false },
-      ],
-    };
+  const [nightSkincare, setNightSkincare] = useState<SkincareRoutineConfig>({
+    time: '10:00 PM',
+    notify: true,
+    steps: [
+      { id: 'ns-1', name: 'Double Cleanser / Micellar Water', completed: false },
+      { id: 'ns-2', name: 'Brush Teeth', completed: false },
+      { id: 'ns-3', name: 'Retinol / Niacinamide Serum', completed: false },
+      { id: 'ns-4', name: 'Night Repair Cream & Eye Cream', completed: false },
+    ],
   });
+
+  // Restore client localStorage after mount (fixes React Error #418 SSR mismatch)
+  useEffect(() => {
+    try {
+      const savedNotes = localStorage.getItem('nyra_user_notes');
+      if (savedNotes) {
+        const parsed = JSON.parse(savedNotes);
+        if (Array.isArray(parsed) && parsed.length > 0) setNotes(parsed);
+      }
+    } catch (e) {}
+
+    try {
+      const savedMorning = localStorage.getItem('nyra_skincare_morning');
+      if (savedMorning) {
+        const parsed = JSON.parse(savedMorning);
+        if (parsed && parsed.time) {
+          parsed.time = normalizeTimeString(parsed.time);
+          setMorningSkincare(parsed);
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const savedNight = localStorage.getItem('nyra_skincare_night');
+      if (savedNight) {
+        const parsed = JSON.parse(savedNight);
+        if (parsed && parsed.time) {
+          parsed.time = normalizeTimeString(parsed.time);
+          setNightSkincare(parsed);
+        }
+      }
+    } catch (e) {}
+  }, []);
 
   // Skincare modal editor
   const [editingSkincareType, setEditingSkincareType] = useState<'morning' | 'night' | null>(null);
@@ -150,7 +223,13 @@ export default function SelfCarePage() {
   const [medFreq, setMedFreq] = useState('Daily');
   const [medType, setMedType] = useState<RoutineItem['type']>('medication');
 
-  // Save skincare state
+  // Save notes & skincare state to localStorage on updates
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nyra_user_notes', JSON.stringify(notes));
+    }
+  }, [notes]);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('nyra_skincare_morning', JSON.stringify(morningSkincare));
@@ -1085,16 +1164,12 @@ export default function SelfCarePage() {
 
               <form onSubmit={handleSaveSkincareSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">
                     Reminder Notification Time
                   </label>
-                  <input
-                    type="text"
-                    required
+                  <StructuredTimePicker
                     value={tempSkincareTime}
-                    onChange={(e) => setTempSkincareTime(e.target.value)}
-                    placeholder="e.g. 08:30 AM"
-                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant/50 dark:border-[#3a2d58] focus:border-primary outline-none text-sm font-semibold bg-white/80 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff]"
+                    onChange={(newTime) => setTempSkincareTime(newTime)}
                   />
                 </div>
 
@@ -1273,28 +1348,31 @@ export default function SelfCarePage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Time</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. 08:00 AM"
+                    <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">
+                      Notification Time
+                    </label>
+                    <StructuredTimePicker
                       value={medTime}
-                      onChange={(e) => setMedTime(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] outline-none text-sm font-semibold bg-white/70 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff]"
+                      onChange={(newTime) => setMedTime(newTime)}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Frequency</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Daily"
+                    <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">
+                      Frequency
+                    </label>
+                    <select
                       value={medFreq}
                       onChange={(e) => setMedFreq(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] outline-none text-sm font-semibold bg-white/70 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff]"
-                    />
+                      className="w-full px-4 py-3 rounded-2xl border border-outline-variant/50 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] font-bold text-xs outline-none cursor-pointer"
+                    >
+                      <option value="Daily">Daily (Every Day)</option>
+                      <option value="Twice Daily">Twice Daily (Morning & Night)</option>
+                      <option value="Every Other Day">Every Other Day</option>
+                      <option value="Weekly">Weekly</option>
+                      <option value="As Needed">As Needed</option>
+                    </select>
                   </div>
                 </div>
 
