@@ -11,17 +11,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
   const supabase = supabaseAdmin();
 
   try {
-    // 1. Get user profile for cycle length + period duration
+    // 1. Get user profile for cycle length + period duration + last period date
     const { data: userProfile } = await supabase
       .from('users')
-      .select('cycle_length, period_duration, name')
+      .select('cycle_length, period_duration, last_period_date, name')
       .eq('id', authUser.userId)
       .single();
 
     const cycleLength = userProfile?.cycle_length || 28;
     const periodDuration = userProfile?.period_duration || 5;
 
-    // 2. Fetch recent cycle logs (last 60 days + future predictions)
+    // 2. Fetch recent cycle logs
     const { data: logs } = await supabase
       .from('cycle_logs')
       .select('*')
@@ -29,31 +29,40 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       .order('date', { ascending: false })
       .limit(60);
 
-    // 3. Find last ACTUAL (not predicted) period start
+    // 3. Find last ACTUAL period start date
     const periodLogs = (logs || []).filter((l) => l.is_period && !l.is_predicted);
-    const lastPeriodDate = periodLogs.length > 0 ? periodLogs[0].date : null;
+    const lastPeriodDate = periodLogs.length > 0
+      ? periodLogs[periodLogs.length - 1].date
+      : userProfile?.last_period_date || null;
 
     let currentDay = 1;
     let currentPhase = 'Follicular';
     let nextPeriodDaysLeft = cycleLength;
 
     if (lastPeriodDate) {
-      const daysSince = Math.floor(
-        (Date.now() - new Date(lastPeriodDate).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      currentDay = (daysSince % cycleLength) + 1;
+      const parts = lastPeriodDate.split('-').map(Number);
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        const lastLocal = new Date(parts[0], parts[1] - 1, parts[2]);
+        const now = new Date();
+        const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const diffDays = Math.round((todayLocal.getTime() - lastLocal.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0) {
+          currentDay = (diffDays % cycleLength) + 1;
+        }
+      }
 
       if (currentDay <= periodDuration) {
         currentPhase = 'Menstrual';
-      } else if (currentDay <= 13) {
+      } else if (currentDay <= Math.floor(cycleLength * 0.46)) {
         currentPhase = 'Follicular';
-      } else if (currentDay <= 16) {
+      } else if (currentDay <= Math.floor(cycleLength * 0.58)) {
         currentPhase = 'Ovulation';
       } else {
         currentPhase = 'Luteal';
       }
 
-      nextPeriodDaysLeft = Math.max(0, cycleLength - currentDay);
+      const left = cycleLength - currentDay + 1;
+      nextPeriodDaysLeft = left > 0 ? left : cycleLength;
     }
 
     // 4. Today's log data

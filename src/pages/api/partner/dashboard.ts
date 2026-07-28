@@ -27,7 +27,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     // 2. Fetch target user's profile
     const { data: targetUser } = await supabase
       .from('users')
-      .select('id, name, cycle_length, period_duration, partner_code')
+      .select('id, name, cycle_length, period_duration, last_period_date, partner_code')
       .eq('id', targetUserId)
       .single();
 
@@ -43,22 +43,32 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
     // 4. Calculate current cycle day & phase from last real period
     const periodLogs = (recentLogs || []).filter((l) => l.is_period && !l.is_predicted);
-    const lastPeriodDate = periodLogs.length > 0 ? periodLogs[0].date : null;
+    const lastPeriodDate = periodLogs.length > 0
+      ? periodLogs[periodLogs.length - 1].date
+      : targetUser.last_period_date || null;
 
-    let currentDay = 18;
-    let currentPhase = 'Luteal Phase';
-    let daysLeft = 4;
+    const cycleLength = targetUser.cycle_length || 28;
+    const periodDuration = targetUser.period_duration || 5;
+    let currentDay = 1;
+    let currentPhase = 'Follicular Phase';
+    let daysLeft = cycleLength;
 
     if (lastPeriodDate) {
-      const daysSince = Math.floor((Date.now() - new Date(lastPeriodDate).getTime()) / (1000 * 60 * 60 * 24));
-      currentDay = Math.max(1, daysSince + 1);
-      const cycleLength = targetUser.cycle_length || 28;
-      const periodDuration = targetUser.period_duration || 5;
-      daysLeft = Math.max(1, cycleLength - currentDay);
+      const parts = lastPeriodDate.split('-').map(Number);
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        const lastLocal = new Date(parts[0], parts[1] - 1, parts[2]);
+        const now = new Date();
+        const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const diffDays = Math.round((todayLocal.getTime() - lastLocal.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0) {
+          currentDay = (diffDays % cycleLength) + 1;
+        }
+      }
+      daysLeft = Math.max(1, cycleLength - currentDay + 1);
 
       if (currentDay <= periodDuration) currentPhase = 'Menstrual Phase';
-      else if (currentDay <= 13) currentPhase = 'Follicular Phase';
-      else if (currentDay <= 16) currentPhase = 'Ovulation Phase';
+      else if (currentDay <= Math.floor(cycleLength * 0.46)) currentPhase = 'Follicular Phase';
+      else if (currentDay <= Math.floor(cycleLength * 0.58)) currentPhase = 'Ovulation Phase';
       else currentPhase = 'Luteal Phase';
     }
 
