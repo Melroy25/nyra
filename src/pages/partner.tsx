@@ -1260,7 +1260,49 @@ export default function PartnerPage() {
         )}
 
         {/* ── 2. DEDICATED PARTNER CHAT VIEW ── */}
-        {activeTab === 'chat' && (
+        {activeTab === 'chat' && !isConnected ? (
+          <motion.div
+            key="chat-unconnected"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center justify-center text-center p-8 py-16 glass-card bg-white/70 dark:bg-[#16102a]/85 border border-white/60 dark:border-[#3a2d58]/60 shadow-xl rounded-2xl max-w-[500px] mx-auto my-8 animate-entrance"
+          >
+            <div className="w-16 h-16 rounded-full bg-tertiary/15 text-tertiary flex items-center justify-center mb-4 border border-tertiary/30 shadow-md">
+              <Heart className="w-8 h-8 fill-current" />
+            </div>
+            <h2 className="font-serif font-bold text-2xl md:text-3xl text-[#18003d] dark:text-[#eee6ff] mb-2">
+              Connect with a Partner 💜
+            </h2>
+            <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium leading-relaxed mb-6 max-w-sm">
+              You haven't linked a partner account yet! Link with your partner to enable private, end-to-end synced partner chat.
+            </p>
+
+            <div className="w-full bg-white/80 dark:bg-[#1c1230] p-4 rounded-2xl border border-tertiary/30 shadow-sm mb-6 flex flex-col gap-2">
+              <span className="text-[10px] font-bold text-tertiary uppercase tracking-wider block">Your Connection Code</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-serif font-bold text-2xl text-[#18003d] dark:text-[#eee6ff] tracking-wider">
+                  {showCode ? displayPairingCode : '••••••••'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowCode(!showCode)}
+                  className="px-3 py-1.5 rounded-xl bg-tertiary/10 text-tertiary text-xs font-bold hover:bg-tertiary/20 transition-all flex items-center gap-1"
+                >
+                  {showCode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span>{showCode ? 'Hide' : 'Show'}</span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => router.push('/partner?tab=dashboard')}
+              className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-tertiary to-primary text-white font-bold text-xs shadow-md shadow-tertiary/20 hover:opacity-95 transition-all flex items-center justify-center gap-2"
+            >
+              <KeyRound className="w-4 h-4" /> Connect Partner on Dashboard
+            </button>
+          </motion.div>
+        ) : activeTab === 'chat' && (
           <motion.div 
             key="chat"
             initial={{ opacity: 0 }}
