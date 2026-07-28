@@ -74,7 +74,8 @@ export default function App({ Component, pageProps }: AppProps) {
               seedCycleLogs(
                 freshUser.lastPeriodDate,
                 freshUser.periodDuration || 5,
-                freshUser.cycleLength || 28
+                freshUser.cycleLength || 28,
+                true
               );
             }
             if (typeof Notification !== 'undefined' && Notification.permission === 'default') {

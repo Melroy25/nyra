@@ -74,7 +74,7 @@ interface AppState {
   logNotes: (date: string, notes: string) => void;
   setSeverity: (date: string, severity: number) => void;
   recalculateCycleMetrics: () => void;
-  seedCycleLogs: (lastPeriodDate: string, periodDuration: number, cycleLength: number) => void;
+  seedCycleLogs: (lastPeriodDate: string, periodDuration: number, cycleLength: number, force?: boolean) => void;
   deleteMoodLog: (date: string) => void;
   deleteSymptomLog: (date: string) => void;
   deletePeriodLog: (date: string) => void;
@@ -227,10 +227,13 @@ export const useStore = create<AppState>((set, get) => ({
     }
     setTimeout(() => { get().recalculateCycleMetrics(); }, 50);
   },
-  seedCycleLogs: (lastPeriodDate, periodDuration, cycleLength) => {
-    // Only seed if localStorage & state have zero real period logs
+  seedCycleLogs: (lastPeriodDate, periodDuration, cycleLength, force = false) => {
+    if (!lastPeriodDate) return;
     const existing = get().cycleLogs.filter((l) => l.isPeriod && !l.isPredicted);
-    if (existing.length === 0 && lastPeriodDate) {
+    const existingStart = existing.length > 0 ? existing[0].date : null;
+
+    // Reseed if logs are empty, forced, or if existing logs start on a different date than lastPeriodDate
+    if (force || existing.length === 0 || existingStart !== lastPeriodDate) {
       const logs = generateInitialCycleLogs(lastPeriodDate, periodDuration, cycleLength);
       set({ cycleLogs: logs });
       if (typeof window !== 'undefined') {
