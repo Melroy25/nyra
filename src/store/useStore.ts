@@ -83,7 +83,7 @@ interface AppState {
   createPartnerAiThread: (title?: string) => string;
   renamePartnerAiThread: (id: string, title: string) => void;
   deletePartnerAiThread: (id: string) => void;
-  addPartnerAiMessage: (text: string) => void;
+  addPartnerAiMessage: (text: string, isAi?: boolean) => void;
 
   // Routine Actions
   toggleRoutine: (id: string) => void;
@@ -585,13 +585,13 @@ export const useStore = create<AppState>((set, get) => ({
       };
     }),
 
-  addPartnerAiMessage: (text) => {
+  addPartnerAiMessage: (text, isAi = false) => {
     const activeId = get().activePartnerAiThreadId;
     if (!activeId || !text.trim()) return;
 
-    const userMsg: ChatMessage = {
-      id: `p-user-${Date.now()}`,
-      senderId: 'partner-john',
+    const newMsg: ChatMessage = {
+      id: `p-${isAi ? 'ai' : 'user'}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      senderId: isAi ? 'nyra-ai' : 'user',
       text: text.trim(),
       timestamp: new Date().toISOString(),
     };
@@ -599,39 +599,10 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       partnerAiThreads: state.partnerAiThreads.map((t) =>
         t.id === activeId
-          ? { ...t, messages: [...t.messages, userMsg] }
+          ? { ...t, messages: [...t.messages, newMsg] }
           : t
       ),
     }));
-
-    // Generate intelligent AI response
-    setTimeout(() => {
-      let aiReply = "During Sarah's Luteal phase, progesterone peaks, which can lower energy and increase emotional sensitivity. Offering quiet companionship, warm tea, or a small sweet treat is a wonderful way to show support!";
-      
-      const query = text.toLowerCase();
-      if (query.includes('cramp') || query.includes('food') || query.includes('eat')) {
-        aiReply = "Great question! Dark chocolate, magnesium-rich foods, and warm herbal chamomile tea help relax smooth uterine muscles and alleviate cramps.";
-      } else if (query.includes('luteal') || query.includes('phase')) {
-        aiReply = "Sarah is in her Luteal Phase (4 days before her expected period). Her body requires slightly more resting calories. Keeping evenings calm and helping with household chores will make a big difference!";
-      } else if (query.includes('mood') || query.includes('support') || query.includes('energy')) {
-        aiReply = "When her energy is low, active listening and gentle validation mean everything. Simply offering a cozy evening at home without pressure helps her feel safe and understood.";
-      }
-
-      const aiMsg: ChatMessage = {
-        id: `p-ai-${Date.now()}`,
-        senderId: 'nyra-ai',
-        text: aiReply,
-        timestamp: new Date().toISOString(),
-      };
-
-      set((state) => ({
-        partnerAiThreads: state.partnerAiThreads.map((t) =>
-          t.id === activeId
-            ? { ...t, messages: [...t.messages, aiMsg] }
-            : t
-        ),
-      }));
-    }, 600);
   },
 
   // Routine Actions

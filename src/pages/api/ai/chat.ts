@@ -165,19 +165,13 @@ Chat rules (VERY IMPORTANT):
       });
     }
 
-    // 6. Call Google Gemini API (if key configured)
+    // 6. Call Google Gemini API
     const geminiApiKey = process.env.GEMINI_API_KEY;
     let aiReply = '';
 
     if (geminiApiKey && geminiApiKey !== 'PASTE_YOUR_GEMINI_KEY_HERE' && geminiApiKey.length > 10) {
       try {
-        const geminiMessages = [
-          ...conversationHistory.map((m: any) => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.content }],
-          })),
-          { role: 'user', parts: [{ text: message }] },
-        ];
+        const geminiMessages = buildGeminiContents(conversationHistory, message);
 
         const geminiResponse = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
@@ -231,10 +225,52 @@ Chat rules (VERY IMPORTANT):
   }
 }
 
-// Smart keyword-aware fallback when Gemini is not configured
+// Helper to guarantee strictly alternating user/model roles for Gemini API
+function buildGeminiContents(history: Array<{ role: string; content: string }>, newMessage: string) {
+  const raw = [
+    ...history.map((h) => ({
+      role: (h.role === 'assistant' || h.role === 'model' ? 'model' : 'user') as 'user' | 'model',
+      text: h.content,
+    })),
+    { role: 'user' as const, text: newMessage },
+  ];
+
+  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+
+  for (const item of raw) {
+    if (!item.text || !item.text.trim()) continue;
+    if (contents.length === 0) {
+      if (item.role === 'model') continue; // First item must be user
+      contents.push({ role: 'user', parts: [{ text: item.text }] });
+    } else {
+      const last = contents[contents.length - 1];
+      if (last.role === item.role) {
+        last.parts[0].text += `\n${item.text}`;
+      } else {
+        contents.push({ role: item.role, parts: [{ text: item.text }] });
+      }
+    }
+  }
+
+  return contents;
+}
+
+// Smart keyword-aware fallback when Gemini is offline or not configured
 function buildSmartFallback(message: string, phase: string, day: number, name: string, aiType: string): string {
   const msg = message.toLowerCase();
   const trackedName = name === 'Partner' || !name ? 'your partner' : name;
+
+  // ── JOKES & HUMOR (ENGLISH & HINGLISH) ──
+  if (/joke|mar|maar|funny|chutkula|hassi|laugh|laughing|hasi|pun|lol|rofl|joke me/.test(msg)) {
+    const jokes = [
+      `Why did the period symptom go to therapy? Because it had way too many mood swings! 😆`,
+      `Why don't hormones ever get lost? Because they always follow their natural cycle! 🌸`,
+      `Why did the ovary cross the road? To get to the ovulation phase! 🥚✨`,
+      `My doctor told me to eat more iron during my period. So I ate chocolate... it has a foil wrapper, close enough right? 🍫😂`,
+      `Pati to Patni: Tum achanak itni sweet kyu ho gayi? Patni: Hormones ka chakkar hai babu bhaiya! 😜`,
+    ];
+    return jokes[Math.floor(Math.random() * jokes.length)];
+  }
 
   // ── PARTNER AI BRANCH ──
   if (aiType === 'partner') {
@@ -262,7 +298,7 @@ function buildSmartFallback(message: string, phase: string, day: number, name: s
       return `Right now in her ${phase} phase (Day ${day}), key ways to support ${trackedName} are: 1) Be extra patient & reassuring, 2) Offer warmth and tea, 3) Help with chores without being asked, and 4) Give her space or quiet companionship if she's tired. 💕`;
     }
 
-    return `${trackedName} is currently in her ${phase} phase (Day ${day}) 💜 Being patient, attentive, and offering quiet companionship or a warm drink is a great way to support her today! How else can I help?`;
+    return `I'm right here with you! 💜 ${trackedName} is currently in her ${phase} (Day ${day}). Feel free to ask me any question about her energy, mood, or how to make her day easier!`;
   }
 
   // ── USER AI BRANCH (FEMALE USER) ──
@@ -314,23 +350,8 @@ function buildSmartFallback(message: string, phase: string, day: number, name: s
     return `In your ${phase} phase, recommended exercise: ${phaseExercise[phase] || 'whatever feels good'}. Always listen to your body!`;
   }
 
-  if (/late|missed period|no period|irregular/.test(msg)) {
-    return `A late or missed period can be caused by stress, weight shifts, illness, or hormonal changes 🌸 If it's more than a week late and a test is negative, track your cycle for a few months. If irregularity continues, consult a gynaecologist.`;
-  }
-
-  if (/pcos|polycystic|endometriosis|hormone|hormonal|thyroid/.test(msg)) {
-    return `These health topics deserve proper medical care 💜 Symptoms like irregular cycles, pain, or heavy flow should be tracked and discussed with a gynaecologist — you deserve clear answers!`;
-  }
-
-  // Default contextual response
-  const phaseContext: Record<string, string> = {
-    Menstrual: `Day ${day}: Rest, warmth, and iron-rich foods are your best allies right now 💝`,
-    Follicular: `Day ${day}: Your energy is building — great time for new plans and social activities 🌱`,
-    Ovulation: `Day ${day}: Peak energy and confidence! Your body is thriving ✨`,
-    Luteal: `Day ${day}: Prioritize sleep, nourishing meals, and managing stress 🌙`,
-  };
-
-  return `${phaseContext[phase] || `You're on Day ${day} of your cycle.`} How can I help you today? 🌸`;
+  return `I'm here for you! 🌸 Whether you have questions about your cycle (Day ${day}, ${phase}), need a recipe recommendation, or just want to chat, I'm all ears! What's on your mind?`;
 }
 
 export default withAuth(handler);
+

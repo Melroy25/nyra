@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import { useStore } from '../store/useStore';
 import { 
-  Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, PlusCircle, Check, CheckCheck, HelpCircle, Bot,
+  Heart, Send, Smile, Info, Sparkles, MessageCircle, ArrowLeft, ArrowUp, PlusCircle, Check, CheckCheck, HelpCircle, Bot,
   Menu, ListFilter, Plus, Edit3, Trash2, Volume2, Copy, X, KeyRound, Loader2,
   Eye, EyeOff, RefreshCw, UserCheck, Unlink, Paperclip, FileText, MoreVertical, ChevronDown, Bell, BellOff, Reply
 } from 'lucide-react';
@@ -760,28 +760,16 @@ export default function PartnerPage() {
     if (!textToSend.trim() || isPartnerAiTyping) return;
     if (!promptText) setPartnerAiInput('');
 
-    // Optimistically add user message
-    const userMsg = {
-      id: `u-${Date.now()}`,
-      senderId: user?.id || 'user',
-      text: textToSend.trim(),
-      timestamp: new Date().toISOString(),
-    };
-    addPartnerAiMessage(textToSend.trim());
+    // Add user message (isAi = false)
+    addPartnerAiMessage(textToSend.trim(), false);
     setIsPartnerAiTyping(true);
 
     try {
       const { reply } = await apiAiChat(activePartnerAiThread?.id || 'auto', textToSend.trim(), 'partner');
-      // Add AI reply
-      const aiMsg = {
-        id: `ai-${Date.now()}`,
-        senderId: 'nyra-ai',
-        text: reply,
-        timestamp: new Date().toISOString(),
-      };
-      addPartnerAiMessage(reply);
+      // Add AI reply (isAi = true)
+      addPartnerAiMessage(reply || 'I am here to help you support her.', true);
     } catch {
-      addPartnerAiMessage('I had trouble connecting. Please check your internet and try again.');
+      addPartnerAiMessage('I had trouble connecting. Please check your internet and try again.', true);
     } finally {
       setIsPartnerAiTyping(false);
     }
@@ -1989,73 +1977,110 @@ export default function PartnerPage() {
             </div>
 
             {/* AI Chat Messages Body */}
-            <div className="flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-4 bg-white/30 dark:bg-[#0d0818]/60 relative">
-              {partnerAiMessages.map((msg) => {
-                const isUser = msg.senderId === user?.id || msg.senderId === 'partner-john' || msg.senderId === 'user';
+            <div className="flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-3 bg-white/30 dark:bg-[#0d0818]/60 relative">
+              {partnerAiMessages.map((msg, idx) => {
+                const isUser = msg.senderId === 'user' || msg.senderId === user?.id;
                 const isSpeaking = speakingMessageId === msg.id;
+                const prevMsg = partnerAiMessages[idx - 1];
+                const showAvatar = !isUser && (idx === 0 || prevMsg?.senderId === 'user' || prevMsg?.senderId === user?.id);
 
                 return (
                   <div 
                     key={msg.id} 
                     ref={(el) => { messageRefs.current[msg.id] = el; }}
-                    className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} group`}
+                    className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} group items-end gap-1.5`}
                   >
-                    <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs font-medium leading-relaxed border shadow-sm relative ${
-                      isUser 
-                        ? 'bg-gradient-to-r from-primary to-secondary text-white border-primary/20 rounded-tr-sm' 
-                        : 'glass-card bg-white/90 dark:bg-[#1c1230]/90 text-[#18003d] dark:text-[#eee6ff] border-white/60 dark:border-[#3a2d58]/60 rounded-tl-sm'
-                    }`}>
-                      {!isUser && (
-                        <div className="flex items-center justify-between gap-2 mb-1.5 text-tertiary font-bold text-[10px]">
-                          <div className="flex items-center gap-1.5">
-                            <Bot className="w-3.5 h-3.5" />
-                            <span>Nyra Partner AI</span>
+                    {/* Bot avatar on left */}
+                    {!isUser && (
+                      <div className="w-8 shrink-0 flex items-end">
+                        {showAvatar ? (
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-tertiary to-primary flex items-center justify-center shadow-sm border border-white/30 overflow-hidden">
+                            <Bot className="w-4 h-4 text-white" />
                           </div>
-                          
-                          {/* Audio Speak & Copy Buttons */}
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleSpeakText(msg.text, msg.id)}
-                              className={`p-1 rounded hover:bg-tertiary/10 transition-colors ${
-                                isSpeaking ? 'text-primary animate-pulse' : 'text-[#3d3050] dark:text-[#c8bedd]'
-                              }`}
-                              title="Listen aloud"
-                            >
-                              <Volume2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleCopyText(msg.text, msg.id)}
-                              className="p-1 rounded text-[#3d3050] dark:text-[#c8bedd] hover:bg-tertiary/10 transition-colors"
-                              title="Copy text"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
+                        ) : <div className="w-8" />}
+                      </div>
+                    )}
+
+                    <div className={`max-w-[82%] relative group/bubble`}>
+                      <div className={`rounded-2xl px-4 py-3 text-xs font-medium leading-relaxed border shadow-sm relative ${
+                        isUser 
+                          ? 'bg-gradient-to-r from-primary to-secondary text-white border-primary/20 rounded-br-sm' 
+                          : 'glass-card bg-white/95 dark:bg-[#1c1230]/95 text-[#18003d] dark:text-[#eee6ff] border-white/60 dark:border-[#3a2d58]/60 rounded-bl-sm'
+                      }`}>
+                        {/* Purple vertical bar accent for bot */}
+                        {!isUser && (
+                          <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-gradient-to-b from-tertiary to-primary rounded-full" />
+                        )}
+
+                        {!isUser && (
+                          <div className="flex items-center justify-between gap-2 mb-1.5 text-tertiary font-bold text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <Sparkles className="w-3 h-3 text-tertiary animate-pulse" />
+                              <span>Nyra Partner AI</span>
+                            </div>
+                            
+                            {/* Audio Speak & Copy Buttons */}
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleSpeakText(msg.text, msg.id)}
+                                className={`p-1 rounded hover:bg-tertiary/10 transition-colors ${
+                                  isSpeaking ? 'text-primary animate-pulse' : 'text-[#3d3050] dark:text-[#c8bedd]'
+                                }`}
+                                title="Listen aloud"
+                              >
+                                <Volume2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleCopyText(msg.text, msg.id)}
+                                className="p-1 rounded text-[#3d3050] dark:text-[#c8bedd] hover:bg-tertiary/10 transition-colors"
+                                title="Copy text"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      {msg.text}
+                        )}
+                        <p className="whitespace-pre-line">{msg.text}</p>
+                      </div>
                     </div>
                   </div>
                 );
               })}
+
+              {/* Typing indicator */}
+              {isPartnerAiTyping && (
+                <div className="flex justify-start items-end gap-1.5 mt-1">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-tertiary to-primary flex items-center justify-center shadow-sm">
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="glass-card bg-white/90 dark:bg-[#1c1230]/90 px-4 py-3 rounded-2xl rounded-bl-sm border border-white/60 dark:border-[#3a2d58]/60 flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-tertiary animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-1.5 h-1.5 rounded-full bg-secondary animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              )}
               <div ref={aiChatEndRef} />
             </div>
 
             {/* AI Input Footer */}
-            <div className="bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex items-center gap-2">
+            <div className="bg-white/80 dark:bg-[#1c1230]/90 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex items-center gap-2">
               <input 
                 type="text" 
                 placeholder={`Ask Nyra AI how to support ${trackedUserName}...`}
                 value={partnerAiInput}
                 onChange={(e) => setPartnerAiInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendPartnerAi()}
-                className="flex-1 px-4 py-2.5 rounded-2xl border border-outline-variant/60 dark:border-[#3a2d58] focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 outline-none text-xs font-semibold bg-white/80 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0]"
+                className="flex-1 px-4 py-3 rounded-full border border-outline-variant/60 dark:border-[#3a2d58] focus:border-tertiary focus:ring-1 focus:ring-tertiary/20 outline-none text-xs font-semibold bg-white/90 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0] shadow-inner"
               />
               <button 
                 onClick={() => handleSendPartnerAi()}
-                className="p-2.5 rounded-2xl bg-gradient-to-r from-tertiary to-primary text-white shadow-md active:scale-95 hover:opacity-95"
+                disabled={!partnerAiInput.trim() || isPartnerAiTyping}
+                className={`w-10 h-10 rounded-full bg-gradient-to-r from-tertiary to-primary text-white flex items-center justify-center shadow-md transition-all ${
+                  !partnerAiInput.trim() || isPartnerAiTyping ? 'opacity-40 cursor-not-allowed' : 'hover:scale-105 active:scale-95'
+                }`}
               >
-                <Send className="w-4 h-4" />
+                <ArrowUp className="w-5 h-5" />
               </button>
             </div>
 
