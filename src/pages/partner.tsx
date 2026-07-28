@@ -266,14 +266,22 @@ export default function PartnerPage() {
   const myName = user?.name || 'User';
   const connectedPartnerName = user?.connectedPartner?.name || chatPartnerInfo?.name || 'Partner';
   const trackedUserName = isPartner ? connectedPartnerName : myName;
-  const [dashboardData, setDashboardData] = useState<any>(() => {
-    if (typeof window !== 'undefined') {
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [isDashboardLoading, setIsDashboardLoading] = useState(true);
+
+  // Restore client cache after mount to prevent SSR React #418 hydration mismatch
+  useEffect(() => {
+    try {
       const cached = localStorage.getItem('nyra_cached_partner_dashboard');
-      if (cached) { try { return JSON.parse(cached); } catch (e) {} }
-    }
-    return null;
-  });
-  const [isDashboardLoading, setIsDashboardLoading] = useState(!dashboardData);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed) {
+          setDashboardData(parsed);
+          setIsDashboardLoading(false);
+        }
+      }
+    } catch (e) {}
+  }, []);
   const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
   const displayPairingCode = user?.connectedPartner?.partnerCode || (user?.connectedPartner as any)?.partner_code || dashboardData?.partner?.partner_code || user?.partnerCode || '';
   const fileInputRef = useRef<HTMLInputElement>(null);

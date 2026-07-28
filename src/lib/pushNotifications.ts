@@ -79,10 +79,7 @@ export async function registerWebPushSubscription() {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
-      }).catch((err) => {
-        console.log('[WebPush] Subscription skipped or unsupported in browser environment:', err?.message || err);
-        return null;
-      });
+      }).catch(() => null);
     }
 
     if (!sub) return;

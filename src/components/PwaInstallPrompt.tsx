@@ -28,10 +28,10 @@ export default function PwaInstallPrompt() {
 
     // Listen for beforeinstallprompt on Chrome/Android/Desktop
     const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
       const dismissed = localStorage.getItem('nyra_pwa_dismissed');
       if (!dismissed) {
+        e.preventDefault();
+        setDeferredPrompt(e);
         setShowPrompt(true);
       }
     };

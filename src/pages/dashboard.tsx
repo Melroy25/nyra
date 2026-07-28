@@ -17,7 +17,7 @@ export default function DashboardPage() {
 
   const name = isMounted && user?.name ? user.name : 'User';
 
-  // Live backend cycle metrics with instant localStorage cache
+  // Live backend cycle metrics with instant cache restoration after hydration
   const [cycleMetrics, setCycleMetrics] = useState<{
     currentDay: number;
     currentPhase: string;
@@ -25,14 +25,22 @@ export default function DashboardPage() {
     cycleLength: number;
     todayMood: string | null;
     todaySymptoms: string[];
-  } | null>(() => {
-    if (typeof window !== 'undefined') {
+  } | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(true);
+
+  // Restore client cache after mount (prevents SSR React #418 hydration mismatch)
+  useEffect(() => {
+    try {
       const cached = localStorage.getItem('nyra_cached_cycle_metrics');
-      if (cached) { try { return JSON.parse(cached); } catch (e) {} }
-    }
-    return null;
-  });
-  const [metricsLoading, setMetricsLoading] = useState(!cycleMetrics);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed) {
+          setCycleMetrics(parsed);
+          setMetricsLoading(false);
+        }
+      }
+    } catch (e) {}
+  }, []);
 
   // Toggle states for "See More" (showing 5 items vs all)
   const [showAllMoods, setShowAllMoods] = useState(false);
