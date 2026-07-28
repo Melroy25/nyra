@@ -72,6 +72,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
         if (diffDays >= 0) {
           currentDay = (diffDays % cycleLength) + 1;
         }
+
+        const multiplier = Math.max(1, Math.ceil((diffDays + 1) / cycleLength));
+        const nextPeriodDate = new Date(lastLocal);
+        nextPeriodDate.setDate(nextPeriodDate.getDate() + multiplier * cycleLength);
+        const msLeft = nextPeriodDate.getTime() - todayLocal.getTime();
+        const daysLeft = Math.round(msLeft / (1000 * 60 * 60 * 24));
+        nextPeriodDaysLeft = daysLeft > 0 ? daysLeft : cycleLength;
       }
 
       if (currentDay <= periodDuration) {
@@ -83,9 +90,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
       } else {
         currentPhase = 'Luteal';
       }
-
-      const left = cycleLength - currentDay + 1;
-      nextPeriodDaysLeft = left > 0 ? left : cycleLength;
     }
 
     // 4. Today's log data

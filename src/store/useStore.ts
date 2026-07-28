@@ -455,6 +455,8 @@ export const useStore = create<AppState>((set, get) => ({
     const cycleLength = userObj?.cycleLength || (userObj as any)?.cycle_length || get().onboardingData.averageCycleLength || 28;
     const periodDur = userObj?.periodDuration || (userObj as any)?.period_duration || get().onboardingData.periodDuration || 5;
 
+    let nextPeriodDaysLeft = cycleLength;
+
     if (lastLogDate) {
       const parts = lastLogDate.split('-').map(Number);
       if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
@@ -466,6 +468,13 @@ export const useStore = create<AppState>((set, get) => ({
         if (diffDays >= 0) {
           currentDay = (diffDays % cycleLength) + 1;
         }
+
+        const multiplier = Math.max(1, Math.ceil((diffDays + 1) / cycleLength));
+        const nextPeriodDate = new Date(lastPeriodLocal);
+        nextPeriodDate.setDate(nextPeriodDate.getDate() + multiplier * cycleLength);
+        const msLeft = nextPeriodDate.getTime() - todayLocal.getTime();
+        const daysLeft = Math.round(msLeft / (1000 * 60 * 60 * 24));
+        nextPeriodDaysLeft = daysLeft > 0 ? daysLeft : cycleLength;
       }
     }
 
@@ -481,12 +490,10 @@ export const useStore = create<AppState>((set, get) => ({
       phase = 'Luteal';
     }
 
-    const nextPeriod = cycleLength - currentDay + 1;
-
     set({
       currentCycleDay: currentDay,
       currentCyclePhase: phase,
-      nextPeriodDaysLeft: nextPeriod > 0 ? nextPeriod : cycleLength,
+      nextPeriodDaysLeft,
     });
   },
 
