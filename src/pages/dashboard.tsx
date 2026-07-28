@@ -28,18 +28,10 @@ export default function DashboardPage() {
   } | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(true);
 
-  // Restore client cache after mount (prevents SSR React #418 hydration mismatch)
+  // Mount effect — recalculate live metrics immediately on client
   useEffect(() => {
-    try {
-      const cached = localStorage.getItem('nyra_cached_cycle_metrics');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed) {
-          setCycleMetrics(parsed);
-          setMetricsLoading(false);
-        }
-      }
-    } catch (e) {}
+    recalculateCycleMetrics();
+    setMetricsLoading(false);
   }, []);
 
   // Toggle states for "See More" (showing 5 items vs all)
@@ -108,20 +100,17 @@ export default function DashboardPage() {
   const storeDaysLeft = useStore((state) => state.nextPeriodDaysLeft);
   const recalculateCycleMetrics = useStore((state) => state.recalculateCycleMetrics);
 
+  // Recalculate metrics immediately when logs or user profile change
   useEffect(() => {
     recalculateCycleMetrics();
-  }, [cycleLogs]);
+  }, [cycleLogs, user]);
 
   useEffect(() => {
     if (user?.id) {
-      if (!cycleMetrics) setMetricsLoading(true);
       apiGetCycleMetrics()
         .then((data) => {
-          if (data) {
+          if (data && data.currentDay) {
             setCycleMetrics(data);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('nyra_cached_cycle_metrics', JSON.stringify(data));
-            }
           }
         })
         .catch((err) => {
@@ -133,9 +122,10 @@ export default function DashboardPage() {
     }
   }, [user?.id]);
 
-  const currentCycleDay = cycleMetrics?.currentDay ?? storeDay ?? 1;
-  const currentCyclePhase = cycleMetrics?.currentPhase ?? storePhase ?? 'Follicular';
-  const nextPeriodDaysLeft = cycleMetrics?.nextPeriodDaysLeft ?? storeDaysLeft ?? 28;
+  // Primary source of truth: store metrics (computed live from logs, matching Calendar page)
+  const currentCycleDay = storeDay || cycleMetrics?.currentDay || 1;
+  const currentCyclePhase = storePhase || cycleMetrics?.currentPhase || 'Follicular';
+  const nextPeriodDaysLeft = storeDaysLeft || cycleMetrics?.nextPeriodDaysLeft || 28;
   const todayMood = cycleMetrics?.todayMood;
   const todaySymptoms = cycleMetrics?.todaySymptoms ?? [];
 
