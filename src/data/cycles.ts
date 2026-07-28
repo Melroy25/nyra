@@ -33,6 +33,7 @@ export function generateInitialCycleLogs(
       flow: null,      // user didn't set flow at registration time
       symptoms: [],
       mood: null,
+      isUserLogged: false, // auto-seeded, not manually tapped by user
     });
   }
 
@@ -53,6 +54,7 @@ export function generateInitialCycleLogs(
         flow: null,
         symptoms: [],
         mood: null,
+        isUserLogged: false,
       });
     }
   }
@@ -73,6 +75,7 @@ export function generateInitialCycleLogs(
         flow: null,
         symptoms: [],
         mood: null,
+        isUserLogged: false,
       });
     }
   }

@@ -29,7 +29,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
   }
 
   if (req.method === 'POST') {
-    const { date, isPeriod, isPredicted, isOvulation, flow, symptoms, mood, notes, severity } = req.body;
+    const { date, isPeriod, isPredicted, isOvulation, flow, symptoms, mood, notes, severity, isUserLogged } = req.body;
 
     if (!date) return res.status(400).json({ error: 'Date is required' });
 
@@ -47,6 +47,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
           mood: mood ?? null,
           notes: notes ?? null,
           severity: severity ?? 0,
+          is_user_logged: isUserLogged ?? true, // default true when saved via API (explicit user action)
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,date' }

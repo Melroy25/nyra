@@ -31,6 +31,8 @@ export interface CycleLog {
   mood: string | null;
   notes?: string;
   severity?: number;
+  /** true = user explicitly tapped this date on the calendar; false/undefined = auto-seeded from registration data */
+  isUserLogged?: boolean;
 }
 
 export interface Symptom {

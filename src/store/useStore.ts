@@ -229,18 +229,30 @@ export const useStore = create<AppState>((set, get) => ({
   },
   seedCycleLogs: (lastPeriodDate, periodDuration, cycleLength, force = false) => {
     if (!lastPeriodDate) return;
-    const existing = get().cycleLogs.filter((l) => l.isPeriod && !l.isPredicted);
-    const existingStart = existing.length > 0 ? existing[0].date : null;
+    const existing = get().cycleLogs;
+    const userLoggedPeriods = existing.filter((l) => l.isPeriod && !l.isPredicted && l.isUserLogged === true);
 
-    // Reseed if logs are empty, forced, or if existing logs start on a different date than lastPeriodDate
-    if (force || existing.length === 0 || existingStart !== lastPeriodDate) {
-      const logs = generateInitialCycleLogs(lastPeriodDate, periodDuration, cycleLength);
-      set({ cycleLogs: logs });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
-      }
+    // Only reseed if there are NO user-explicitly-logged period entries, or if force=true
+    if (!force && userLoggedPeriods.length > 0) {
+      // User has their own logged data — don't overwrite with seed data, just recalculate
       get().recalculateCycleMetrics();
+      return;
     }
+
+    const seedLogs = generateInitialCycleLogs(lastPeriodDate, periodDuration, cycleLength);
+
+    // Merge: keep all existing user-logged entries, add seed entries for dates not already user-logged
+    const userLoggedDates = new Set(userLoggedPeriods.map((l) => l.date));
+    const merged = [
+      ...existing.filter((l) => l.isUserLogged === true), // keep all user-logged
+      ...seedLogs.filter((l) => !userLoggedDates.has(l.date)), // add seed only for non-overlapping dates
+    ];
+
+    set({ cycleLogs: merged });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('nyra_cycle_logs', JSON.stringify(merged));
+    }
+    get().recalculateCycleMetrics();
   },
   setOnboardingStep: (onboardingStep) => set({ onboardingStep }),
   updateOnboardingData: (data) =>
@@ -286,9 +298,9 @@ export const useStore = create<AppState>((set, get) => ({
       const logs = [...state.cycleLogs];
       const index = logs.findIndex((l) => l.date === date);
       if (index > -1) {
-        logs[index] = { ...logs[index], isPeriod: true, flow: 'medium' };
+        logs[index] = { ...logs[index], isPeriod: true, flow: 'medium', isUserLogged: true };
       } else {
-        logs.push({ date, isPeriod: true, isPredicted: false, isOvulation: false, flow: 'medium', symptoms: [], mood: null });
+        logs.push({ date, isPeriod: true, isPredicted: false, isOvulation: false, flow: 'medium', symptoms: [], mood: null, isUserLogged: true });
       }
       if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };
@@ -311,9 +323,9 @@ export const useStore = create<AppState>((set, get) => ({
       const index = logs.findIndex((l) => l.date === date);
       const isPeriod = flow !== null;
       if (index > -1) {
-        logs[index] = { ...logs[index], flow, isPeriod };
+        logs[index] = { ...logs[index], flow, isPeriod, isUserLogged: true };
       } else {
-        logs.push({ date, isPeriod, isPredicted: false, isOvulation: false, flow, symptoms: [], mood: null });
+        logs.push({ date, isPeriod, isPredicted: false, isOvulation: false, flow, symptoms: [], mood: null, isUserLogged: true });
       }
       if (typeof window !== 'undefined') localStorage.setItem('nyra_cycle_logs', JSON.stringify(logs));
       return { cycleLogs: logs };

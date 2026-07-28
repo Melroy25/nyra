@@ -174,9 +174,9 @@ export default function DashboardPage() {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const displayedSymptomLogs = showAllSymptoms ? allSymptomLogs : allSymptomLogs.slice(0, 5);
 
-  // ── Period Logs (Grouped by consecutive dates, sorted newest first) ──
+  // ── Period Logs (only explicitly user-logged entries) ──
   const periodLogs = [...cycleLogs]
-    .filter((l) => l.isPeriod && !l.isPredicted && !(pendingDelete?.type === 'period' && pendingDelete?.date === l.date))
+    .filter((l) => l.isPeriod && !l.isPredicted && l.isUserLogged === true && !(pendingDelete?.type === 'period' && pendingDelete?.date === l.date))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const displayedPeriodLogs = showAllPeriods ? periodLogs : periodLogs.slice(0, 5);
 
