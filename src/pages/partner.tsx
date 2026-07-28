@@ -1289,18 +1289,19 @@ export default function PartnerPage() {
                         const rate = voicePlaybackRate[msg.id] || 1;
                         const playing = voicePlaying[msg.id] || false;
                         const progress = voiceProgress[msg.id] || 0;
+                        const elapsed = voiceCurrentTime[msg.id] || 0;
+                        const total = voiceDuration[msg.id];
                         return (
-                          <div className="flex flex-col gap-1 mb-1">
-                          <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl ${
+                          <div className={`flex flex-col gap-2 px-3 pt-2.5 pb-2 rounded-2xl mb-1 ${
                             isSentByMe
                               ? 'bg-gradient-to-br from-[#7c3aed] to-[#a855f7] text-white'
                               : 'bg-white dark:bg-[#1e1535] border border-black/6 dark:border-[#3a2d58]/60'
                           }`}>
-                            {/* Hidden audio element */}
+                            {/* Hidden audio — preload=auto so total duration loads immediately */}
                             <audio
                               ref={el => { audioRefs.current[msg.id] = el; }}
                               src={mediaUrl}
-                              preload="metadata"
+                              preload="auto"
                               onLoadedMetadata={(e) => {
                                 const el = e.currentTarget;
                                 if (el.duration && isFinite(el.duration)) {
@@ -1317,70 +1318,62 @@ export default function PartnerPage() {
                                 if (el.duration && isFinite(el.duration)) {
                                   setVoiceProgress(prev => ({ ...prev, [msg.id]: el.currentTime / el.duration }));
                                   setVoiceCurrentTime(prev => ({ ...prev, [msg.id]: el.currentTime }));
+                                  if (!voiceDuration[msg.id]) {
+                                    setVoiceDuration(prev => ({ ...prev, [msg.id]: el.duration }));
+                                  }
                                 }
                               }}
                             />
-                            {/* Play/Pause */}
-                            <button
-                              onClick={() => toggleVoicePlay(msg.id, mediaUrl)}
-                              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                                isSentByMe ? 'bg-white/20 hover:bg-white/30' : 'bg-primary/10 hover:bg-primary/20'
-                              } transition-colors`}
-                            >
-                              {playing
-                                ? <span className={`text-lg ${isSentByMe ? 'text-white' : 'text-primary'}`}>⏸</span>
-                                : <span className={`text-lg ${isSentByMe ? 'text-white' : 'text-primary'}`}>▶️</span>
-                              }
-                            </button>
-                            {/* Waveform bars */}
-                            <div className="flex items-center gap-px flex-1 h-8 relative overflow-hidden">
-                              {Array.from({ length: 28 }).map((_, i) => {
-                                const barProgress = i / 27;
-                                const filled = barProgress <= progress;
-                                const heights = [3,5,8,6,10,12,7,9,11,5,8,14,10,7,12,9,6,11,8,13,6,10,7,9,5,11,8,6];
-                                const h = heights[i] || 6;
-                                return (
-                                  <div
-                                    key={i}
-                                    style={{ height: `${h}px`, minWidth: '2px', flex: 1 }}
-                                    className={`rounded-full transition-colors ${
-                                      filled
-                                        ? (isSentByMe ? 'bg-white' : 'bg-primary')
-                                        : (isSentByMe ? 'bg-white/40' : 'bg-primary/25')
-                                    } ${playing && filled ? 'animate-pulse' : ''}`}
-                                  />
-                                );
-                              })}
-                            </div>
-                            {/* Playback speed */}
-                            <button
-                              onClick={() => cyclePlaybackRate(msg.id)}
-                              className={`text-[10px] font-extrabold shrink-0 px-2 py-1 rounded-lg ${
-                                isSentByMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-primary/10 text-primary hover:bg-primary/20'
-                              } transition-colors`}
-                            >
-                              {rate}x
-                            </button>
-                          </div>
 
-                          {/* Duration row: elapsed / total */}
-                          <div className={`flex items-center justify-between px-1 mt-0.5 ${
-                            isSentByMe ? 'text-white/70' : 'text-[#9d8fc0] dark:text-[#6b5b95]'
-                          }`}>
-                            <span className="text-[10px] font-semibold tabular-nums">
-                              {voiceCurrentTime[msg.id] != null && voiceCurrentTime[msg.id] > 0
-                                ? formatSeconds(Math.floor(voiceCurrentTime[msg.id]))
-                                : '0:00'
-                              }
-                            </span>
-                            <span className="text-[9px] opacity-50">/</span>
-                            <span className="text-[10px] font-semibold tabular-nums">
-                              {voiceDuration[msg.id] && isFinite(voiceDuration[msg.id])
-                                ? formatSeconds(Math.floor(voiceDuration[msg.id]))
-                                : '--:--'
-                              }
-                            </span>
-                          </div>
+                            {/* Row 1: Play + Waveform + Speed */}
+                            <div className="flex items-center gap-2.5">
+                              <button
+                                onClick={() => toggleVoicePlay(msg.id, mediaUrl)}
+                                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                                  isSentByMe ? 'bg-white/20 hover:bg-white/30' : 'bg-primary/10 hover:bg-primary/20'
+                                } transition-colors`}
+                              >
+                                {playing
+                                  ? <span className={`text-lg ${isSentByMe ? 'text-white' : 'text-primary'}`}>⏸</span>
+                                  : <span className={`text-lg ${isSentByMe ? 'text-white' : 'text-primary'}`}>▶️</span>
+                                }
+                              </button>
+                              <div className="flex items-center gap-px flex-1 h-8 overflow-hidden">
+                                {Array.from({ length: 28 }).map((_, i) => {
+                                  const barPct = i / 27;
+                                  const filled = barPct <= progress;
+                                  const heights = [3,5,8,6,10,12,7,9,11,5,8,14,10,7,12,9,6,11,8,13,6,10,7,9,5,11,8,6];
+                                  return (
+                                    <div
+                                      key={i}
+                                      style={{ height: `${heights[i] || 6}px`, minWidth: '2px', flex: 1 }}
+                                      className={`rounded-full transition-colors ${
+                                        filled
+                                          ? (isSentByMe ? 'bg-white' : 'bg-primary')
+                                          : (isSentByMe ? 'bg-white/40' : 'bg-primary/25')
+                                      } ${playing && filled ? 'animate-pulse' : ''}`}
+                                    />
+                                  );
+                                })}
+                              </div>
+                              <button
+                                onClick={() => cyclePlaybackRate(msg.id)}
+                                className={`text-[10px] font-extrabold shrink-0 px-2 py-1 rounded-lg ${
+                                  isSentByMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-primary/10 text-primary hover:bg-primary/20'
+                                } transition-colors`}
+                              >
+                                {rate}x
+                              </button>
+                            </div>
+
+                            {/* Row 2: Elapsed / Total — inside bubble, always visible */}
+                            <div className={`flex items-center gap-1.5 text-[10px] font-bold tabular-nums ${
+                              isSentByMe ? 'text-white/80' : 'text-[#9d8fc0] dark:text-[#7c6aaa]'
+                            }`}>
+                              <span>{elapsed > 0 ? formatSeconds(Math.floor(elapsed)) : '0:00'}</span>
+                              <span className="opacity-50 text-[9px]">/</span>
+                              <span>{total && isFinite(total) ? formatSeconds(Math.floor(total)) : '--:--'}</span>
+                            </div>
                           </div>
                         );
                       })()}
