@@ -92,6 +92,19 @@ export default function PartnerPage() {
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [drawerTab, setDrawerTab] = useState<'emojis' | 'stickers'>('emojis');
 
+  // ── Voice Note ────────────────────────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Per-message playback speed: msgId -> speed
+  const [voicePlaybackRate, setVoicePlaybackRate] = useState<Record<string, number>>({});
+  const audioRefs = useRef<Record<string, HTMLAudioElement | null>>({});
+  const [voicePlaying, setVoicePlaying] = useState<Record<string, boolean>>({});
+  const [voiceProgress, setVoiceProgress] = useState<Record<string, number>>({}); // 0-1
+
   // ── Telegram-like message features ──────────────────────────────────────
   const [contextMenu, setContextMenu] = useState<{ msgId: string; x: number; y: number } | null>(null);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
@@ -650,6 +663,94 @@ export default function PartnerPage() {
     }
   };
 
+  // ── Voice Note Handlers ──────────────────────────────────────────────────
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg' });
+      audioChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: mr.mimeType });
+        setVoiceBlob(blob);
+        stream.getTracks().forEach(t => t.stop());
+      };
+      mr.start(100);
+      mediaRecorderRef.current = mr;
+      setIsRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+    } catch (err) {
+      alert('Microphone access denied. Please allow microphone access to record voice notes.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.ondataavailable = null;
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    setVoiceBlob(null);
+    audioChunksRef.current = [];
+  };
+
+  const sendVoiceNote = async () => {
+    if (!voiceBlob) return;
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result as string;
+      const tempId = `msg-${Date.now()}`;
+      const myId = authUserId || user?.id || 'user';
+      const newMsg = { id: tempId, senderId: myId, text: '', mediaUrl: dataUrl, mediaType: 'audio', timestamp: new Date().toISOString() };
+      setMessages(prev => [...prev, newMsg]);
+      setVoiceBlob(null);
+      try {
+        const { message: sentMsg } = await apiSendMessage('auto', undefined, undefined, dataUrl, 'audio');
+        if (sentMsg) {
+          setMessages(prev => prev.map(m => m.id === tempId ? {
+            id: sentMsg.id, senderId: sentMsg.sender_id, text: '', mediaUrl: sentMsg.media_url, mediaType: 'audio', timestamp: sentMsg.created_at
+          } : m));
+        }
+      } catch (err) { console.log('Voice note upload fallback:', err); }
+    };
+    reader.readAsDataURL(voiceBlob);
+  };
+
+  const formatSeconds = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+  const toggleVoicePlay = (msgId: string, url: string) => {
+    const audio = audioRefs.current[msgId];
+    if (!audio) return;
+    if (voicePlaying[msgId]) {
+      audio.pause();
+      setVoicePlaying(prev => ({ ...prev, [msgId]: false }));
+    } else {
+      audio.playbackRate = voicePlaybackRate[msgId] || 1;
+      audio.play();
+      setVoicePlaying(prev => ({ ...prev, [msgId]: true }));
+    }
+  };
+
+  const cyclePlaybackRate = (msgId: string) => {
+    const current = voicePlaybackRate[msgId] || 1;
+    const next = current === 1 ? 1.5 : current === 1.5 ? 2 : 1;
+    setVoicePlaybackRate(prev => ({ ...prev, [msgId]: next }));
+    const audio = audioRefs.current[msgId];
+    if (audio) audio.playbackRate = next;
+  };
+
   // Handle Partner AI Chat query (real API call)
   const [isPartnerAiTyping, setIsPartnerAiTyping] = useState(false);
   const handleSendPartnerAi = async (promptText?: string) => {
@@ -1167,32 +1268,88 @@ export default function PartnerPage() {
                     onTouchEnd={() => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } }}
                   >
                     <div className={`relative max-w-[78%] ${isSentByMe ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
-                      {/* Image/Video with download button */}
-                      {mediaUrl && (mediaType === 'image') && (
+                      {/* Voice Note bubble */}
+                      {mediaUrl && mediaType === 'audio' && (() => {
+                        const rate = voicePlaybackRate[msg.id] || 1;
+                        const playing = voicePlaying[msg.id] || false;
+                        const progress = voiceProgress[msg.id] || 0;
+                        return (
+                          <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-2xl mb-1 ${
+                            isSentByMe
+                              ? 'bg-gradient-to-br from-[#7c3aed] to-[#a855f7] text-white'
+                              : 'bg-white dark:bg-[#1e1535] border border-black/6 dark:border-[#3a2d58]/60'
+                          }`}>
+                            {/* Hidden audio element */}
+                            <audio
+                              ref={el => { audioRefs.current[msg.id] = el; }}
+                              src={mediaUrl}
+                              preload="metadata"
+                              onEnded={() => setVoicePlaying(prev => ({ ...prev, [msg.id]: false }))}
+                              onTimeUpdate={(e) => {
+                                const el = e.currentTarget;
+                                if (el.duration) setVoiceProgress(prev => ({ ...prev, [msg.id]: el.currentTime / el.duration }));
+                              }}
+                            />
+                            {/* Play/Pause */}
+                            <button
+                              onClick={() => toggleVoicePlay(msg.id, mediaUrl)}
+                              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                                isSentByMe ? 'bg-white/20 hover:bg-white/30' : 'bg-primary/10 hover:bg-primary/20'
+                              } transition-colors`}
+                            >
+                              {playing
+                                ? <span className={`text-lg ${isSentByMe ? 'text-white' : 'text-primary'}`}>⏸</span>
+                                : <span className={`text-lg ${isSentByMe ? 'text-white' : 'text-primary'}`}>▶️</span>
+                              }
+                            </button>
+                            {/* Waveform bars */}
+                            <div className="flex items-center gap-px flex-1 h-8 relative overflow-hidden">
+                              {Array.from({ length: 28 }).map((_, i) => {
+                                const barProgress = i / 27;
+                                const filled = barProgress <= progress;
+                                const heights = [3,5,8,6,10,12,7,9,11,5,8,14,10,7,12,9,6,11,8,13,6,10,7,9,5,11,8,6];
+                                const h = heights[i] || 6;
+                                return (
+                                  <div
+                                    key={i}
+                                    style={{ height: `${h}px`, minWidth: '2px', flex: 1 }}
+                                    className={`rounded-full transition-colors ${
+                                      filled
+                                        ? (isSentByMe ? 'bg-white' : 'bg-primary')
+                                        : (isSentByMe ? 'bg-white/40' : 'bg-primary/25')
+                                    } ${playing && filled ? 'animate-pulse' : ''}`}
+                                  />
+                                );
+                              })}
+                            </div>
+                            {/* Playback speed */}
+                            <button
+                              onClick={() => cyclePlaybackRate(msg.id)}
+                              className={`text-[10px] font-extrabold shrink-0 px-2 py-1 rounded-lg ${
+                                isSentByMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-primary/10 text-primary hover:bg-primary/20'
+                              } transition-colors`}
+                            >
+                              {rate}x
+                            </button>
+                          </div>
+                        );
+                      })()}
+                      {/* Image with download */}
+                      {mediaUrl && mediaType === 'image' && (
                         <div className="relative group/media rounded-2xl overflow-hidden shadow-sm border border-black/10 mb-1">
-                          <img
-                            src={mediaUrl}
-                            alt="Attachment"
-                            className="max-h-64 max-w-full object-cover block"
-                          />
-                          <a
-                            href={mediaUrl}
-                            download
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute bottom-2 right-2 bg-black/60 text-white p-1.5 rounded-xl opacity-0 group-hover/media:opacity-100 transition-opacity flex items-center gap-1 text-[10px] font-bold"
-                          >
+                          <img src={mediaUrl} alt="Attachment" className="max-h-64 max-w-full object-cover block" />
+                          <a href={mediaUrl} download target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                            className="absolute bottom-2 right-2 bg-black/60 text-white p-1.5 rounded-xl opacity-0 group-hover/media:opacity-100 transition-opacity flex items-center gap-1 text-[10px] font-bold">
                             <FileText className="w-3 h-3" /> Save
                           </a>
                         </div>
                       )}
-                      {mediaUrl && (mediaType === 'video') && (
+                      {mediaUrl && mediaType === 'video' && (
                         <div className="relative rounded-2xl overflow-hidden shadow-sm border border-black/10 mb-1">
                           <video src={mediaUrl} controls className="max-h-64 max-w-full block" />
                         </div>
                       )}
-                      {mediaUrl && (mediaType !== 'image' && mediaType !== 'video') && (
+                      {mediaUrl && mediaType !== 'image' && mediaType !== 'video' && mediaType !== 'audio' && (
                         <a
                           href={mediaUrl}
                           download="attachment"
@@ -1514,45 +1671,143 @@ export default function PartnerPage() {
             </AnimatePresence>
 
             {/* Chat Footer Input Box */}
-            <div className="bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md px-4 py-3 border-t border-black/8 dark:border-[#3a2d58]/60 flex items-center gap-2">
-              <label
-                className="p-2 rounded-2xl text-[#3d3050] dark:text-[#c8bedd] hover:bg-primary/10 transition-colors cursor-pointer active:scale-95 flex items-center justify-center"
-                title="Attach Image, Video, or Document"
-              >
-                <Paperclip className="w-5 h-5" />
-                <input
-                  type="file"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  accept="image/*,video/*,application/pdf,application/msword,.doc,.docx,.txt"
-                />
-              </label>
-              <button 
-                onClick={() => setShowStickerDrawer(!showStickerDrawer)}
-                className={`p-2 rounded-2xl transition-colors ${
-                  showStickerDrawer ? 'text-primary bg-primary/10' : 'text-[#3d3050] dark:text-[#c8bedd] hover:bg-primary/10'
-                }`}
-                title="Emojis & Stickers"
-              >
-                <Smile className="w-5 h-5" />
-              </button>
-              <input 
-                type="text" 
-                placeholder={editingMsgId ? 'Edit message...' : `Message ${connectedPartnerName}...`}
-                value={editingMsgId ? editText : chatInput}
-                onChange={(e) => editingMsgId ? setEditText(e.target.value) : setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') editingMsgId ? handleSaveEdit() : handleSendMessage();
-                  if (e.key === 'Escape' && editingMsgId) { setEditingMsgId(null); setEditText(''); }
-                }}
-                className="flex-1 px-4 py-2.5 rounded-2xl border border-outline-variant/60 dark:border-[#3a2d58] focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none text-xs font-semibold bg-white/80 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0]"
-              />
-              <button 
-                onClick={editingMsgId ? handleSaveEdit : handleSendMessage}
-                className="p-2.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white shadow-md shadow-primary/20 active:scale-95 hover:opacity-95"
-              >
-                {editingMsgId ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-              </button>
+            <div className="bg-white/70 dark:bg-[#1c1230]/80 backdrop-blur-md border-t border-black/8 dark:border-[#3a2d58]/60">
+              
+              {/* Voice note preview bar (shown after stopping recording) */}
+              <AnimatePresence>
+                {voiceBlob && !isRecording && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="flex items-center gap-3 px-4 py-2.5 bg-primary/8 dark:bg-primary/15 border-b border-primary/20"
+                  >
+                    <div className="flex items-center gap-px flex-1 h-8">
+                      {Array.from({ length: 28 }).map((_, i) => {
+                        const heights = [3,5,8,6,10,12,7,9,11,5,8,14,10,7,12,9,6,11,8,13,6,10,7,9,5,11,8,6];
+                        return <div key={i} style={{ height: `${heights[i] || 6}px`, flex: 1, minWidth: '2px' }} className="rounded-full bg-primary/60" />;
+                      })}
+                    </div>
+                    <button
+                      onClick={cancelRecording}
+                      className="p-1.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-500 hover:bg-red-200 transition-colors shrink-0"
+                      title="Discard"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={sendVoiceNote}
+                      className="p-1.5 rounded-full bg-primary text-white hover:bg-primary/90 transition-colors shrink-0 shadow-md"
+                      title="Send voice note"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Recording active bar */}
+              <AnimatePresence>
+                {isRecording && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="flex items-center gap-3 px-4 py-2.5 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800/40"
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                    <span className="text-red-600 dark:text-red-400 font-bold text-sm flex-1">
+                      Recording... {formatSeconds(recordingSeconds)}
+                    </span>
+                    {/* Animated bars while recording */}
+                    <div className="flex items-center gap-px h-7">
+                      {[4,8,12,6,10,14,8,5,11,9,13,7].map((h, i) => (
+                        <div key={i} style={{ height: `${h}px`, minWidth: '2px', flex: 1, animationDelay: `${i * 80}ms` }} className="rounded-full bg-red-400 animate-bounce" />
+                      ))}
+                    </div>
+                    <button
+                      onClick={cancelRecording}
+                      className="p-1.5 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={stopRecording}
+                      className="px-3 py-1.5 rounded-full bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors"
+                    >
+                      Stop
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="px-4 py-3 flex items-center gap-2">
+                <label
+                  className="p-2 rounded-2xl text-[#3d3050] dark:text-[#c8bedd] hover:bg-primary/10 transition-colors cursor-pointer active:scale-95 flex items-center justify-center"
+                  title="Attach Image, Video, or Document"
+                >
+                  <Paperclip className="w-5 h-5" />
+                  <input
+                    type="file"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    accept="image/*,video/*,application/pdf,application/msword,.doc,.docx,.txt"
+                    ref={fileInputRef}
+                  />
+                </label>
+                <button 
+                  onClick={() => setShowStickerDrawer(!showStickerDrawer)}
+                  className={`p-2 rounded-2xl transition-colors ${
+                    showStickerDrawer ? 'text-primary bg-primary/10' : 'text-[#3d3050] dark:text-[#c8bedd] hover:bg-primary/10'
+                  }`}
+                  title="Emojis & Stickers"
+                >
+                  <Smile className="w-5 h-5" />
+                </button>
+                {!isRecording && !voiceBlob ? (
+                  <input 
+                    type="text" 
+                    placeholder={editingMsgId ? 'Edit message...' : `Message ${connectedPartnerName}...`}
+                    value={editingMsgId ? editText : chatInput}
+                    onChange={(e) => editingMsgId ? setEditText(e.target.value) : setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') editingMsgId ? handleSaveEdit() : handleSendMessage();
+                      if (e.key === 'Escape' && editingMsgId) { setEditingMsgId(null); setEditText(''); }
+                    }}
+                    className="flex-1 px-4 py-2.5 rounded-2xl border border-outline-variant/60 dark:border-[#3a2d58] focus:border-primary focus:ring-1 focus:ring-primary/20 outline-none text-xs font-semibold bg-white/80 dark:bg-[#16102a] text-[#18003d] dark:text-[#eee6ff] dark:placeholder-[#8a7fa0]"
+                  />
+                ) : (
+                  <div className="flex-1" />
+                )}
+                {/* Mic button — hold to record */}
+                {!editingMsgId && !chatInput && !voiceBlob && (
+                  <button
+                    onMouseDown={startRecording}
+                    onMouseUp={stopRecording}
+                    onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+                    onTouchEnd={(e) => { e.preventDefault(); stopRecording(); }}
+                    className={`p-2.5 rounded-2xl transition-all ${
+                      isRecording
+                        ? 'bg-red-500 text-white scale-110 shadow-lg shadow-red-500/30 animate-pulse'
+                        : 'text-[#3d3050] dark:text-[#c8bedd] hover:bg-primary/10 hover:text-primary'
+                    }`}
+                    title={isRecording ? 'Recording… release to stop' : 'Hold to record voice note'}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="2" width="6" height="11" rx="3" />
+                      <path d="M5 10a7 7 0 0 0 14 0" />
+                      <line x1="12" y1="19" x2="12" y2="22" />
+                      <line x1="8" y1="22" x2="16" y2="22" />
+                    </svg>
+                  </button>
+                )}
+                <button 
+                  onClick={editingMsgId ? handleSaveEdit : (voiceBlob ? sendVoiceNote : handleSendMessage)}
+                  className="p-2.5 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white shadow-md shadow-primary/20 active:scale-95 hover:opacity-95"
+                >
+                  {editingMsgId ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
           </motion.div>
