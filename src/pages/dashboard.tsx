@@ -17,7 +17,7 @@ export default function DashboardPage() {
 
   const name = isMounted && user?.name ? user.name : 'User';
 
-  // Live backend cycle metrics
+  // Live backend cycle metrics with instant localStorage cache
   const [cycleMetrics, setCycleMetrics] = useState<{
     currentDay: number;
     currentPhase: string;
@@ -25,8 +25,14 @@ export default function DashboardPage() {
     cycleLength: number;
     todayMood: string | null;
     todaySymptoms: string[];
-  } | null>(null);
-  const [metricsLoading, setMetricsLoading] = useState(true);
+  } | null>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('nyra_cached_cycle_metrics');
+      if (cached) { try { return JSON.parse(cached); } catch (e) {} }
+    }
+    return null;
+  });
+  const [metricsLoading, setMetricsLoading] = useState(!cycleMetrics);
 
   // Toggle states for "See More" (showing 5 items vs all)
   const [showAllMoods, setShowAllMoods] = useState(false);
@@ -91,21 +97,18 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (user?.id) {
-      setMetricsLoading(true);
+      if (!cycleMetrics) setMetricsLoading(true);
       apiGetCycleMetrics()
         .then((data) => {
-          setCycleMetrics(data);
+          if (data) {
+            setCycleMetrics(data);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('nyra_cached_cycle_metrics', JSON.stringify(data));
+            }
+          }
         })
         .catch((err) => {
-          console.log('Cycle metrics fetch failed (using defaults):', err);
-          setCycleMetrics({
-            currentDay: 1,
-            currentPhase: 'Follicular',
-            nextPeriodDaysLeft: 28,
-            cycleLength: 28,
-            todayMood: null,
-            todaySymptoms: [],
-          });
+          console.log('Cycle metrics fetch failed:', err);
         })
         .finally(() => setMetricsLoading(false));
     } else {

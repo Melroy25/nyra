@@ -220,9 +220,9 @@ export default function App({ Component, pageProps }: AppProps) {
     };
 
     checkIncomingPartnerMessages();
-    const interval = setInterval(checkIncomingPartnerMessages, 3000);
+    const interval = setInterval(checkIncomingPartnerMessages, 10000);
     return () => clearInterval(interval);
-  }, [user?.id, router.pathname, router.query.tab]);
+  }, [user?.id]);
 
   return (
     <Layout>

@@ -266,7 +266,14 @@ export default function PartnerPage() {
   const myName = user?.name || 'User';
   const connectedPartnerName = user?.connectedPartner?.name || chatPartnerInfo?.name || 'Partner';
   const trackedUserName = isPartner ? connectedPartnerName : myName;
-  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [dashboardData, setDashboardData] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('nyra_cached_partner_dashboard');
+      if (cached) { try { return JSON.parse(cached); } catch (e) {} }
+    }
+    return null;
+  });
+  const [isDashboardLoading, setIsDashboardLoading] = useState(!dashboardData);
   const isConnected = Boolean(user?.connectedPartnerId || user?.connectedPartner);
   const displayPairingCode = user?.connectedPartner?.partnerCode || (user?.connectedPartner as any)?.partner_code || dashboardData?.partner?.partner_code || user?.partnerCode || '';
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -274,18 +281,25 @@ export default function PartnerPage() {
   // Fetch Live Partner Dashboard Data
   useEffect(() => {
     if (activeTab === 'dashboard') {
+      if (!dashboardData) setIsDashboardLoading(true);
       apiGetPartnerDashboard()
         .then((data: any) => {
-          setDashboardData(data);
-          if (data.partner && user && !user.connectedPartner) {
-            setUser({
-              ...user,
-              connectedPartner: data.partner,
-              connectedPartnerId: data.partner.id,
-            });
+          if (data) {
+            setDashboardData(data);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('nyra_cached_partner_dashboard', JSON.stringify(data));
+            }
+            if (data.partner && user && !user.connectedPartner) {
+              setUser({
+                ...user,
+                connectedPartner: data.partner,
+                connectedPartnerId: data.partner.id,
+              });
+            }
           }
         })
-        .catch((err: any) => console.log('Partner dashboard load:', err));
+        .catch((err: any) => console.log('Partner dashboard load:', err))
+        .finally(() => setIsDashboardLoading(false));
     }
 
     // Clear unread badge whenever user opens the chat tab
@@ -1053,6 +1067,43 @@ export default function PartnerPage() {
                 </div>
 
               </div>
+            ) : isDashboardLoading && !dashboardData ? (
+              <div className="flex flex-col gap-6 animate-pulse">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+                  <div className="md:col-span-8 glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-6 h-[200px] border border-white/50 dark:border-[#3a2d58]/60 flex flex-col justify-between">
+                    <div className="space-y-3">
+                      <div className="w-28 h-6 bg-primary/20 rounded-xl"></div>
+                      <div className="w-44 h-10 bg-primary/30 rounded-xl"></div>
+                      <div className="w-56 h-6 bg-primary/10 rounded-xl"></div>
+                    </div>
+                    <div className="w-32 h-4 bg-gray-300 dark:bg-white/10 rounded-lg"></div>
+                  </div>
+                  <div className="md:col-span-4 flex flex-col gap-4">
+                    <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-5 border border-white/50 dark:border-[#3a2d58]/60 h-[92px] flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-2xl bg-gray-200 dark:bg-white/10 shrink-0"></div>
+                      <div className="space-y-2 flex-1">
+                        <div className="w-12 h-3 bg-gray-200 dark:bg-white/10 rounded"></div>
+                        <div className="w-24 h-5 bg-gray-300 dark:bg-white/20 rounded"></div>
+                      </div>
+                    </div>
+                    <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-5 border border-white/50 dark:border-[#3a2d58]/60 h-[92px] flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-2xl bg-gray-200 dark:bg-white/10 shrink-0"></div>
+                      <div className="space-y-2 flex-1">
+                        <div className="w-16 h-3 bg-gray-200 dark:bg-white/10 rounded"></div>
+                        <div className="w-28 h-5 bg-gray-300 dark:bg-white/20 rounded"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="glass-card bg-white/70 dark:bg-[#16102a]/80 rounded-2xl p-6 h-[220px] border border-white/50 dark:border-[#3a2d58]/60 space-y-4">
+                  <div className="w-56 h-6 bg-tertiary/20 rounded-xl"></div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                    <div className="h-24 bg-gray-200 dark:bg-white/10 rounded-2xl"></div>
+                    <div className="h-24 bg-gray-200 dark:bg-white/10 rounded-2xl"></div>
+                    <div className="h-24 bg-gray-200 dark:bg-white/10 rounded-2xl"></div>
+                  </div>
+                </div>
+              </div>
             ) : (
               // PARTNER'S DASHBOARD VIEW
               <div className="flex flex-col gap-6">
@@ -1069,14 +1120,14 @@ export default function PartnerPage() {
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-2xl bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 mb-4">
                         <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
                         <span className="font-bold text-[10px] text-primary dark:text-[#d4b8ff] uppercase tracking-wider">
-                          {dashboardData?.cycleMetrics?.currentPhase || 'Luteal Phase'}
+                          {dashboardData?.cycleMetrics?.currentPhase || 'Cycle Phase'}
                         </span>
                       </div>
                       <h2 className="font-serif font-bold text-4xl text-primary dark:text-[#d4b8ff] mb-1">
-                        Day {dashboardData?.cycleMetrics?.currentDay || 24}
+                        Day {dashboardData?.cycleMetrics?.currentDay || 1}
                       </h2>
                       <p className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">
-                        Period Expected in {dashboardData?.cycleMetrics?.daysLeft || 4} days
+                        Period Expected in {dashboardData?.cycleMetrics?.daysLeft ?? 14} days
                       </p>
                     </div>
                     <div className="mt-6 text-xs text-[#3d3050] dark:text-[#c8bedd] font-semibold">
@@ -1143,7 +1194,7 @@ export default function PartnerPage() {
                       <div>
                         <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Nyra Partner Insight</h3>
                         <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-semibold">
-                          Understanding {trackedUserName}'s Day {dashboardData?.cycleMetrics?.currentDay || 16} ({dashboardData?.cycleMetrics?.currentPhase || 'Ovulation'})
+                          Understanding {trackedUserName}&apos;s Day {dashboardData?.cycleMetrics?.currentDay || 1} ({dashboardData?.cycleMetrics?.currentPhase || 'Cycle Phase'})
                         </p>
                       </div>
                     </div>
@@ -1157,7 +1208,7 @@ export default function PartnerPage() {
                         <span>What is happening?</span>
                       </div>
                       <p className="text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium text-[11.5px]">
-                        {getCycleDayDetails(dashboardData?.cycleMetrics?.currentDay || 16).whatIsIt}
+                        {getCycleDayDetails(dashboardData?.cycleMetrics?.currentDay || 1, dashboardData?.cycleMetrics?.cycleLength || 28).whatIsIt}
                       </p>
                     </div>
 
@@ -1168,7 +1219,7 @@ export default function PartnerPage() {
                         <span>How she might feel:</span>
                       </div>
                       <p className="text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium text-[11.5px]">
-                        {getCycleDayDetails(dashboardData?.cycleMetrics?.currentDay || 16).howYouFeel}
+                        {getCycleDayDetails(dashboardData?.cycleMetrics?.currentDay || 1, dashboardData?.cycleMetrics?.cycleLength || 28).howYouFeel}
                       </p>
                     </div>
 
@@ -1179,7 +1230,7 @@ export default function PartnerPage() {
                         <span>How to support her today:</span>
                       </div>
                       <ul className="space-y-1 text-[#3d3050] dark:text-[#c8bedd] leading-relaxed font-medium text-[11.5px] pl-1">
-                        {getCycleDayDetails(dashboardData?.cycleMetrics?.currentDay || 16).partnerTips.map((tip, i) => (
+                        {getCycleDayDetails(dashboardData?.cycleMetrics?.currentDay || 1, dashboardData?.cycleMetrics?.cycleLength || 28).partnerTips.map((tip, i) => (
                           <li key={i} className="flex items-start gap-1.5">
                             <span className="text-primary font-bold">•</span>
                             <span>{tip}</span>
