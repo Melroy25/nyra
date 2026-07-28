@@ -348,49 +348,51 @@ export default function DashboardPage() {
       </section>
 
       {/* ── Water Intake Hydration Indicator Widget ── */}
-      <section className="mb-stack-lg">
-        <div className="glass-card rounded-2xl p-6 border border-white/50 dark:border-[#3a2d58]/50 shadow-sm relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 w-full sm:w-auto">
-            <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-500 shrink-0">
-              <Droplet className="w-6 h-6 animate-bounce" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-serif font-bold text-lg text-[#18003d] dark:text-[#eee6ff]">Daily Water Intake</h3>
-                <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 px-2 py-0.5 rounded-lg border border-cyan-200 dark:border-cyan-800">
-                  {waterPercent}% Goal
-                </span>
+      {featureToggles?.waterEnabled ? (
+        <section className="mb-stack-lg">
+          <div className="glass-card rounded-2xl p-6 border border-white/50 dark:border-[#3a2d58]/50 shadow-sm relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-500 shrink-0">
+                <Droplet className="w-6 h-6 animate-bounce" />
               </div>
-              <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium mt-0.5">
-                {waterIntake} ml logged of {waterGoal} ml target
-              </p>
-              {/* Progress bar */}
-              <div className="w-full bg-black/5 dark:bg-white/10 h-2 rounded-full mt-2 overflow-hidden">
-                <div 
-                  className="bg-cyan-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${waterPercent}%` }}
-                />
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-serif font-bold text-lg text-[#18003d] dark:text-[#eee6ff]">Daily Water Intake</h3>
+                  <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 px-2 py-0.5 rounded-lg border border-cyan-200 dark:border-cyan-800">
+                    {waterPercent}% Goal
+                  </span>
+                </div>
+                <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] font-medium mt-0.5">
+                  {waterIntake} ml logged of {waterGoal} ml target
+                </p>
+                {/* Progress bar */}
+                <div className="w-full bg-black/5 dark:bg-white/10 h-2 rounded-full mt-2 overflow-hidden">
+                  <div 
+                    className="bg-cyan-500 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${waterPercent}%` }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-            <button
-              onClick={() => addWater(250)}
-              className="px-4 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" /> Add 250ml
-            </button>
-            <button
-              onClick={resetWater}
-              title="Reset Water Intake"
-              className="p-2.5 rounded-xl bg-white/40 dark:bg-white/10 border border-white/50 dark:border-white/15 text-on-surface-variant dark:text-[#c8bedd] hover:bg-white/70 transition-colors"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+              <button
+                onClick={() => addWater(250)}
+                className="px-4 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" /> Add 250ml
+              </button>
+              <button
+                onClick={resetWater}
+                title="Reset Water Intake"
+                className="p-2.5 rounded-xl bg-white/40 dark:bg-white/10 border border-white/50 dark:border-white/15 text-on-surface-variant dark:text-[#c8bedd] hover:bg-white/70 transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {/* Daily Summary Bento Grid */}
       <section className="mb-stack-lg">
