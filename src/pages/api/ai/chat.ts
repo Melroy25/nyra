@@ -150,14 +150,13 @@ User context (use only if relevant):
 
 Rules:
 1. Answer EVERY question directly, completely, and accurately — just like ChatGPT would.
-2. For general questions (word meanings, facts, jokes, recipes, advice, math, names, science, food questions, etc.) — answer them fully WITHOUT injecting cycle facts unless the user asks about their health.
-3. For yes/no questions — say YES or NO first, then give a clear explanation.
-4. For "meaning of [name/word]" questions — provide the actual etymology/meaning.
-5. For questions about food (e.g. "is ice cream good during periods?") — give a direct, honest, informative answer.
-6. For cycle/health questions — use the user's cycle context to give caring, specific guidance.
-7. NEVER give vague non-answers like "feel free to ask" or "I'm here to help" as a direct response to an actual question.
+2. ALWAYS complete your sentences and lists. Never stop mid-sentence or truncate output early.
+3. For general questions (books, movies, word meanings, facts, jokes, recipes, advice, math, names, science, food questions, etc.) — answer them fully WITHOUT injecting cycle facts unless the user asks about their health.
+4. For yes/no questions — say YES or NO first, then give a clear explanation.
+5. For "meaning of [name/word]" questions — provide the actual etymology/meaning.
+6. For questions about food (e.g. "is ice cream good during periods?") — give a direct, honest, informative answer.
+7. For cycle/health questions — use the user's cycle context to give caring, specific guidance.
 8. Keep responses natural, warm, and concise. Use occasional emojis. Sound like a knowledgeable friend, not a customer service bot.`;
-
 
     // 5. Save user message to DB
     if (threadId) {
@@ -190,8 +189,8 @@ Rules:
                   system_instruction: { parts: [{ text: systemPrompt }] },
                   contents: geminiMessages,
                   generationConfig: {
-                    temperature: 1.0,
-                    maxOutputTokens: 400,
+                    temperature: 0.8,
+                    maxOutputTokens: 1200,
                     topP: 0.95,
                     topK: 40,
                   },
@@ -301,6 +300,19 @@ function buildSmartFallback(
   // ── WHO/WHAT AM I ──
   if (/who are you|what are you|what can you do|tell me about yourself/.test(msg)) {
     return `I'm Nyra — your AI assistant! 💜 I can answer general knowledge questions, explain word meanings, give recipes, health advice, help with your cycle tracking, suggest tips, and much more. What would you like to know?`;
+  }
+
+  // ── BOOK RECOMMENDATIONS ──
+  if (/book|read|reading|novel|fiction|author|recommend.*book|give me/.test(msg)) {
+    return `Here are 5 fantastic book recommendations across different genres: 📚
+
+1. 📖 **The Midnight Library** by Matt Haig (Fiction/Mindset) — A heartwarming story about choices, regrets, and living a meaningful life.
+2. 🌿 **Atomic Habits** by James Clear (Self-Improvement) — Practical strategies for building good habits and breaking bad ones.
+3. 💫 **The Alchemist** by Paulo Coelho (Inspirational) — A beautiful fable about following your dreams and trusting your journey.
+4. 🩺 **In the FLO** by Alisa Vitti (Womens Health) — A biohacking guide to syncing your diet, workload, and workout with your cycle.
+5. 🔍 **The Silent Patient** by Alex Michaelides (Psychological Thriller) — A gripping, fast-paced murder mystery with a mind-blowing twist.
+
+Let me know if you want recommendations in a specific genre like Romance, Sci-Fi, or Fantasy! ✨`;
   }
 
   // ── NAME MEANINGS ──

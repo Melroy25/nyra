@@ -171,7 +171,7 @@ export default function CyclePage() {
     if (!isCurrentMonth) { cls += 'opacity-25 '; }
 
     const isActualPeriod = (log?.isPeriod && !log?.isPredicted) || isInitialPeriodDay(dateStr);
-    const isPredicted = log?.isPredicted || isPredictedPeriodDay(dateStr);
+    const isPredicted = isPredictedPeriodDay(dateStr);
     const isOvulation = log?.isOvulation || isPredictedOvulationDay(dateStr);
 
     if (isActualPeriod) {

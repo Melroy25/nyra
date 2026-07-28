@@ -37,10 +37,10 @@ export function generateInitialCycleLogs(
     });
   }
 
-  // ── Predicted next period: 3 days centred on (start + cycleLength) ──
+  // ── Predicted next period: periodDuration days starting at (start + averageCycleLength) ──
   const predictedStart = new Date(start);
-  predictedStart.setDate(predictedStart.getDate() + averageCycleLength - 1); // 1 day before expected
-  for (let i = 0; i < 3; i++) {
+  predictedStart.setDate(predictedStart.getDate() + averageCycleLength);
+  for (let i = 0; i < periodDuration; i++) {
     const d = new Date(predictedStart);
     d.setDate(d.getDate() + i);
     const dateStr = d.toISOString().split('T')[0];

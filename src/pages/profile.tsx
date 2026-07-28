@@ -90,6 +90,8 @@ export default function ProfilePage() {
   const [editDob, setEditDob] = useState(dob);
   const [editAvatar, setEditAvatar] = useState<string | undefined>(avatarUrl);
   const [editGoals, setEditGoals] = useState<string[]>(goals);
+  const [editCycleLength, setEditCycleLength] = useState<number>(cycleLength);
+  const [editPeriodDuration, setEditPeriodDuration] = useState<number>(periodDuration);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,7 +101,9 @@ export default function ProfilePage() {
     if (age) setEditAge(age);
     if (dob) setEditDob(dob);
     if (avatarUrl) setEditAvatar(avatarUrl);
-  }, [name, age, dob, avatarUrl]);
+    if (cycleLength) setEditCycleLength(cycleLength);
+    if (periodDuration) setEditPeriodDuration(periodDuration);
+  }, [name, age, dob, avatarUrl, cycleLength, periodDuration]);
 
   const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -130,6 +134,8 @@ export default function ProfilePage() {
 
     try {
       const numAge = typeof editAge === 'number' ? editAge : (age || 0);
+      const numCycleLen = Math.max(20, Math.min(45, Number(editCycleLength) || 28));
+      const numPeriodDur = Math.max(2, Math.min(10, Number(editPeriodDuration) || 5));
 
       // Call Supabase API
       const res = await apiUpdateProfile({
@@ -138,20 +144,22 @@ export default function ProfilePage() {
         dateOfBirth: editDob,
         goals: editGoals,
         avatarUrl: editAvatar,
+        cycleLength: numCycleLen,
+        periodDuration: numPeriodDur,
       });
 
-      if (user) {
-        const updatedUser = {
-          ...user,
-          ...(res?.user || {}),
-          name: res?.user?.name || editName,
-          age: res?.user?.age || numAge,
-          dateOfBirth: res?.user?.dateOfBirth || editDob,
-          avatarUrl: res?.user?.avatarUrl || editAvatar || undefined,
-          goals: res?.user?.goals || editGoals,
-        };
-        setUser(updatedUser);
-      }
+      const updatedUser = {
+        ...(user || {}),
+        ...(res?.user || {}),
+        name: res?.user?.name || editName,
+        age: res?.user?.age || numAge,
+        dateOfBirth: res?.user?.dateOfBirth || editDob,
+        avatarUrl: res?.user?.avatarUrl || editAvatar || undefined,
+        goals: res?.user?.goals || editGoals,
+        cycleLength: numCycleLen,
+        periodDuration: numPeriodDur,
+      };
+      setUser(updatedUser as any);
 
       // Sync local Zustand state
       updateOnboardingData({
@@ -159,7 +167,15 @@ export default function ProfilePage() {
         age: numAge,
         dob: editDob,
         goals: editGoals,
+        averageCycleLength: numCycleLen,
+        periodDuration: numPeriodDur,
       });
+
+      const lastP = user?.lastPeriodDate || (user as any)?.last_period_date || onboardingData.lastPeriodDate;
+      if (lastP) {
+        useStore.getState().seedCycleLogs(lastP, numPeriodDur, numCycleLen, true);
+        useStore.getState().recalculateCycleMetrics();
+      }
 
       setIsEditOpen(false);
     } catch (err: any) {
@@ -313,7 +329,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               <button
-                onClick={() => router.push('/onboarding')}
+                onClick={() => setIsEditOpen(true)}
                 className="w-full mt-6 py-2.5 rounded-2xl border border-primary/30 dark:border-primary/40 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
               >
                 Update Cycle Parameters
@@ -359,9 +375,9 @@ export default function ProfilePage() {
       {/* ── Edit Profile Modal ── */}
       {isEditOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#16102a] border border-white/40 dark:border-[#3a2d58] rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-5 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white dark:bg-[#16102a] border border-white/40 dark:border-[#3a2d58] rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-5 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-outline-variant/20 dark:border-[#3a2d58] pb-3">
-              <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Edit Profile</h3>
+              <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Edit Profile & Cycle</h3>
               <button
                 onClick={() => setIsEditOpen(false)}
                 className="p-1 rounded-full text-on-surface-variant hover:bg-black/5 dark:hover:bg-white/10"
@@ -432,6 +448,35 @@ export default function ProfilePage() {
                     onChange={(e) => setEditDob(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-sm font-semibold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
                   />
+                </div>
+              </div>
+
+              {/* Cycle Parameters (Cycle Length & Period Duration) */}
+              <div className="bg-primary/5 dark:bg-primary/10 p-3.5 rounded-2xl border border-primary/20 space-y-3">
+                <p className="text-xs font-bold text-primary dark:text-[#d4b8ff] uppercase tracking-wider">Cycle Configuration</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#3d3050] dark:text-[#c8bedd] mb-1">Cycle Length (Days)</label>
+                    <input
+                      type="number"
+                      min="20"
+                      max="45"
+                      value={editCycleLength}
+                      onChange={(e) => setEditCycleLength(parseInt(e.target.value) || 28)}
+                      className="w-full px-3 py-2 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white dark:bg-[#1c1230] text-sm font-bold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#3d3050] dark:text-[#c8bedd] mb-1">Period Duration (Days)</label>
+                    <input
+                      type="number"
+                      min="2"
+                      max="10"
+                      value={editPeriodDuration}
+                      onChange={(e) => setEditPeriodDuration(parseInt(e.target.value) || 5)}
+                      className="w-full px-3 py-2 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white dark:bg-[#1c1230] text-sm font-bold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
                 </div>
               </div>
 
