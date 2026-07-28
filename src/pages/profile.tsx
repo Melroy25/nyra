@@ -60,8 +60,23 @@ export default function ProfilePage() {
   const isPartner = user?.role === 'partner';
   const name = user?.name || onboardingData.name || (isPartner ? 'Partner' : 'User');
   const email = user?.email || '';
-  const age = user?.age || onboardingData.age || 0;
-  const dob = user?.dateOfBirth || onboardingData.dob || '';
+  const dob = user?.dateOfBirth || (user as any)?.date_of_birth || user?.dob || onboardingData.dob || '';
+  const calculatedAge = (() => {
+    if (user?.age && user.age > 0) return user.age;
+    if (onboardingData?.age && onboardingData.age > 0) return onboardingData.age;
+    if (dob) {
+      const birth = new Date(dob);
+      if (!isNaN(birth.getTime())) {
+        const today = new Date();
+        let calc = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) calc--;
+        if (calc > 0) return calc;
+      }
+    }
+    return 0;
+  })();
+  const age = calculatedAge;
   const avatarUrl = user?.avatarUrl || undefined;
   const cycleLength = user?.cycleLength || onboardingData.averageCycleLength || 28;
   const periodDuration = user?.periodDuration || onboardingData.periodDuration || 5;

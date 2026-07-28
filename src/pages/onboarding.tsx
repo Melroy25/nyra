@@ -37,6 +37,11 @@ export default function OnboardingPage() {
 
       setIsSaving(true);
       try {
+        // Clear any old account's cached cycle logs from previous sessions
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('nyra_cycle_logs');
+        }
+
         const res = await apiCompleteOnboarding({
           name: onboardingData.name,
           age: onboardingData.age,
@@ -47,25 +52,57 @@ export default function OnboardingPage() {
           goals: onboardingData.goals || [],
         });
 
-        if (user) {
-          setUser({
-            ...user,
-            ...(res?.user || {}),
-            name: res?.user?.name || onboardingData.name || user.name,
-            onboardingCompleted: true,
-          });
-        }
+        const freshUser = res?.user;
+        const targetUser = freshUser || {
+          ...(user || {}),
+          name: onboardingData.name || user?.name || 'User',
+          age: onboardingData.age || user?.age,
+          dob: onboardingData.dob || user?.dob,
+          dateOfBirth: onboardingData.dob || user?.dateOfBirth,
+          lastPeriodDate: onboardingData.lastPeriodDate || user?.lastPeriodDate,
+          cycleLength: onboardingData.averageCycleLength || user?.cycleLength || 28,
+          periodDuration: onboardingData.periodDuration || user?.periodDuration || 5,
+          onboardingCompleted: true,
+        };
+
+        setUser(targetUser as any);
+        updateOnboardingData({
+          name: onboardingData.name,
+          age: onboardingData.age,
+          dob: onboardingData.dob,
+          lastPeriodDate: onboardingData.lastPeriodDate,
+          averageCycleLength: onboardingData.averageCycleLength,
+          periodDuration: onboardingData.periodDuration,
+        });
+
+        useStore.getState().seedCycleLogs(
+          onboardingData.lastPeriodDate,
+          onboardingData.periodDuration || 5,
+          onboardingData.averageCycleLength || 28
+        );
+        useStore.getState().recalculateCycleMetrics();
 
         router.push('/dashboard');
       } catch (err: any) {
         console.error('[onboarding] API onboarding error, fallback to local complete:', err);
-        if (user) {
-          setUser({
-            ...user,
-            name: onboardingData.name || user.name || 'User',
-            onboardingCompleted: true,
-          });
-        }
+        const fallbackUser = {
+          ...(user || {}),
+          name: onboardingData.name || user?.name || 'User',
+          age: onboardingData.age || user?.age,
+          dob: onboardingData.dob || user?.dob,
+          dateOfBirth: onboardingData.dob || user?.dateOfBirth,
+          lastPeriodDate: onboardingData.lastPeriodDate || user?.lastPeriodDate,
+          cycleLength: onboardingData.averageCycleLength || user?.cycleLength || 28,
+          periodDuration: onboardingData.periodDuration || user?.periodDuration || 5,
+          onboardingCompleted: true,
+        };
+        setUser(fallbackUser as any);
+        useStore.getState().seedCycleLogs(
+          onboardingData.lastPeriodDate,
+          onboardingData.periodDuration || 5,
+          onboardingData.averageCycleLength || 28
+        );
+        useStore.getState().recalculateCycleMetrics();
         router.push('/dashboard');
       } finally {
         setIsSaving(false);
