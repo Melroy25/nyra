@@ -64,18 +64,23 @@ function urlBase64ToUint8Array(base64String: string) {
 
 export async function registerWebPushSubscription() {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  if (Notification.permission !== 'granted') return;
+  // NOTE: Permission check is done by the caller. This function assumes permission is granted.
+  // We still guard here as a safety net.
+  if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') return;
 
   const token = localStorage.getItem('nyra_token');
   if (!token) return;
 
   try {
     const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription().catch(() => null);
 
     const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BL34zJyImY_UP4WVQfQ2uRbSBthKCEW9_JxzfHH5b1OG_SBLN7suf7w9DNnUpbePB4nA4OApotINSAN7pQenGGo';
 
+    // Always get the current subscription (may already exist or may need creating)
+    let sub = await reg.pushManager.getSubscription().catch(() => null);
+
     if (!sub) {
+      // No subscription yet — create one now
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),
@@ -84,7 +89,7 @@ export async function registerWebPushSubscription() {
 
     if (!sub) return;
 
-    // Send subscription payload to backend
+    // Always send (upsert) to backend so DB always has the freshest endpoint
     await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: {

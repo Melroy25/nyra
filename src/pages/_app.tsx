@@ -104,31 +104,60 @@ export default function App({ Component, pageProps }: AppProps) {
         });
     }
 
-    // Register Service Worker for PWA + hand token for background polling
+    // ── Register Service Worker + start background poll + VAPID push subscription ──
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(() => {
-          // Use .ready so we always get the truly-active SW (not null on first visit)
-          return navigator.serviceWorker.ready;
-        })
-        .then((reg) => {
-          const t = localStorage.getItem('nyra_token');
-          const uid = (() => {
-            try { return JSON.parse(localStorage.getItem('nyra_cached_user') || '{}')?.id; } catch (e) { return null; }
-          })();
-          // Restore known IDs so SW doesn't re-notify old messages
-          const knownIdsArr = (() => {
-            try { return JSON.parse(localStorage.getItem('nyra_known_msg_ids') || '[]'); } catch (e) { return []; }
-          })();
-          if (t && reg.active) {
-            reg.active.postMessage({
-              type: 'START_BG_POLL',
-              token: t,
-              userId: uid,
-              knownIds: knownIdsArr,
-            });
-            registerWebPushSubscription().catch(() => {});
+      // Helper: start SW background message polling
+      const startSwBgPoll = (controller: ServiceWorker) => {
+        const t = localStorage.getItem('nyra_token');
+        const uid = (() => {
+          try { return JSON.parse(localStorage.getItem('nyra_cached_user') || '{}')?.id; } catch (e) { return null; }
+        })();
+        const knownIdsArr = (() => {
+          try { return JSON.parse(localStorage.getItem('nyra_known_msg_ids') || '[]'); } catch (e) { return []; }
+        })();
+        if (t) {
+          controller.postMessage({ type: 'START_BG_POLL', token: t, userId: uid, knownIds: knownIdsArr });
+        }
+      };
+
+      // Helper: ensure VAPID push subscription is registered (called AFTER permission is granted)
+      const ensurePushSubscription = async () => {
+        try {
+          // 1. Request permission if needed
+          if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+            await Notification.requestPermission().catch(() => {});
           }
+          // 2. Subscribe to push only if permission is granted
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            await registerWebPushSubscription().catch(() => {});
+          }
+        } catch (e) {}
+      };
+
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => navigator.serviceWorker.ready)
+        .then((reg) => {
+          // Start background poll — use controller (active SW) or fall back to reg.active
+          const controller = navigator.serviceWorker.controller || reg.active;
+          if (controller) {
+            startSwBgPoll(controller);
+          }
+
+          // If SW is installing for the first time, wait for it to become active
+          // then start the poll (handles first-ever install where controller is null)
+          if (!navigator.serviceWorker.controller) {
+            const onControllerChange = () => {
+              const newController = navigator.serviceWorker.controller;
+              if (newController) {
+                startSwBgPoll(newController);
+                navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+              }
+            };
+            navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+          }
+
+          // Ensure push subscription is live (re-registers on every app open to handle stale subs)
+          ensurePushSubscription();
         })
         .catch((err) => console.warn('SW registration failed:', err));
     }
@@ -141,6 +170,23 @@ export default function App({ Component, pageProps }: AppProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // When user logs in (user?.id changes), refresh the SW's auth token for background polling
+    // and re-register VAPID push so the subscription is always current
+    if (user?.id && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        const controller = navigator.serviceWorker.controller || reg.active;
+        if (controller) {
+          const t = localStorage.getItem('nyra_token');
+          const knownIdsArr = (() => {
+            try { return JSON.parse(localStorage.getItem('nyra_known_msg_ids') || '[]'); } catch { return []; }
+          })();
+          if (t) {
+            controller.postMessage({ type: 'START_BG_POLL', token: t, userId: user.id, knownIds: knownIdsArr });
+          }
+        }
+      }).catch(() => {});
+    }
 
     // Seed known IDs from localStorage ONCE on mount so we don't re-notify old messages
     if (!knownMsgIdsSeededRef.current) {
