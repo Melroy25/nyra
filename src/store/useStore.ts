@@ -98,7 +98,7 @@ interface AppState {
   // Routine Actions
   setRoutines: (routines: RoutineItem[]) => void;
   toggleRoutine: (id: string) => void;
-  addRoutine: (name: string, time: string, frequency: string, type: RoutineItem['type']) => void;
+  addRoutine: (name: string, time: string, frequency: string, type: RoutineItem['type'], duration?: string) => void;
   deleteRoutine: (id: string) => void;
   addWater: (amount: number) => void;
   setWaterGoal: (goal: number) => void;
@@ -694,11 +694,25 @@ export const useStore = create<AppState>((set, get) => ({
       return { routines };
     }),
 
-  addRoutine: (name, time, frequency, type) =>
+  addRoutine: (name, time, frequency, type, duration) =>
     set((state) => {
+      // Compute endsAt from duration string
+      let endsAt: string | undefined;
+      if (duration && duration !== 'Ongoing') {
+        const now = new Date();
+        const match = duration.match(/(\d+)\s*(day|week|month)/i);
+        if (match) {
+          const num = parseInt(match[1]);
+          const unit = match[2].toLowerCase();
+          if (unit === 'day') now.setDate(now.getDate() + num);
+          else if (unit === 'week') now.setDate(now.getDate() + num * 7);
+          else if (unit === 'month') now.setMonth(now.getMonth() + num);
+          endsAt = now.toISOString();
+        }
+      }
       const routines = [
         ...state.routines,
-        { id: `rot-${Date.now()}`, name, time, frequency, type, completed: false },
+        { id: `rot-${Date.now()}`, name, time, frequency, type, completed: false, duration, endsAt },
       ];
       if (typeof window !== 'undefined') localStorage.setItem('nyra_routines', JSON.stringify(routines));
       return { routines };

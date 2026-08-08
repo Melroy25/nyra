@@ -252,7 +252,14 @@ export default function SelfCarePage() {
   const [medName, setMedName] = useState('');
   const [medTime, setMedTime] = useState('08:00 AM');
   const [medFreq, setMedFreq] = useState('Daily');
-  const [medType, setMedType] = useState<RoutineItem['type']>('medication');
+  const [medDuration, setMedDuration] = useState('Ongoing');
+
+  // ── 5. SUPPLEMENTS MODAL STATE ─────────────────────────────────────────────
+  const [showAddSupModal, setShowAddSupModal] = useState(false);
+  const [supName, setSupName] = useState('');
+  const [supTime, setSupTime] = useState('08:00 AM');
+  const [supFreq, setSupFreq] = useState('Daily');
+  const [supDuration, setSupDuration] = useState('Ongoing');
 
   // Save notes & skincare state to localStorage on updates
   useEffect(() => {
@@ -488,10 +495,22 @@ export default function SelfCarePage() {
   const handleAddMedSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!medName.trim()) return;
-    addRoutine(medName, medTime, medFreq, medType);
-    apiCreateRoutine({ name: medName, time: medTime, frequency: medFreq, type: medType }).catch(() => {});
+    addRoutine(medName, medTime, medFreq, 'medication', medDuration);
+    apiCreateRoutine({ name: medName, time: medTime, frequency: medFreq, type: 'medication' }).catch(() => {});
     setMedName('');
+    setMedDuration('Ongoing');
     setShowAddMedModal(false);
+  };
+
+  // ── SUPPLEMENTS HANDLERS ─────────────────────────────────────────────────
+  const handleAddSupSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supName.trim()) return;
+    addRoutine(supName, supTime, supFreq, 'supplement', supDuration);
+    apiCreateRoutine({ name: supName, time: supTime, frequency: supFreq, type: 'supplement' }).catch(() => {});
+    setSupName('');
+    setSupDuration('Ongoing');
+    setShowAddSupModal(false);
   };
 
   const medications = routines.filter((r) => r.type === 'medication');
@@ -734,9 +753,16 @@ export default function SelfCarePage() {
                           </button>
                           <div>
                             <h4 className={`text-sm font-bold ${med.completed ? 'line-through text-outline' : 'text-on-surface'}`}>{med.name}</h4>
-                            <div className="flex items-center gap-1.5 text-[10px] text-on-surface-variant font-semibold mt-0.5">
-                              <Clock className="w-3 h-3" />
-                              <span>{med.time} &bull; {med.frequency}</span>
+                            <div className="flex items-center gap-2 text-[10px] text-on-surface-variant font-semibold mt-0.5 flex-wrap">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {med.time} &bull; {med.frequency}
+                              </span>
+                              {med.duration && med.duration !== 'Ongoing' && (
+                                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold border border-primary/20">
+                                  ⏳ {med.duration}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -843,33 +869,62 @@ export default function SelfCarePage() {
 
               </div>
 
-              {/* Supplements List */}
+              {/* Daily Supplements List */}
               <div className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm">
-                <h3 className="font-serif font-bold text-base text-on-background dark:text-[#eee6ff] mb-4 flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-primary" />
-                  <span>Daily Supplements</span>
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {supplements.map((sup) => (
-                    <button
-                      key={sup.id}
-                      onClick={() => toggleRoutine(sup.id)}
-                      className="text-left flex items-center gap-3 p-3 bg-white/30 dark:bg-[#1c1230]/60 border border-white/40 dark:border-[#3a2d58]/50 rounded-xl hover:bg-white/60 dark:hover:bg-[#261d48]/60 transition-colors group"
-                    >
-                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-                        sup.completed ? 'bg-primary border-primary text-white' : 'border-outline-variant dark:border-[#3a2d58] group-hover:bg-white dark:group-hover:bg-white/10'
-                      }`}>
-                        {sup.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                      </div>
-                      <div>
-                        <span className={`text-sm font-bold block ${sup.completed ? 'line-through text-outline dark:text-[#8a7fa0]' : 'text-on-surface dark:text-[#eee6ff]'}`}>
-                          {sup.name}
-                        </span>
-                        <span className="text-[10px] text-on-surface-variant dark:text-[#c8bedd] font-semibold">{sup.time}</span>
-                      </div>
-                    </button>
-                  ))}
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-serif font-bold text-base text-on-background dark:text-[#eee6ff] flex items-center gap-2">
+                    <Plus className="w-4 h-4 text-primary" />
+                    <span>Daily Supplements</span>
+                  </h3>
+                  <button
+                    onClick={() => { setSupName(''); setSupTime('08:00 AM'); setSupFreq('Daily'); setShowAddSupModal(true); }}
+                    className="text-xs font-bold text-primary dark:text-[#d4b8ff] hover:underline flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Supplement
+                  </button>
                 </div>
+
+                {supplements.length > 0 ? (
+                  <div className="flex flex-col gap-3">
+                    {supplements.map((sup) => (
+                      <div key={sup.id} className="flex justify-between items-center bg-white/40 dark:bg-surface-container/20 rounded-xl p-3 border border-white/50 dark:border-white/10">
+                        <button
+                          onClick={() => toggleRoutine(sup.id)}
+                          className="flex items-center gap-3 flex-1 text-left"
+                        >
+                          <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                            sup.completed ? 'bg-primary border-primary text-white' : 'border-outline-variant dark:border-[#3a2d58] hover:bg-white dark:hover:bg-white/10'
+                          }`}>
+                            {sup.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
+                          <div>
+                            <span className={`text-sm font-bold block ${sup.completed ? 'line-through text-outline dark:text-[#8a7fa0]' : 'text-on-surface dark:text-[#eee6ff]'}`}>
+                              {sup.name}
+                            </span>
+                            <div className="flex items-center gap-2 text-[10px] text-on-surface-variant dark:text-[#c8bedd] font-semibold mt-0.5 flex-wrap">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" /> {sup.time} &bull; {sup.frequency}
+                              </span>
+                              {sup.duration && sup.duration !== 'Ongoing' && (
+                                <span className="px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-bold border border-secondary/20">
+                                  ⏳ {sup.duration}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => deleteRoutine(sup.id)}
+                          className="text-on-surface-variant hover:text-error p-1.5 rounded-full hover:bg-white dark:hover:bg-white/10 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-on-surface-variant dark:text-[#c8bedd] italic">No supplements tracked. Click Add Supplement.</p>
+                )}
               </div>
 
             </div>
@@ -1368,97 +1423,165 @@ export default function SelfCarePage() {
       {/* ── MODAL 5: ADD MEDICATION ── */}
       <AnimatePresence>
         {showAddMedModal && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
               className="bg-white dark:bg-[#16102a] rounded-3xl max-w-md w-full p-6 md:p-8 border border-white dark:border-[#3a2d58]/60 shadow-2xl relative"
             >
-              <h3 className="font-serif font-bold text-xl text-on-surface dark:text-[#eee6ff] mb-4">Add Medication / Supplement</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-serif font-bold text-xl text-on-surface dark:text-[#eee6ff]">Add Medication</h3>
+                <button onClick={() => setShowAddMedModal(false)} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
+                  <X className="w-5 h-5 text-on-surface-variant" />
+                </button>
+              </div>
               <form onSubmit={handleAddMedSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Name</label>
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Medication Name</label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Ibuprofen, Iron"
+                    placeholder="e.g. Ibuprofen, Paracetamol, Iron"
                     value={medName}
                     onChange={(e) => setMedName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] outline-none text-sm font-semibold bg-white/70 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff]"
+                    autoFocus
+                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] outline-none text-sm font-semibold bg-white/70 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">
-                      Notification Time
-                    </label>
-                    <StructuredTimePicker
-                      value={medTime}
-                      onChange={(newTime) => setMedTime(newTime)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">
-                      Frequency
-                    </label>
-                    <select
-                      value={medFreq}
-                      onChange={(e) => setMedFreq(e.target.value)}
-                      className="w-full px-4 py-3 rounded-2xl border border-outline-variant/50 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] font-bold text-xs outline-none cursor-pointer"
-                    >
-                      <option value="Daily">Daily (Every Day)</option>
-                      <option value="Twice Daily">Twice Daily (Morning & Night)</option>
-                      <option value="Every Other Day">Every Other Day</option>
-                      <option value="Weekly">Weekly</option>
-                      <option value="As Needed">As Needed</option>
-                    </select>
-                  </div>
-                </div>
-
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Type</label>
-                  <div className="flex gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setMedType('medication')}
-                      className={`flex-1 py-3 rounded-xl border font-bold text-xs transition-colors ${
-                        medType === 'medication' ? 'bg-primary border-primary text-white' : 'border-outline-variant dark:border-[#3a2d58] text-on-surface'
-                      }`}
-                    >
-                      Medication
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMedType('supplement')}
-                      className={`flex-1 py-3 rounded-xl border font-bold text-xs transition-colors ${
-                        medType === 'supplement' ? 'bg-primary border-primary text-white' : 'border-outline-variant dark:border-[#3a2d58] text-on-surface'
-                      }`}
-                    >
-                      Supplement
-                    </button>
-                  </div>
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Reminder Time</label>
+                  <StructuredTimePicker value={medTime} onChange={(t) => setMedTime(t)} />
                 </div>
-
-                <div className="pt-4 flex gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddMedModal(false)}
-                    className="flex-1 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] text-on-surface-variant font-bold text-xs"
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Frequency</label>
+                  <select
+                    value={medFreq}
+                    onChange={(e) => setMedFreq(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant/50 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] font-bold text-xs outline-none cursor-pointer"
                   >
+                    <option value="Daily">Daily (Every Day)</option>
+                    <option value="Twice Daily">Twice Daily (Morning &amp; Night)</option>
+                    <option value="Every Other Day">Every Other Day</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="As Needed">As Needed / Prescribed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Duration (Course Length)</label>
+                  <select
+                    value={medDuration}
+                    onChange={(e) => setMedDuration(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant/50 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] font-bold text-xs outline-none cursor-pointer"
+                  >
+                    <option value="Ongoing">Ongoing (Long Term)</option>
+                    <option value="3 days">3 Days</option>
+                    <option value="5 days">5 Days</option>
+                    <option value="7 days">7 Days (1 Week)</option>
+                    <option value="2 weeks">2 Weeks</option>
+                    <option value="3 weeks">3 Weeks</option>
+                    <option value="1 month">1 Month</option>
+                    <option value="2 months">2 Months</option>
+                    <option value="3 months">3 Months</option>
+                  </select>
+                </div>
+                <div className="pt-4 flex gap-4">
+                  <button type="button" onClick={() => setShowAddMedModal(false)}
+                    className="flex-1 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] text-on-surface-variant font-bold text-xs">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-xs shadow-md"
+                  <button type="submit"
+                    className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-xs shadow-md">
+                    Add Medication
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL 6: ADD SUPPLEMENT ── */}
+      <AnimatePresence>
+        {showAddSupModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white dark:bg-[#16102a] rounded-3xl max-w-md w-full p-6 md:p-8 border border-white dark:border-[#3a2d58]/60 shadow-2xl relative"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-serif font-bold text-xl text-on-surface dark:text-[#eee6ff]">Add Supplement</h3>
+                <button onClick={() => setShowAddSupModal(false)} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
+                  <X className="w-5 h-5 text-on-surface-variant" />
+                </button>
+              </div>
+              <form onSubmit={handleAddSupSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Supplement Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Magnesium, Vitamin D, Omega-3"
+                    value={supName}
+                    onChange={(e) => setSupName(e.target.value)}
+                    autoFocus
+                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] outline-none text-sm font-semibold bg-white/70 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Reminder Time</label>
+                  <StructuredTimePicker value={supTime} onChange={(t) => setSupTime(t)} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Frequency</label>
+                  <select
+                    value={supFreq}
+                    onChange={(e) => setSupFreq(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant/50 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] font-bold text-xs outline-none cursor-pointer"
                   >
-                    Add Tracker
+                    <option value="Daily">Daily (Every Day)</option>
+                    <option value="Twice Daily">Twice Daily (Morning &amp; Night)</option>
+                    <option value="Every Other Day">Every Other Day</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="As Needed">As Needed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant dark:text-[#c8bedd] uppercase tracking-wider mb-2">Duration (Course Length)</label>
+                  <select
+                    value={supDuration}
+                    onChange={(e) => setSupDuration(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-outline-variant/50 dark:border-[#3a2d58] bg-white/80 dark:bg-[#1c1230] text-on-surface dark:text-[#eee6ff] font-bold text-xs outline-none cursor-pointer"
+                  >
+                    <option value="Ongoing">Ongoing (Continuous)</option>
+                    <option value="1 week">1 Week</option>
+                    <option value="2 weeks">2 Weeks</option>
+                    <option value="3 weeks">3 Weeks</option>
+                    <option value="1 month">1 Month</option>
+                    <option value="2 months">2 Months</option>
+                    <option value="3 months">3 Months</option>
+                  </select>
+                </div>
+                <div className="pt-4 flex gap-4">
+                  <button type="button" onClick={() => setShowAddSupModal(false)}
+                    className="flex-1 py-3 rounded-2xl border border-outline-variant dark:border-[#3a2d58] text-on-surface-variant font-bold text-xs">
+                    Cancel
+                  </button>
+                  <button type="submit"
+                    className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-primary to-secondary text-white font-bold text-xs shadow-md">
+                    Add Supplement
                   </button>
                 </div>
               </form>

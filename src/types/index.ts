@@ -96,4 +96,6 @@ export interface RoutineItem {
   type: 'medication' | 'skincare_morning' | 'skincare_night' | 'supplement' | 'water';
   completed: boolean;
   amount?: number; // e.g. for water
+  duration?: string; // e.g. "2 weeks", "1 month", "Ongoing"
+  endsAt?: string;  // ISO date string of when the course ends
 }
