@@ -115,11 +115,12 @@ export default function Layout({ children }: LayoutProps) {
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isItemActive(item.path);
+              const isPartnerItem = item.path === '/partner' || item.path.startsWith('/partner?');
               return (
                 <Link
                   key={item.path}
                   href={item.path}
-                  className={`font-semibold text-xs transition-all flex items-center gap-1.5 py-1.5 px-3 rounded-xl ${
+                  className={`font-semibold text-xs transition-all flex items-center gap-1.5 py-1.5 px-3 rounded-xl relative ${
                     active
                       ? 'text-primary bg-primary/10 shadow-sm border border-primary/20'
                       : 'text-on-surface/65 dark:text-[#c8bedd] hover:text-primary dark:hover:text-[#d4b8ff] hover:bg-primary/8 dark:hover:bg-primary/15'
@@ -127,6 +128,11 @@ export default function Layout({ children }: LayoutProps) {
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {item.label}
+                  {isPartnerItem && isMounted && unreadCount > 0 && (
+                    <span className="bg-red-500 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm animate-pulse ml-0.5">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -210,6 +216,7 @@ export default function Layout({ children }: LayoutProps) {
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = isItemActive(item.path);
+            const isPartnerItem = item.path === '/partner' || item.path.startsWith('/partner?');
             return (
               <Link
                 key={item.path}
@@ -221,7 +228,7 @@ export default function Layout({ children }: LayoutProps) {
                 }`}
               >
                 <Icon className="w-5 h-5" />
-                {item.path === '/partner?tab=chat' && isMounted && unreadCount > 0 && (
+                {isPartnerItem && isMounted && unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-extrabold w-4.5 h-4.5 px-1 rounded-full flex items-center justify-center border border-white dark:border-[#100c20] shadow-sm animate-pulse">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
