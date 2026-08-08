@@ -194,8 +194,11 @@ export default function App({ Component, pageProps }: AppProps) {
           return;
         }
 
+        // Suppress in-app notifications only when actively on the CHAT tab
+        // (still show badge + notify when on dashboard, ai, or other partner tabs)
         const isActivelyChatting =
           router.pathname === '/partner' &&
+          router.query?.tab === 'chat' &&
           document.visibilityState === 'visible';
 
         messages.forEach((msg: any) => {

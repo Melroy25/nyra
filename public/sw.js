@@ -1,5 +1,5 @@
 // Service Worker for Nyra PWA — Background Notifications + Caching
-const CACHE_NAME = 'nyra-app-v2';
+const CACHE_NAME = 'nyra-app-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
@@ -115,11 +115,11 @@ async function bgCheckMessages() {
       }
     }
 
-    // Check if user has the /partner screen open AND it's visible (foreground)
-    // If app is closed, minimized, or on another page → show notification
+    // Check if user has the /partner CHAT tab open AND it's visible (foreground)
+    // If user is on dashboard, AI, or other tab → still show notification
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const chatTabFocused = allClients.some(
-      (c) => c.url.includes('/partner') && c.visibilityState === 'visible'
+      (c) => c.url.includes('/partner') && c.url.includes('tab=chat') && c.visibilityState === 'visible'
     );
 
     const partnerName = partnerInfo.name || 'Partner';
@@ -166,8 +166,9 @@ self.addEventListener('push', (event) => {
         const payload = event.data.json();
         const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 
+        // Suppress VAPID notification only if chat tab is open & visible
         const isChatScreenOpen = allClients.some(
-          (c) => c.url.includes('/partner') && c.visibilityState === 'visible'
+          (c) => c.url.includes('/partner') && c.url.includes('tab=chat') && c.visibilityState === 'visible'
         );
 
         if (!isChatScreenOpen) {

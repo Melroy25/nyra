@@ -43,9 +43,26 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
     // 4. Calculate current cycle day & phase from last real period
     const periodLogs = (recentLogs || []).filter((l) => l.is_period && !l.is_predicted);
-    const lastPeriodDate = periodLogs.length > 0
-      ? periodLogs[0].date
-      : targetUser.last_period_date || null;
+
+    // Use last_period_date from the user's profile as the authoritative period START date.
+    // This is set during onboarding and updated whenever the user marks a period start.
+    // Avoid using periodLogs[0].date (most recent log = last day of ongoing period = always Day 1).
+    // Fall back: find the earliest date in the most recent consecutive is_period streak.
+    let lastPeriodDate: string | null = targetUser.last_period_date || null;
+
+    if (!lastPeriodDate && periodLogs.length > 0) {
+      // periodLogs is DESC ordered; find the earliest consecutive streak from the most recent
+      const sortedAsc = [...periodLogs].sort((a, b) => a.date.localeCompare(b.date));
+      let streakStart = sortedAsc[sortedAsc.length - 1];
+      for (let i = sortedAsc.length - 2; i >= 0; i--) {
+        const curr = new Date(sortedAsc[i].date);
+        const next = new Date(sortedAsc[i + 1].date);
+        const dayDiff = Math.round((next.getTime() - curr.getTime()) / 86400000);
+        if (dayDiff === 1) streakStart = sortedAsc[i];
+        else break;
+      }
+      lastPeriodDate = streakStart.date;
+    }
 
     const cycleLength = targetUser.cycle_length || 28;
     const periodDuration = targetUser.period_duration || 5;
@@ -73,7 +90,9 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     }
 
     // 5. ONLY use TODAY's logged mood & symptoms — never fallback to old logs or phase defaults
-    const todayStr = new Date().toISOString().split('T')[0]; // "2026-07-28"
+    // Use local date to match how cycle_logs are stored (stored as local date, not UTC)
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const allLogs = recentLogs || [];
     const todayLog = allLogs.find((l) => l.date === todayStr);
 
