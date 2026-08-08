@@ -29,13 +29,23 @@ export default function App({ Component, pageProps }: AppProps) {
 
   // ── Restore Logged-in Session & Cache on App Mount ──
   useEffect(() => {
-    // Restore cycle logs from localStorage after client hydration
+    // Restore cycle logs and routines from localStorage after client hydration
     try {
       const storedLogs = localStorage.getItem('nyra_cycle_logs');
       if (storedLogs) {
         const parsed = JSON.parse(storedLogs);
         if (Array.isArray(parsed) && parsed.length > 0) {
           useStore.getState().setCycleLogs(parsed);
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const storedRoutines = localStorage.getItem('nyra_routines');
+      if (storedRoutines) {
+        const parsed = JSON.parse(storedRoutines);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          useStore.getState().setRoutines(parsed);
         }
       }
     } catch (e) {}

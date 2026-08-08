@@ -96,6 +96,7 @@ interface AppState {
   addPartnerAiMessage: (text: string, isAi?: boolean, imageUrl?: string) => void;
 
   // Routine Actions
+  setRoutines: (routines: RoutineItem[]) => void;
   toggleRoutine: (id: string) => void;
   addRoutine: (name: string, time: string, frequency: string, type: RoutineItem['type']) => void;
   deleteRoutine: (id: string) => void;
@@ -679,25 +680,36 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   // Routine Actions
+  setRoutines: (routines) => {
+    set({ routines });
+    if (typeof window !== 'undefined') localStorage.setItem('nyra_routines', JSON.stringify(routines));
+  },
+
   toggleRoutine: (id) =>
-    set((state) => ({
-      routines: state.routines.map((r) =>
+    set((state) => {
+      const routines = state.routines.map((r) =>
         r.id === id ? { ...r, completed: !r.completed } : r
-      ),
-    })),
+      );
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_routines', JSON.stringify(routines));
+      return { routines };
+    }),
 
   addRoutine: (name, time, frequency, type) =>
-    set((state) => ({
-      routines: [
+    set((state) => {
+      const routines = [
         ...state.routines,
         { id: `rot-${Date.now()}`, name, time, frequency, type, completed: false },
-      ],
-    })),
+      ];
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_routines', JSON.stringify(routines));
+      return { routines };
+    }),
 
   deleteRoutine: (id) =>
-    set((state) => ({
-      routines: state.routines.filter((r) => r.id !== id),
-    })),
+    set((state) => {
+      const routines = state.routines.filter((r) => r.id !== id);
+      if (typeof window !== 'undefined') localStorage.setItem('nyra_routines', JSON.stringify(routines));
+      return { routines };
+    }),
 
   addWater: (amount) =>
     set((state) => ({

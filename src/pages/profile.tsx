@@ -309,28 +309,17 @@ export default function ProfilePage() {
             {/* Cycle Configuration Card */}
             <div className="glass-card rounded-2xl p-5 border border-white/40 dark:border-[#3a2d58]/50 shadow-sm flex flex-col justify-between">
               <div>
-                <h3 className={`font-serif font-bold text-lg ${headingCls} mb-4 flex items-center gap-2`}>
+                <h3 className={`font-serif font-bold text-lg ${headingCls} mb-2 flex items-center gap-2`}>
                   <Calendar className="w-4 h-4 text-primary" />
                   <span>Cycle Configuration</span>
                 </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
-                    <span className={labelCls}>Average Cycle Length</span>
-                    <span className="font-bold text-primary dark:text-[#d4b8ff]">{cycleLength} Days</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs font-semibold border-b border-black/8 dark:border-[#3a2d58]/60 pb-2">
-                    <span className={labelCls}>Average Period Duration</span>
-                    <span className="font-bold text-primary dark:text-[#d4b8ff]">{periodDuration} Days</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs font-semibold">
-                    <span className={labelCls}>Next Period Peak</span>
-                    <span className={`font-bold ${headingCls}`}>Normal</span>
-                  </div>
-                </div>
+                <p className="text-xs text-[#3d3050] dark:text-[#c8bedd] leading-relaxed">
+                  Manage your period duration and cycle length parameters to maintain accurate phase mapping and predictions.
+                </p>
               </div>
               <button
                 onClick={() => setIsEditOpen(true)}
-                className="w-full mt-6 py-2.5 rounded-2xl border border-primary/30 dark:border-primary/40 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
+                className="w-full mt-6 py-3 rounded-2xl border border-primary/30 dark:border-primary/40 hover:border-primary bg-primary/5 dark:bg-primary/10 hover:bg-primary/15 text-xs font-bold text-primary dark:text-[#d4b8ff] transition-all"
               >
                 Update Cycle Parameters
               </button>

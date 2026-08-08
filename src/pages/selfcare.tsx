@@ -489,6 +489,7 @@ export default function SelfCarePage() {
     e.preventDefault();
     if (!medName.trim()) return;
     addRoutine(medName, medTime, medFreq, medType);
+    apiCreateRoutine({ name: medName, time: medTime, frequency: medFreq, type: medType }).catch(() => {});
     setMedName('');
     setShowAddMedModal(false);
   };

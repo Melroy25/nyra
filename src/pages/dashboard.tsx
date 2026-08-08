@@ -126,8 +126,14 @@ export default function DashboardPage() {
   const currentCycleDay = storeDay || cycleMetrics?.currentDay || 1;
   const currentCyclePhase = storePhase || cycleMetrics?.currentPhase || 'Follicular';
   const nextPeriodDaysLeft = storeDaysLeft || cycleMetrics?.nextPeriodDaysLeft || 28;
-  const todayMood = cycleMetrics?.todayMood;
-  const todaySymptoms = cycleMetrics?.todaySymptoms ?? [];
+
+  // Compute today's mood and symptoms directly from cycleLogs for instant UI sync
+  const todayIso = new Date().toISOString().split('T')[0];
+  const todayLog = cycleLogs.find((l) => l.date === todayIso);
+  const todayMood = todayLog?.mood || cycleMetrics?.todayMood;
+  const todaySymptoms = (todayLog?.symptoms && todayLog.symptoms.length > 0) 
+    ? todayLog.symptoms 
+    : (cycleMetrics?.todaySymptoms ?? []);
 
   // Progress fraction for the ring
   const progressFraction = Math.max(0.02, currentCycleDay / (cycleMetrics?.cycleLength ?? 28));
