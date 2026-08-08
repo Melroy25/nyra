@@ -17,7 +17,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
   // 1. Ensure the code isn't your own
   const { data: self } = await supabase
     .from('users')
-    .select('id, partner_code')
+    .select('id, role, partner_code')
     .eq('id', authUser.userId)
     .single();
 
@@ -36,7 +36,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     return res.status(404).json({ error: 'No user found with that partner code' });
   }
 
-  // 3. Check if target is already connected to someone else
+  // 3. Enforce valid pairing: A period-tracking User must connect with a Partner account
+  const selfRole = self?.role || authUser.role || 'user';
+  const targetRole = targetUser.role || 'user';
+
+  if (selfRole === targetRole) {
+    if (selfRole === 'user') {
+      return res.status(400).json({
+        error: 'Cannot connect two user accounts. A period-tracking User must connect with a Partner account.'
+      });
+    } else {
+      return res.status(400).json({
+        error: 'Cannot connect two partner accounts. A Partner account must connect with a User account.'
+      });
+    }
+  }
+
+  // 4. Check if target is already connected to someone else
   const { data: targetFull } = await supabase
     .from('users')
     .select('connected_partner_id')
@@ -44,7 +60,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     .single();
 
   if (targetFull?.connected_partner_id && targetFull.connected_partner_id !== authUser.userId) {
-    return res.status(409).json({ error: 'This user is already connected to a partner' });
+    return res.status(409).json({ error: 'This partner is already connected to someone else' });
   }
 
   // 4. Bidirectional link: both users point to each other

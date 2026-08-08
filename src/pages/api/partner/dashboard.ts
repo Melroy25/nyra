@@ -18,11 +18,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
 
     if (!me) return res.status(404).json({ error: 'User not found' });
 
-    const targetUserId = me.connected_partner_id || me.id;
-
-    if (!me.connected_partner_id && me.role === 'partner') {
+    if (!me.connected_partner_id) {
       return res.status(200).json({ isConnected: false, message: 'No partner connected yet.' });
     }
+
+    const targetUserId = me.connected_partner_id;
 
     // 2. Fetch target user's profile
     const { data: targetUser } = await supabase
@@ -44,13 +44,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse, authUser: Auth
     // 4. Calculate current cycle day & phase from last real period
     const periodLogs = (recentLogs || []).filter((l) => l.is_period && !l.is_predicted);
     const lastPeriodDate = periodLogs.length > 0
-      ? periodLogs[periodLogs.length - 1].date
+      ? periodLogs[0].date
       : targetUser.last_period_date || null;
 
     const cycleLength = targetUser.cycle_length || 28;
     const periodDuration = targetUser.period_duration || 5;
     let currentDay = 1;
-    let currentPhase = 'Follicular Phase';
+    let currentPhase = 'Menstrual Phase';
     let daysLeft = cycleLength;
 
     if (lastPeriodDate) {

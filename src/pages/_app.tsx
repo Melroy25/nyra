@@ -196,7 +196,6 @@ export default function App({ Component, pageProps }: AppProps) {
 
         const isActivelyChatting =
           router.pathname === '/partner' &&
-          router.query.tab === 'chat' &&
           document.visibilityState === 'visible';
 
         messages.forEach((msg: any) => {

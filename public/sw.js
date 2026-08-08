@@ -115,11 +115,11 @@ async function bgCheckMessages() {
       }
     }
 
-    // Check if user has the CHAT tab open AND it's visible (foreground)
+    // Check if user has the /partner screen open AND it's visible (foreground)
     // If app is closed, minimized, or on another page → show notification
     const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const chatTabFocused = allClients.some(
-      (c) => c.url.includes('/partner') && c.url.includes('tab=chat') && c.visibilityState === 'visible'
+      (c) => c.url.includes('/partner') && c.visibilityState === 'visible'
     );
 
     const partnerName = partnerInfo.name || 'Partner';
@@ -132,7 +132,7 @@ async function bgCheckMessages() {
       if (msg.sender_id !== bgUserId && !isAlreadyKnown) {
         bgKnownIds.add(msg.id);
         bgKnownIds.add(msgSig);
-        // Show push notification unless the user is actively IN the chat tab
+        // Show push notification unless the user is actively IN the partner chat view
         if (!chatTabFocused) {
           const bodyText =
             msg.text ||
@@ -155,6 +155,36 @@ async function bgCheckMessages() {
     // Silently fail — network might be off
   }
 }
+
+// ── Web Push Payload Listener (VAPID) — Suppress if chat screen is open ──
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  event.waitUntil(
+    (async () => {
+      try {
+        const payload = event.data.json();
+        const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+        const isChatScreenOpen = allClients.some(
+          (c) => c.url.includes('/partner') && c.visibilityState === 'visible'
+        );
+
+        if (!isChatScreenOpen) {
+          await self.registration.showNotification(payload.title || 'New Message', {
+            body: payload.body || '',
+            icon: payload.icon || '/logo.png',
+            badge: '/logo.png',
+            tag: payload.tag || 'nyra-chat',
+            data: { url: payload.url || '/partner?tab=chat' },
+          });
+        }
+      } catch (err) {
+        console.log('SW push event handler error:', err);
+      }
+    })()
+  );
+});
 
 // ── Notification click: open / focus the chat page ───────────────────────────
 self.addEventListener('notificationclick', (event) => {

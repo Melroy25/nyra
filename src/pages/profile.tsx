@@ -366,7 +366,7 @@ export default function ProfilePage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#16102a] border border-white/40 dark:border-[#3a2d58] rounded-3xl p-6 w-full max-w-md shadow-2xl relative space-y-5 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-outline-variant/20 dark:border-[#3a2d58] pb-3">
-              <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">Edit Profile & Cycle</h3>
+              <h3 className="font-serif font-bold text-xl text-[#18003d] dark:text-[#eee6ff]">{isPartner ? 'Edit Profile' : 'Edit Profile & Cycle'}</h3>
               <button
                 onClick={() => setIsEditOpen(false)}
                 className="p-1 rounded-full text-on-surface-variant hover:bg-black/5 dark:hover:bg-white/10"
@@ -389,11 +389,9 @@ export default function ProfilePage() {
                     )}
                   </div>
                   {/* Upload button using native label for instant gallery trigger on mobile */}
-                  <label
-                    className="flex-1 py-3 rounded-xl border-2 border-dashed border-primary/30 dark:border-primary/40 bg-primary/5 dark:bg-primary/10 hover:bg-primary/10 transition-colors text-xs font-bold text-primary dark:text-[#d4b8ff] flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                  >
+                  <label className="px-4 py-2.5 rounded-2xl border-2 border-dashed border-primary/40 hover:border-primary text-xs font-bold text-primary dark:text-[#d4b8ff] cursor-pointer hover:bg-primary/5 transition-all flex items-center gap-2">
                     <Camera className="w-4 h-4" />
-                    Upload from Camera / Gallery
+                    <span>Upload from Camera / Gallery</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -440,36 +438,36 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Cycle Parameters (Cycle Length & Period Duration) */}
-              <div className="bg-primary/5 dark:bg-primary/10 p-3.5 rounded-2xl border border-primary/20 space-y-3">
-                <p className="text-xs font-bold text-primary dark:text-[#d4b8ff] uppercase tracking-wider">Cycle Configuration</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#3d3050] dark:text-[#c8bedd] mb-1">Cycle Length (Days)</label>
-                    <input
-                      type="number"
-                      min="20"
-                      max="45"
-                      value={editCycleLength}
-                      onChange={(e) => setEditCycleLength(parseInt(e.target.value) || 28)}
-                      className="w-full px-3 py-2 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white dark:bg-[#1c1230] text-sm font-bold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#3d3050] dark:text-[#c8bedd] mb-1">Period Duration (Days)</label>
-                    <input
-                      type="number"
-                      min="2"
-                      max="10"
-                      value={editPeriodDuration}
-                      onChange={(e) => setEditPeriodDuration(parseInt(e.target.value) || 5)}
-                      className="w-full px-3 py-2 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white dark:bg-[#1c1230] text-sm font-bold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
-                    />
+              {/* Cycle Parameters (Cycle Length & Period Duration) - ONLY for female users */}
+              {!isPartner && (
+                <div className="bg-primary/5 dark:bg-primary/10 p-3.5 rounded-2xl border border-primary/20 space-y-3">
+                  <p className="text-xs font-bold text-primary dark:text-[#d4b8ff] uppercase tracking-wider">Cycle Configuration</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#3d3050] dark:text-[#c8bedd] mb-1">Cycle Length (Days)</label>
+                      <input
+                        type="number"
+                        min="20"
+                        max="45"
+                        value={editCycleLength}
+                        onChange={(e) => setEditCycleLength(parseInt(e.target.value) || 28)}
+                        className="w-full px-3 py-2 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white dark:bg-[#1c1230] text-sm font-bold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#3d3050] dark:text-[#c8bedd] mb-1">Period Duration (Days)</label>
+                      <input
+                        type="number"
+                        min="2"
+                        max="10"
+                        value={editPeriodDuration}
+                        onChange={(e) => setEditPeriodDuration(parseInt(e.target.value) || 5)}
+                        className="w-full px-3 py-2 rounded-xl border border-outline-variant dark:border-[#3a2d58] bg-white dark:bg-[#1c1230] text-sm font-bold text-[#18003d] dark:text-[#eee6ff] outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-
-
+              )}
 
               {/* Error display */}
               {saveError && (
