@@ -88,6 +88,12 @@
   --foreground: #18003d;
 }
 
+html, body {
+  overscroll-behavior-y: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior: none;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
